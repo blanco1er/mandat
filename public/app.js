@@ -232,12 +232,81 @@ function toolStep({ name, args }) {
   const label = TOOL_LABEL[name]?.(args);
   if (label) add(step(label));
 }
-function placesCard({ category, places }) {
+// Real places, on an interactive map right in the conversation (MapLibre + OpenFreeMap: free, no key).
+const MAPLIBRE = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/';
+let maplibreReady;
+function loadMapLibre() {
+  return (maplibreReady ||= new Promise((ok, ko) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = MAPLIBRE + 'maplibre-gl.css';
+    document.head.append(css);
+    const js = document.createElement('script');
+    js.src = MAPLIBRE + 'maplibre-gl.js';
+    js.onload = () => ok(window.maplibregl);
+    js.onerror = () => { maplibreReady = null; ko(new Error('map unavailable')); };
+    document.head.append(js);
+  }));
+}
+// A map starts only when its card scrolls into view (a long history never opens dozens of maps).
+const mapWatcher = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) { mapWatcher.unobserve(e.target); e.target.start(); }
+}, { rootMargin: '200px' });
+
+function placesCard({ category, center, places }) {
   if (!places?.length) return;
+  const shown = places.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon)).slice(0, 5);
   const li = el('li', 'card places');
-  li.innerHTML = `<header><span class="avatar" style="background:#19a463">⌖</span><div><b>Real ${many(category)} near you</b><small>OpenStreetMap</small></div></header><ul>${places.slice(0, 4)
-    .map((p) => `<li>${esc(p.name)} <span>· ${p.distance} m${p.openingHours ? ' · ' + esc(p.openingHours.slice(0, 28)) : ''}</span></li>`).join('')}</ul>`;
+  li.innerHTML = `<header><span class="avatar" style="background:#19a463">⌖</span><div><b>Real ${many(category)} near you</b><small>OpenStreetMap</small></div></header>
+    ${shown.length ? `<div class="place-map" role="region" aria-label="Map of ${esc(many(category))} nearby"></div>` : ''}
+    <ol class="place-list">${(shown.length ? shown : places.slice(0, 4)).map((p, i) => `<li><button type="button" data-i="${i}"><span class="pin-n">${i + 1}</span><span class="pl-name">${esc(p.name)}</span><span class="pl-meta">${p.distance} m${p.openingHours ? ' · ' + esc(p.openingHours.slice(0, 28)) : ''}</span></button></li>`).join('')}</ol>`;
   add(li);
+  const box = li.querySelector('.place-map');
+  if (!box) return;
+  box.start = async () => {
+    let ml;
+    try { ml = await loadMapLibre(); } catch { return box.remove(); }
+    const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+    const map = new ml.Map({
+      container: box,
+      style: `https://tiles.openfreemap.org/styles/${dark ? 'dark' : 'positron'}`,
+      center: center ? [center.lon, center.lat] : [shown[0].lon, shown[0].lat],
+      zoom: 15,
+      cooperativeGestures: true,
+      attributionControl: { compact: true },
+    });
+    map.addControl(new ml.NavigationControl({ showCompass: false }), 'top-right');
+    const bounds = new ml.LngLatBounds();
+    if (center) {
+      new ml.Marker({ element: el('div', 'me-dot') }).setLngLat([center.lon, center.lat]).addTo(map);
+      bounds.extend([center.lon, center.lat]);
+    }
+    const pins = shown.map((p, i) => {
+      const pin = el('button', 'pin'); // MapLibre owns this element's transform; the drop shape lives inside
+      pin.innerHTML = `<span class="pin-body"><b>${i + 1}</b></span>`;
+      pin.type = 'button';
+      pin.setAttribute('aria-label', p.name);
+      pin.addEventListener('click', (e) => { e.stopPropagation(); select(i); });
+      new ml.Marker({ element: pin, anchor: 'bottom' }).setLngLat([p.lon, p.lat]).addTo(map);
+      bounds.extend([p.lon, p.lat]);
+      return pin;
+    });
+    map.fitBounds(bounds, { padding: { top: 46, bottom: 30, left: 30, right: 30 }, maxZoom: 16, duration: 0 });
+    // Keep the (required) OpenStreetMap credit folded into its small "i" until asked for.
+    map.once('load', () => box.querySelector('.maplibregl-compact-show')?.classList.remove('maplibregl-compact-show'));
+    const popup = new ml.Popup({ offset: [0, -34], anchor: 'bottom', closeButton: false, focusAfterOpen: false, className: 'place-pop' });
+    const select = (i) => {
+      const p = shown[i];
+      li.querySelectorAll('.place-list button').forEach((b, j) => b.classList.toggle('on', j === i));
+      pins.forEach((pin, j) => pin.classList.toggle('on', j === i));
+      map.flyTo({ center: [p.lon, p.lat], offset: [0, 55], zoom: Math.max(map.getZoom(), 16), duration: 700 }); // pin sits low, bubble fits above
+      popup.setLngLat([p.lon, p.lat])
+        .setHTML(`<b>${esc(p.name)}</b><span>${p.distance} m away</span><a href="https://maps.apple.com/?daddr=${p.lat},${p.lon}" target="_blank" rel="noopener">Directions</a>`)
+        .addTo(map);
+    };
+    li.querySelectorAll('.place-list button').forEach((b) => b.addEventListener('click', () => select(+b.dataset.i)));
+  };
+  mapWatcher.observe(box);
 }
 function verifiedMark({ merchant_id, name, ok }) {
   state.verified[merchant_id] = ok;
