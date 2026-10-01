@@ -31,15 +31,15 @@ async function boot() {
   $('#demoNote').textContent = r.paypalMode === 'sandbox' ? 'PayPal sandbox — no real money moves.' : 'Demo mode — PayPal sandbox keys not configured yet.';
   const p = new URLSearchParams(location.search);
   history.replaceState(null, '', '/');
-  if (!state.me.paypal.connected) return show('welcome');
-  if (!state.me.paypal.mandate) return mandateView();
+  if (!state.me.paypal.mandate) return p.get('mandate') === 'cancelled' ? mandateView() : show('welcome');
   renderHome(r.missions);
   const open = p.get('mission');
   if (open) openMission(open);
   else show('home');
 }
 
-// ---------- mandate ----------
+// ---------- mandate (signing it is also the PayPal sign-in) ----------
+$('#start').addEventListener('click', () => mandateView());
 let mAutonomy = 'balanced';
 function mandateView() {
   $('#mCap').value = state.me.rules.monthlyCap;

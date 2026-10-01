@@ -180,8 +180,14 @@ app.get('/mandate/return', async (req, res) => {
     const u = me(req, res);
     const tokenId = String(req.query.approval_token_id || u.pendingSetup || '');
     const m = await PayPal.activateMandate(tokenId);
-    u.paypal.mandate = { ...m, signedAt: new Date().toISOString() };
-    if (m.payer && !u.paypal.payerEmail) u.paypal.payerEmail = m.payer;
+    const { payerName, payerId, ...mandate } = m;
+    u.paypal.mandate = { ...mandate, signedAt: new Date().toISOString() };
+    // Approving the mandate is the PayPal sign-in: one trip to PayPal connects the account and signs.
+    u.paypal.connected = true;
+    if (m.payer) u.paypal.payerEmail = m.payer;
+    if (payerName) u.paypal.payerName = payerName;
+    if (!u.profile.name && payerName) u.profile.name = payerName;
+    if (!u.profile.email && m.payer) u.profile.email = m.payer;
     delete u.pendingSetup;
     saveUser(u);
     res.redirect('/?mandate=active');
