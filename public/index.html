@@ -18,53 +18,70 @@
   <div class="backdrop" aria-hidden="true"><i></i><i></i><i></i></div>
 
   <header class="topbar glass">
-    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Mandat</div>
-    <button class="envelope-chip" id="envChip" hidden aria-label="Budget">
-      <svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" class="ring-bg"/><circle cx="18" cy="18" r="15" class="ring-spent"/><circle cx="18" cy="18" r="15" class="ring-held"/></svg>
-      <span><b id="envRemaining">—</b><small>left</small></span>
-    </button>
+    <button class="back" id="back" hidden aria-label="Missions"><svg viewBox="0 0 24 24"><path d="M15.4 4.6 8 12l7.4 7.4-1.4 1.4L5.2 12 14 3.2z"/></svg></button>
+    <div class="brand" id="brand"><span class="brand-mark" aria-hidden="true"></span><span id="topTitle">Mandat</span></div>
+    <div class="top-actions">
+      <button class="envelope-chip" id="envChip" hidden aria-label="Budget">
+        <svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" class="ring-bg"/><circle cx="18" cy="18" r="15" class="ring-spent"/><circle cx="18" cy="18" r="15" class="ring-held"/></svg>
+        <span><b id="envRemaining">—</b><small>left</small></span>
+      </button>
+      <button class="icon-btn stop" id="stopMission" hidden aria-label="Stop this mission">■</button>
+      <button class="icon-btn plus" id="newMission" hidden aria-label="New mission">＋</button>
+    </div>
   </header>
 
-  <!-- 1. Setup: say what you want, set the mandate -->
-  <main id="setup" class="view">
-    <h1 class="large-title">What should I<br>take care of?</h1>
-    <p class="lede">Tell me what you want and how much you can spend. I'll find it, negotiate with the merchants' agents, book and pay with PayPal — never a cent over your mandate.</p>
+  <!-- 0. Welcome: sign in with PayPal -->
+  <main id="welcome" class="view" hidden>
+    <div class="hero-orb" aria-hidden="true"><span></span></div>
+    <h1 class="large-title center">Your errands,<br>handled.</h1>
+    <p class="lede center">Say what you want and how much you can spend. Mandat searches, negotiates with merchants' agents, books and pays with PayPal — inside the budget you set.</p>
+    <a class="cta paypal" href="/auth/paypal"><span>Continue with PayPal</span></a>
+    <p class="fine center">We only receive your PayPal-verified name and email. Your card and password stay with PayPal.</p>
+  </main>
 
-    <div class="field-card">
-      <textarea id="intent" rows="3" placeholder="My girlfriend's birthday this Saturday: dinner for 6 around 8pm near me, a cake and flowers."></textarea>
-      <button class="mic-mini" id="dictate" aria-label="Dictate"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg></button>
-    </div>
-
-    <div class="mandate-card">
-      <div class="row">
-        <label for="budget">Budget</label>
-        <div class="stepper">
-          <button data-step="-25" aria-label="Less">−</button>
-          <input id="budget" inputmode="numeric" value="400" aria-label="Budget in euros">
-          <span class="cur">€</span>
-          <button data-step="25" aria-label="More">+</button>
-        </div>
+  <!-- 1. Mandate: sign once -->
+  <main id="mandate" class="view" hidden>
+    <h1 class="large-title">Sign your mandate</h1>
+    <p class="lede">One signature with PayPal lets your agent hold deposits for you — only inside each mission's budget and your rules.</p>
+    <div class="group">
+      <div class="row"><label>Monthly limit</label>
+        <div class="stepper" data-for="monthlyCap"><button data-step="-100">−</button><input id="mCap" inputmode="numeric" value="1500"><span class="cur">€</span><button data-step="100">+</button></div>
       </div>
-      <div class="row">
-        <label>Ask me before paying above</label>
-        <div class="segmented" id="approve" role="radiogroup">
-          <button role="radio" data-v="0">Always</button>
-          <button role="radio" data-v="50">€50</button>
-          <button role="radio" data-v="100" aria-checked="true">€100</button>
-          <button role="radio" data-v="200">€200</button>
+      <div class="row col"><label>How independent should it be?</label>
+        <div class="segmented wide" id="mAutonomy" role="radiogroup">
+          <button role="radio" data-v="careful">Careful</button>
+          <button role="radio" data-v="balanced" aria-checked="true">Balanced</button>
+          <button role="radio" data-v="autopilot">Autopilot</button>
         </div>
+        <p class="hint" id="mAutonomyHelp"></p>
       </div>
-      <p class="fine">You sign once with PayPal. Deposits are <b>held</b>, not charged, until each merchant confirms — cancel anytime and the money comes back to your mandate.</p>
     </div>
-
-    <button class="cta" id="start"><span class="pp">Sign mandate with PayPal</span></button>
+    <ul class="promises">
+      <li><b>Never over budget.</b> Each mission has its own envelope.</li>
+      <li><b>Held, not charged.</b> Deposits are captured only when the merchant confirms.</li>
+      <li><b>Stop anytime.</b> One tap freezes every payment.</li>
+    </ul>
+    <button class="cta paypal" id="signMandate"><span>Sign mandate with PayPal</span></button>
     <p class="demo-note" id="demoNote"></p>
   </main>
 
-  <!-- 2. Live: the agent at work -->
+  <!-- 2. Missions home -->
+  <main id="home" class="view" hidden>
+    <h1 class="large-title">Missions</h1>
+    <p class="hello" id="hello"></p>
+    <div class="stopped-banner" id="stoppedBanner" hidden>Mandat is stopped — no payment can be made. <button id="resumeAll">Resume</button></div>
+    <ol class="missions" id="missions"></ol>
+    <div class="empty" id="empty" hidden>
+      <p>Nothing on your plate. Try:</p>
+      <button class="suggest" data-t="Two weeks in Spain in October, I leave from Paris. 700 euros all in." data-b="700" data-e="🇪🇸">🇪🇸 Two weeks in Spain, 700 €</button>
+      <button class="suggest" data-t="My girlfriend's birthday this Saturday: dinner for 6 around 8pm near me, a cake and flowers." data-b="400" data-e="🎂">🎂 A birthday evening for 6, 400 €</button>
+    </div>
+  </main>
+
+  <!-- 3. A mission, live -->
   <main id="live" class="view" hidden>
-    <section class="envelope-card glass-card" id="envelopeCard">
-      <div class="env-head"><span>Mandate</span><span id="envPurpose"></span></div>
+    <section class="envelope-card glass-card">
+      <div class="env-head"><span>Mission budget</span><span id="envPurpose"></span></div>
       <div class="env-bar"><i class="spent"></i><i class="held"></i></div>
       <div class="env-legend">
         <div><b id="envSpent">€0</b><small>paid</small></div>
@@ -76,23 +93,101 @@
     <div class="feed-spacer"></div>
   </main>
 
-  <!-- Floating composer: voice orb + text -->
+  <!-- 4. Settings -->
+  <main id="settings" class="view" hidden>
+    <h1 class="large-title">Settings</h1>
+
+    <h2 class="group-title">PayPal</h2>
+    <div class="group">
+      <div class="row"><span class="pp-mark">P</span><div class="grow"><b id="sPayer">—</b><small id="sPayerMail"></small></div><span class="tag ok" id="sVerified" hidden>Verified</span></div>
+      <div class="row"><div class="grow"><b>Mandate</b><small id="sMandate"></small></div><button class="link danger" id="sRevoke">Revoke</button></div>
+    </div>
+
+    <h2 class="group-title">Autonomy</h2>
+    <div class="group">
+      <div class="row col">
+        <div class="segmented wide" id="sAutonomy" role="radiogroup">
+          <button role="radio" data-v="careful">Careful</button>
+          <button role="radio" data-v="balanced">Balanced</button>
+          <button role="radio" data-v="autopilot">Autopilot</button>
+        </div>
+        <p class="hint" id="sAutonomyHelp"></p>
+      </div>
+      <div class="row" id="sApproveRow"><label>Ask me above</label><div class="stepper"><button data-step="-25">−</button><input id="sApprove" inputmode="numeric"><span class="cur">€</span><button data-step="25">+</button></div></div>
+      <div class="row"><label>Daily limit</label><div class="stepper"><button data-step="-50">−</button><input id="sDaily" inputmode="numeric"><span class="cur">€</span><button data-step="50">+</button></div></div>
+      <div class="row"><label>Monthly limit</label><div class="stepper"><button data-step="-100">−</button><input id="sMonthly" inputmode="numeric"><span class="cur">€</span><button data-step="100">+</button></div></div>
+      <div class="row"><div class="grow"><b>Stop everything</b><small>Freeze every payment, in every mission</small></div><label class="switch"><input type="checkbox" id="sStop"><i></i></label></div>
+    </div>
+
+    <h2 class="group-title">About you</h2>
+    <div class="group">
+      <label class="field"><span>Name for bookings</span><input id="pName" autocomplete="name"></label>
+      <label class="field"><span>Email</span><input id="pEmail" type="email" autocomplete="email"></label>
+      <label class="field"><span>Phone</span><input id="pPhone" type="tel" autocomplete="tel"></label>
+      <label class="field"><span>Usual address</span><input id="pHome" placeholder="Used when location is off"></label>
+      <label class="field"><span>Allergies & diet</span><input id="pDiet" placeholder="e.g. no nuts, vegetarian"></label>
+      <label class="field"><span>Likes</span><input id="pPrefs" placeholder="e.g. quiet places, Italian, trains over planes"></label>
+    </div>
+
+    <h2 class="group-title">People you share costs with</h2>
+    <div class="group" id="people"></div>
+    <button class="link add" id="addPerson">＋ Add someone</button>
+
+    <h2 class="group-title">Location & voice</h2>
+    <div class="group">
+      <div class="row"><div class="grow"><b>Location</b><small id="sLoc">Asked when a mission needs it</small></div><button class="link" id="sLocBtn">Allow</button></div>
+      <div class="row"><div class="grow"><b>Spoken replies</b><small>Mandat answers out loud</small></div><label class="switch"><input type="checkbox" id="sVoice"><i></i></label></div>
+    </div>
+
+    <h2 class="group-title">What Mandat knows about you</h2>
+    <div class="group"><pre class="knows" id="sKnows"></pre></div>
+    <button class="link danger add" id="sForget">Forget everything about me</button>
+    <p class="fine">Stored on your account only, used only to act for you, never sold. PayPal keeps your payment details.</p>
+    <div class="feed-spacer"></div>
+  </main>
+
+  <!-- Floating tab bar (home / settings) -->
+  <nav class="tabbar glass" id="tabbar" hidden>
+    <button data-tab="home" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z"/></svg><span>Missions</span></button>
+    <button data-tab="settings"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.6 2.3-1.9-.3a7 7 0 0 0-.7-1.7l1.1-1.6-1.6-1.6-1.6 1.1a7 7 0 0 0-1.7-.7l-.3-1.9h-2.2l-.3 1.9a7 7 0 0 0-1.7.7L7.5 5.6 5.9 7.2 7 8.8a7 7 0 0 0-.7 1.7l-1.9.3v2.2l1.9.3c.2.6.4 1.2.7 1.7l-1.1 1.6 1.6 1.6 1.6-1.1c.5.3 1.1.5 1.7.7l.3 1.9h2.2l.3-1.9c.6-.2 1.2-.4 1.7-.7l1.6 1.1 1.6-1.6-1.1-1.6c.3-.5.5-1.1.7-1.7l1.9-.3z"/></svg><span>Settings</span></button>
+  </nav>
+
+  <!-- Composer inside a mission: photo, voice orb, text -->
   <footer class="composer glass" id="composer" hidden>
-    <button class="orb" id="orb" aria-label="Talk to Mandat"><span class="orb-core"></span><span class="orb-ring"></span></button>
+    <button class="icon-round" id="photoBtn" aria-label="Send a photo"><svg viewBox="0 0 24 24"><path d="M9 4 7.2 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.2L15 4H9Zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></svg></button>
     <form id="say" autocomplete="off">
-      <input id="sayText" placeholder="Talk, or type…" aria-label="Message">
+      <input id="sayText" placeholder="Talk, type, or send a photo…" aria-label="Message">
       <button class="send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
     </form>
+    <button class="orb" id="orb" aria-label="Talk to Mandat"><span class="orb-core"></span><span class="orb-ring"></span></button>
   </footer>
+  <input type="file" accept="image/*" id="photoInput" hidden>
 
-  <!-- Approval sheet (Apple Pay-style conventions, our own design) -->
+  <!-- New mission sheet -->
+  <div class="sheet-scrim" id="nmScrim" hidden></div>
+  <section class="sheet tall" id="nmSheet" role="dialog" aria-modal="true" aria-labelledby="nmTitle" hidden>
+    <div class="grabber"></div>
+    <div class="sheet-head"><b id="nmTitle">New mission</b><button class="sheet-close" id="nmCancel">Cancel</button></div>
+    <div class="field-card">
+      <textarea id="nmIntent" rows="3" placeholder="Two weeks in Spain in October, I leave from Paris. 700 euros all in."></textarea>
+      <div class="nm-tools">
+        <button class="mic-mini" id="nmPhoto" aria-label="Add a photo"><svg viewBox="0 0 24 24"><path d="M9 4 7.2 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.2L15 4H9Zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"/></svg></button>
+        <button class="mic-mini" id="nmMic" aria-label="Dictate"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg></button>
+      </div>
+      <img id="nmPreview" class="nm-preview" alt="" hidden>
+    </div>
+    <div class="group">
+      <div class="row"><label>Budget for this mission</label><div class="stepper"><button data-step="-25">−</button><input id="nmBudget" inputmode="numeric" value="400"><span class="cur">€</span><button data-step="25">+</button></div></div>
+    </div>
+    <p class="hint" id="nmRule"></p>
+    <button class="cta" id="nmStart"><span>Start mission</span></button>
+  </section>
+
+  <!-- Approval sheet -->
   <div class="sheet-scrim" id="scrim" hidden></div>
   <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
     <div class="grabber"></div>
-    <div class="sheet-head">
-      <span class="pp-badge">PayPal</span>
-      <button class="sheet-close" id="sheetDecline">Decline</button>
-    </div>
+    <div class="sheet-head"><span class="pp-badge">PayPal</span><button class="sheet-close" id="sheetDecline">Decline</button></div>
     <div class="sheet-merchant" id="sheetMerchant"></div>
     <div class="sheet-lines" id="sheetLines"></div>
     <div class="sheet-total"><span id="sheetTitle">Hold deposit</span><b id="sheetAmount"></b></div>

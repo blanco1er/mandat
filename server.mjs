@@ -1,32 +1,62 @@
-// Mandat server: sessions, live event stream (SSE), user approvals, merchant inbox, PayPal mandate return.
+// Mandat server: account (PayPal login, profile, rules, mandate), missions (each with its own envelope),
+// live event stream per mission (SSE), approvals, stop switch, merchant inbox.
 import express from 'express';
 import path from 'node:path';
-import { createSession, userTurn, resolveApproval, resolveRequest, envelopeView } from './lib/agent.mjs';
+import crypto from 'node:crypto';
+import { createSession, userTurn, resolveApproval, resolveRequest, envelopeView, missionSummary } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
+import { geocode } from './lib/places.mjs';
+import { chat, MODELS } from './lib/deepseek.mjs';
+import { newUser, getUser, saveUser, getMission, saveMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
 const app = express();
 const PORT = Number(process.env.PORT || 8790);
-const sessions = new Map(); // id -> { s, clients:Set<res>, busy:Promise, log:[] }
+const BASE = () => process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+const live = new Map(); // missionId -> { s, clients:Set, busy:Promise, log:[] }
 
-app.use(express.json({ limit: '64kb' }));
+app.use(express.json({ limit: '8mb' })); // photos arrive as data URLs
 app.use(express.static(path.resolve('public'), { extensions: ['html'] }));
 
-function box(id) {
-  const b = sessions.get(id);
-  if (!b) throw Object.assign(new Error('Unknown session'), { status: 404 });
-  return b;
+// ---------- account (cookie) ----------
+function cookie(req, name) {
+  const m = (req.headers.cookie || '').match(new RegExp('(?:^|; )' + name + '=([^;]+)'));
+  return m ? decodeURIComponent(m[1]) : null;
+}
+function me(req, res) {
+  let u = getUser(cookie(req, 'mandat_uid'));
+  if (!u) {
+    u = newUser();
+    saveUser(u);
+    res.setHeader('Set-Cookie', `mandat_uid=${u.id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`);
+  }
+  return u;
+}
+function publicUser(u) {
+  const { paypal, ...rest } = u;
+  return { ...rest, paypal: { connected: paypal.connected, payerName: paypal.payerName, payerEmail: paypal.payerEmail, verified: paypal.verified, mandate: paypal.mandate ? { active: true, mode: paypal.mandate.mode, signedAt: paypal.mandate.signedAt } : null }, knows: agentBrief(u), autonomyLevels: AUTONOMY };
 }
 
-// Every event goes to the live stream and to a replay log (a reconnecting screen catches up).
+// ---------- missions in memory, persisted after every agent run ----------
+function box(id, user) {
+  let b = live.get(id);
+  if (!b) {
+    const s = getMission(id);
+    if (!s) throw Object.assign(new Error('Unknown mission'), { status: 404 });
+    b = { s, clients: new Set(), busy: Promise.resolve(), log: s._log || [] };
+    live.set(id, b);
+  }
+  if (user && b.s.userId !== user.id) throw Object.assign(new Error('Not your mission'), { status: 403 });
+  if (user) b.s._user = user;
+  return b;
+}
 function emitter(b) {
   return (type, data) => {
     const evt = { type, data, at: Date.now() };
     b.log.push(evt);
+    if (b.log.length > 400) b.log.shift();
     for (const res of b.clients) res.write(`data: ${JSON.stringify(evt)}\n\n`);
   };
 }
-
-// One agent action at a time per session; the UI shows "thinking" meanwhile.
 function run(b, fn) {
   const emit = emitter(b);
   b.busy = b.busy.then(async () => {
@@ -39,11 +69,12 @@ function run(b, fn) {
     } finally {
       emit('busy', { on: false });
       emit('envelope', envelopeView(b.s));
+      emit('summary', missionSummary(b.s));
+      saveMission(b.s);
     }
   });
   return b.busy;
 }
-
 const api = (h) => async (req, res) => {
   try {
     res.json(await h(req, res));
@@ -54,66 +85,193 @@ const api = (h) => async (req, res) => {
 
 app.get('/api/health', (req, res) => res.json({ ok: true, paypal: PayPal.MODE }));
 
-app.post('/api/sessions', api(async (req) => {
-  const { budget, approveAbove = 50, currency = 'EUR', purpose = '', location = null, language = 'en' } = req.body || {};
-  if (!(budget > 0 && budget <= 5000)) throw new Error('Budget must be between 1 and 5000.');
-  const s = createSession({ budget, approveAbove, currency, purpose, location, language });
-  sessions.set(s.id, { s, clients: new Set(), busy: Promise.resolve(), log: [] });
-  return { id: s.id, envelope: envelopeView(s), paypal: PayPal.MODE };
+app.get('/api/me', api(async (req, res) => {
+  const u = me(req, res);
+  const missions = u.missions.map((id) => getMission(id)).filter(Boolean).map((s) => missionSummary(live.get(s.id)?.s || s));
+  return { user: publicUser(u), missions, paypalMode: PayPal.MODE };
 }));
 
-// Sign the mandate: returns the PayPal URL where the user saves PayPal once.
-app.post('/api/sessions/:id/mandate', api(async (req) => {
-  const b = box(req.params.id);
-  const base = process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+app.post('/api/me', api(async (req, res) => {
+  const u = me(req, res);
+  const { profile, rules, voice } = req.body || {};
+  if (profile) {
+    const p = u.profile;
+    for (const k of ['name', 'email', 'phone', 'diet', 'preferences']) if (typeof profile[k] === 'string') p[k] = profile[k].slice(0, 300);
+    if (profile.home === null || (profile.home && typeof profile.home.label === 'string')) p.home = profile.home;
+    if (Array.isArray(profile.people)) p.people = profile.people.slice(0, 20).map((x) => ({ name: String(x.name || '').slice(0, 60), contact: String(x.contact || '').slice(0, 120) })).filter((x) => x.name);
+  }
+  if (rules) {
+    if (AUTONOMY[rules.autonomy]) u.rules.autonomy = rules.autonomy;
+    for (const k of ['approveAbove', 'monthlyCap', 'dailyCap']) if (Number.isFinite(rules[k]) && rules[k] >= 0 && rules[k] <= 20000) u.rules[k] = rules[k];
+  }
+  if (voice && typeof voice.on === 'boolean') u.voice.on = voice.on;
+  saveUser(u);
+  return { user: publicUser(u) };
+}));
+
+// Forget everything the agent knows about me (profile), keep PayPal connection and missions.
+app.post('/api/me/forget', api(async (req, res) => {
+  const u = me(req, res);
+  u.profile = newUser().profile;
+  saveUser(u);
+  return { user: publicUser(u) };
+}));
+
+// Stop switch: freezes every mission's payments instantly.
+app.post('/api/me/stop', api(async (req, res) => {
+  const u = me(req, res);
+  u.frozen = !!req.body?.stopped;
+  saveUser(u);
+  for (const id of u.missions) {
+    const b = live.get(id);
+    if (b) emitter(b)('stopped', { stopped: u.frozen, scope: 'all' });
+  }
+  return { user: publicUser(u) };
+}));
+
+// ---------- PayPal: log in, then sign the mandate once ----------
+app.get('/auth/paypal', (req, res) => {
+  const u = me(req, res);
+  const state = crypto.randomBytes(8).toString('hex');
+  u._state = state;
+  res.setHeader('Set-Cookie', [`mandat_uid=${u.id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`, `mandat_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`]);
+  res.redirect(PayPal.loginUrl({ redirectUri: `${BASE()}/auth/paypal/callback`, state }));
+});
+
+app.get('/auth/paypal/callback', async (req, res) => {
+  try {
+    const u = me(req, res);
+    if (String(req.query.state) !== cookie(req, 'mandat_state')) throw new Error('State mismatch');
+    const info = await PayPal.loginCallback(String(req.query.code));
+    u.paypal.connected = true;
+    u.paypal.payerName = info.name;
+    u.paypal.payerEmail = info.email;
+    u.paypal.verified = info.verified;
+    if (!u.profile.name && info.name) u.profile.name = info.name;
+    if (!u.profile.email && info.email) u.profile.email = info.email;
+    saveUser(u);
+    res.redirect('/?connected=1');
+  } catch (e) {
+    res.status(400).send('PayPal sign-in failed: ' + e.message);
+  }
+});
+
+app.post('/api/me/mandate', api(async (req, res) => {
+  const u = me(req, res);
   const setup = await PayPal.createMandateSetup({
-    returnUrl: `${base}/mandate/return?session=${b.s.id}`,
-    cancelUrl: `${base}/?session=${b.s.id}&mandate=cancelled`,
-    description: `Mandat — up to ${b.s.envelope.total} ${b.s.envelope.currency} for: ${b.s.envelope.purpose || 'your plan'}`,
+    returnUrl: `${BASE()}/mandate/return`,
+    cancelUrl: `${BASE()}/?mandate=cancelled`,
+    description: `Mandat — lets your agent hold and pay deposits up to ${u.rules.monthlyCap} EUR a month, inside each mission budget.`,
   });
-  b.s.pendingSetup = setup.id;
+  u.pendingSetup = setup.id;
+  saveUser(u);
   return setup;
 }));
 
-// PayPal sends the user back here after approving the mandate.
 app.get('/mandate/return', async (req, res) => {
   try {
-    const b = box(String(req.query.session));
-    const tokenId = String(req.query.approval_token_id || b.s.pendingSetup || '');
+    const u = me(req, res);
+    const tokenId = String(req.query.approval_token_id || u.pendingSetup || '');
     const m = await PayPal.activateMandate(tokenId);
-    b.s.mandate = m;
-    emitter(b)('mandate', { active: true, mode: m.mode });
-    res.redirect(`/?session=${b.s.id}&mandate=active`);
+    u.paypal.mandate = { ...m, signedAt: new Date().toISOString() };
+    if (m.payer && !u.paypal.payerEmail) u.paypal.payerEmail = m.payer;
+    delete u.pendingSetup;
+    saveUser(u);
+    res.redirect('/?mandate=active');
   } catch (e) {
     res.status(400).send('Mandate activation failed: ' + e.message);
   }
 });
 
-app.post('/api/sessions/:id/messages', api(async (req) => {
-  const b = box(req.params.id);
+app.post('/api/me/mandate/revoke', api(async (req, res) => {
+  const u = me(req, res);
+  u.paypal.mandate = null;
+  saveUser(u);
+  return { user: publicUser(u) };
+}));
+
+// ---------- missions ----------
+app.post('/api/missions', api(async (req, res) => {
+  const u = me(req, res);
+  if (!u.paypal.mandate) throw new Error('Sign the PayPal mandate first.');
+  if (u.frozen) throw new Error('Mandat is stopped. Resume it in Settings.');
+  const { intent = '', budget, emoji = '✦', location = null, image = null } = req.body || {};
+  if (!(budget > 0 && budget <= 5000)) throw new Error('Budget must be between 1 and 5000.');
+  const used = monthCommitted(u, u.missions.map(getMission));
+  if (used + budget > u.rules.monthlyCap) throw new Error(`This would exceed your monthly cap (${u.rules.monthlyCap} €, ${used} € already planned).`);
+  const s = createSession({ budget, approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });
+  s.title = await titleFor(intent);
+  u.missions.unshift(s.id);
+  saveUser(u);
+  saveMission(s);
+  const b = { s, clients: new Set(), busy: Promise.resolve(), log: [] };
+  live.set(s.id, b);
+  b.s._user = u;
+  emitter(b)('user', { text: intent, image: !!image });
+  run(b, (emit) => userTurn(b.s, intent, emit, { image }));
+  return { id: s.id, summary: missionSummary(s) };
+}));
+
+// A short, clean mission title (e.g. "Two weeks in Spain"), written by the fast model; plain fallback.
+async function titleFor(intent) {
+  const fallback = intent.replace(/\s+/g, ' ').trim().split(/[,.;:!?]/)[0].slice(0, 40) || 'New mission';
+  if (!intent.trim()) return 'Photo mission';
+  try {
+    const { message } = await chat({ model: MODELS.fast, maxTokens: 1500, temperature: 0.3, messages: [{ role: 'user', content: `Give a 2-5 word title, in the same language, for this errand: "${intent.slice(0, 300)}". No quotes, no emoji, no final period.` }] });
+    const t = (message.content || '').trim().replace(/^["'«]|["'»]$/g, '').slice(0, 42);
+    return t || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+app.get('/api/missions/:id', api(async (req, res) => {
+  const u = me(req, res);
+  const b = box(req.params.id, u);
+  return { summary: missionSummary(b.s), envelope: envelopeView(b.s) };
+}));
+
+app.post('/api/missions/:id/messages', api(async (req, res) => {
+  const u = me(req, res);
+  const b = box(req.params.id, u);
   const text = String(req.body?.text || '').trim().slice(0, 1200);
-  if (!text) throw new Error('Empty message');
-  emitter(b)('user', { text });
-  run(b, (emit) => userTurn(b.s, text, emit));
+  const image = typeof req.body?.image === 'string' && req.body.image.startsWith('data:image/') ? req.body.image : null;
+  if (!text && !image) throw new Error('Empty message');
+  emitter(b)('user', { text, image: !!image });
+  run(b, (emit) => userTurn(b.s, text, emit, { image }));
   return { queued: true };
 }));
 
-app.post('/api/sessions/:id/location', api(async (req) => {
-  const b = box(req.params.id);
+app.post('/api/missions/:id/location', api(async (req, res) => {
+  const b = box(req.params.id, me(req, res));
   const { lat, lon, label } = req.body || {};
   if (typeof lat !== 'number' || typeof lon !== 'number') throw new Error('lat/lon required');
-  b.s.location = { lat, lon, label: String(label || `${lat.toFixed(4)}, ${lon.toFixed(4)}`).slice(0, 120) };
+  b.s.location = { lat, lon, label: String(label || 'your location').slice(0, 120) };
   return { ok: true };
 }));
 
-app.post('/api/sessions/:id/approvals/:aid', api(async (req) => {
-  const b = box(req.params.id);
+app.post('/api/missions/:id/stop', api(async (req, res) => {
+  const b = box(req.params.id, me(req, res));
+  b.s.frozen = !!req.body?.stopped;
+  emitter(b)('stopped', { stopped: b.s.frozen, scope: 'mission' });
+  emitter(b)('summary', missionSummary(b.s));
+  saveMission(b.s);
+  return { ok: true };
+}));
+
+app.post('/api/missions/:id/approvals/:aid', api(async (req, res) => {
+  const b = box(req.params.id, me(req, res));
   run(b, (emit) => resolveApproval(b.s, req.params.aid, !!req.body?.approved, emit));
   return { queued: true };
 }));
 
-app.get('/api/sessions/:id/events', (req, res) => {
-  const b = box(req.params.id);
+app.get('/api/missions/:id/events', (req, res) => {
+  let b;
+  try {
+    b = box(req.params.id, me(req, res));
+  } catch (e) {
+    return res.status(e.status || 400).end();
+  }
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   for (const evt of b.log) res.write(`data: ${JSON.stringify(evt)}\n\n`);
   b.clients.add(res);
@@ -124,16 +282,23 @@ app.get('/api/sessions/:id/events', (req, res) => {
   });
 });
 
-// Merchant inbox (merchants without an AI agent): list and answer booking requests with one tap.
+app.get('/api/geocode', api(async (req) => {
+  const q = String(req.query.q || '').trim().slice(0, 160);
+  if (q.length < 3) throw new Error('Type an address');
+  return await geocode(q);
+}));
+
+// ---------- merchant inbox (merchants without an AI agent) ----------
 app.get('/api/merchants/:mid/requests', api(async (req) => {
   const out = [];
-  for (const b of sessions.values()) for (const r of Object.values(b.s.requests)) if (r.merchant_id === req.params.mid) out.push(r);
+  for (const b of live.values()) for (const r of Object.values(b.s.requests)) if (r.merchant_id === req.params.mid) out.push(r);
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }));
 
 app.post('/api/requests/:rid', api(async (req) => {
-  for (const b of sessions.values()) {
+  for (const b of live.values()) {
     if (b.s.requests[req.params.rid]) {
+      if (b.s.userId) b.s._user = getUser(b.s.userId);
       run(b, (emit) => resolveRequest(b.s, req.params.rid, !!req.body?.accepted, emit));
       return { queued: true };
     }
@@ -141,4 +306,4 @@ app.post('/api/requests/:rid', api(async (req) => {
   throw Object.assign(new Error('Unknown request'), { status: 404 });
 }));
 
-app.listen(PORT, () => console.log(`Mandat on http://localhost:${PORT} (PayPal: ${PayPal.MODE})`));
+app.listen(PORT, () => console.log(`Mandat on ${BASE()} (PayPal: ${PayPal.MODE})`));
