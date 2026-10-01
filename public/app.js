@@ -13,7 +13,9 @@ function show(view) {
   $('#tabbar').hidden = !['home', 'settings'].includes(view);
   $('#composer').hidden = view !== 'live';
   $('#back').hidden = view !== 'live';
-  $('#envChip').hidden = view !== 'live';
+  $('#topBudget').hidden = view !== 'live';
+  $('#topbar').classList.toggle('has-budget', view === 'live');
+  $('#topbar').classList.remove('compact');
   $('#stopMission').hidden = view !== 'live';
   $('#newMission').hidden = view !== 'home';
   $('.brand-mark').hidden = view === 'live';
@@ -145,9 +147,9 @@ async function openMission(id) {
   state.es = new EventSource(`/api/missions/${id}/events`);
   state.es.onmessage = (m) => handle(JSON.parse(m.data));
 }
-// Slim the pinned budget card once the feed scrolls (hysteresis avoids flicker as its height changes).
+// Slim the title + budget bar once the feed scrolls (hysteresis avoids flicker as its height changes).
 addEventListener('scroll', () => {
-  const card = $('.envelope-card');
+  const card = $('#topbar');
   const y = scrollY;
   if (y > 40) card.classList.add('compact');
   else if (y < 8) card.classList.remove('compact');
@@ -277,7 +279,6 @@ function sharesCard({ label, per, links }) {
 }
 function envelope(e) {
   state.currency = e.currency;
-  $('#envRemaining').textContent = fmt(e.remaining);
   $('#envSpent').textContent = fmt(e.spent);
   $('#envHeld').textContent = fmt(e.held);
   $('#envLeft').textContent = fmt(e.remaining);
@@ -285,8 +286,6 @@ function envelope(e) {
   const p = (v) => (100 * v) / (e.total || 1);
   $('.env-bar .spent').style.width = p(e.spent) + '%';
   $('.env-bar .held').style.width = p(e.held) + '%';
-  $('.ring-spent').style.strokeDasharray = `${(p(e.spent) * 94.2) / 100} 94.2`;
-  $('.ring-held').style.strokeDasharray = `0 ${(p(e.spent) * 94.2) / 100} ${(p(e.held) * 94.2) / 100} 94.2`;
 }
 
 // ---------- approval sheet: hold to approve ----------

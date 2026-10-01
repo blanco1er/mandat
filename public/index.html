@@ -17,17 +17,24 @@
 <body>
   <div class="backdrop" aria-hidden="true"><i></i><i></i><i></i></div>
 
-  <header class="topbar glass">
-    <button class="back" id="back" hidden aria-label="Missions"><svg viewBox="0 0 24 24"><path d="M15.4 4.6 8 12l7.4 7.4-1.4 1.4L5.2 12 14 3.2z"/></svg></button>
-    <div class="brand" id="brand"><span class="brand-mark" aria-hidden="true"></span><span id="topTitle">Mandat</span></div>
-    <div class="top-actions">
-      <button class="envelope-chip" id="envChip" hidden aria-label="Budget">
-        <svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" class="ring-bg"/><circle cx="18" cy="18" r="15" class="ring-spent"/><circle cx="18" cy="18" r="15" class="ring-held"/></svg>
-        <span><b id="envRemaining">—</b><small>left</small></span>
-      </button>
-      <button class="icon-btn stop" id="stopMission" hidden aria-label="Stop this mission">■</button>
-      <button class="icon-btn plus" id="newMission" hidden aria-label="New mission">＋</button>
+  <header class="topbar glass" id="topbar">
+    <div class="top-row">
+      <button class="back" id="back" hidden aria-label="Missions"><svg viewBox="0 0 24 24"><path d="M15.4 4.6 8 12l7.4 7.4-1.4 1.4L5.2 12 14 3.2z"/></svg></button>
+      <div class="brand" id="brand"><span class="brand-mark" aria-hidden="true"></span><span id="topTitle">Mandat</span></div>
+      <div class="top-actions">
+        <button class="icon-btn stop" id="stopMission" hidden aria-label="Stop this mission">■</button>
+        <button class="icon-btn plus" id="newMission" hidden aria-label="New mission">＋</button>
+      </div>
     </div>
+    <section class="top-budget" id="topBudget" hidden aria-label="Mission budget">
+      <div class="env-head"><span>Mission budget</span><span id="envPurpose"></span></div>
+      <div class="env-bar"><i class="spent"></i><i class="held"></i></div>
+      <div class="env-legend">
+        <div><b id="envSpent">€0</b><small>paid</small></div>
+        <div><b id="envHeld">€0</b><small>held</small></div>
+        <div><b id="envLeft">€0</b><small>left</small></div>
+      </div>
+    </section>
   </header>
 
   <!-- 0. Welcome: sign in with PayPal -->
@@ -80,15 +87,6 @@
 
   <!-- 3. A mission, live -->
   <main id="live" class="view" hidden>
-    <section class="envelope-card glass-card">
-      <div class="env-head"><span>Mission budget</span><span id="envPurpose"></span></div>
-      <div class="env-bar"><i class="spent"></i><i class="held"></i></div>
-      <div class="env-legend">
-        <div><b id="envSpent">€0</b><small>paid</small></div>
-        <div><b id="envHeld">€0</b><small>held</small></div>
-        <div><b id="envLeft">€0</b><small>left</small></div>
-      </div>
-    </section>
     <ol class="feed" id="feed" aria-live="polite"></ol>
     <div class="feed-spacer"></div>
   </main>
