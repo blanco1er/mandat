@@ -44,7 +44,8 @@
 html { background: var(--bg); }
 html, body { margin: 0; min-height: 100%; color: var(--ink); -webkit-font-smoothing: antialiased; }
 body { background: transparent; min-height: 100vh; }
-body { padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); overflow-x: hidden; }
+/* The top bar floats (fixed), so its height changes never move the page; --top-h reserves its full height. */
+body { padding: calc(env(safe-area-inset-top) + var(--top-h, 60px)) 0 env(safe-area-inset-bottom); overflow-x: hidden; }
 button, input, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
@@ -77,8 +78,8 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
 }
 
 .topbar {
-  position: sticky; top: calc(8px + env(safe-area-inset-top)); z-index: 10;
-  margin: 8px 16px 0; height: 52px; border-radius: 26px; padding: 0 8px 0 18px;
+  position: fixed; top: calc(8px + env(safe-area-inset-top)); left: 16px; right: 16px; z-index: 10;
+  margin: 0 auto; height: 52px; border-radius: 26px; padding: 0 8px 0 18px;
   display: flex; align-items: center; justify-content: space-between;
 }
 .brand { font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; }
@@ -133,7 +134,7 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
   transition: font-size 0.35s var(--smooth), line-height 0.35s var(--smooth), height 0.35s var(--smooth), max-height 0.35s var(--smooth), margin 0.35s var(--smooth), opacity 0.25s var(--smooth);
 }
 .topbar.compact .top-budget { padding-bottom: 10px; }
-.topbar.compact .env-head { max-height: 0; opacity: 0; margin-bottom: 0; }
+.topbar.compact .env-head { font-size: 12px; margin-bottom: 5px; }
 .topbar.compact .env-bar { height: 5px; }
 .topbar.compact .env-legend { margin-top: 7px; }
 .topbar.compact .env-legend div { flex-direction: row; align-items: baseline; gap: 5px; }
@@ -259,7 +260,7 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
 }
 
 /* ---------- v2: account, missions, settings ---------- */
-.topbar { max-width: 660px; margin-left: auto; margin-right: auto; gap: 8px; }
+.topbar { max-width: 660px; gap: 8px; }
 .top-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .back { width: 36px; height: 36px; border-radius: 18px; display: grid; place-items: center; margin-left: -10px; }
 .back svg { width: 20px; fill: var(--accent); }

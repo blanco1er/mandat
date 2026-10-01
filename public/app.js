@@ -147,7 +147,12 @@ async function openMission(id) {
   state.es = new EventSource(`/api/missions/${id}/events`);
   state.es.onmessage = (m) => handle(JSON.parse(m.data));
 }
-// Slim the title + budget bar once the feed scrolls (hysteresis avoids flicker as its height changes).
+// Reserve the top bar's full height in the page; the slim state floats over it, so nothing jumps.
+new ResizeObserver(() => {
+  const t = $('#topbar');
+  if (!t.classList.contains('compact')) document.documentElement.style.setProperty('--top-h', t.offsetHeight + 8 + 'px');
+}).observe($('#topbar'));
+// Slim the title + budget bar once the feed scrolls.
 addEventListener('scroll', () => {
   const card = $('#topbar');
   const y = scrollY;
