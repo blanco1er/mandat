@@ -7,6 +7,7 @@ import { createSession, userTurn, resolveApproval, resolveRequest, envelopeView,
 import * as PayPal from './lib/paypal.mjs';
 import { geocode } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
+import { invoiceStatus } from './lib/invoices.mjs';
 import { newUser, getUser, saveUser, getMission, saveMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
 const app = express();
@@ -264,6 +265,21 @@ app.post('/api/missions/:id/messages', api(async (req, res) => {
   emitter(b)('user', { text, image: !!image });
   run(b, (emit) => userTurn(b.s, text, emit, { image }));
   return { queued: true };
+}));
+
+// Split-bill invoices: ask PayPal for fresh statuses; a newly paid share is announced in the mission.
+app.get('/api/missions/:id/shares', api(async (req, res) => {
+  const b = box(req.params.id, me(req, res));
+  let changed = false;
+  await Promise.all(b.s.shares.filter((sh) => sh.invoiceId && !sh.error && sh.status !== 'PAID').map(async (sh) => {
+    const status = await invoiceStatus(sh.invoiceId).catch(() => null);
+    if (!status || status === sh.status) return;
+    sh.status = status;
+    changed = true;
+    if (status === 'PAID') emitter(b)('share_paid', { invoiceId: sh.invoiceId, friend: sh.friend, amount: sh.amount });
+  }));
+  if (changed) saveMission(b.s);
+  return { shares: b.s.shares.filter((sh) => sh.invoiceId).map(({ qr, ...sh }) => sh) };
 }));
 
 app.post('/api/missions/:id/location', api(async (req, res) => {

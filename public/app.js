@@ -139,7 +139,8 @@ $('#nmStart').addEventListener('click', async () => {
 // ---------- a mission, live ----------
 async function openMission(id) {
   if (state.es) state.es.close();
-  Object.assign(state, { mission: id, cards: {}, verified: {}, live: false, busy: false, streamLi: null });
+  stopWatchingShares();
+  Object.assign(state, { mission: id, cards: {}, verified: {}, live: false, busy: false, streamLi: null, shareRows: {} });
   $('#newPill').hidden = true;
   $('#feed').innerHTML = '';
   const r = await get(`/api/missions/${id}`);
@@ -164,6 +165,7 @@ addEventListener('scroll', () => {
 }, { passive: true });
 $('#back').addEventListener('click', () => {
   if (state.es) state.es.close();
+  stopWatchingShares();
   state.mission = null;
   stopSpeaking();
   refreshHome();
@@ -229,6 +231,11 @@ function handle({ type, data }) {
     case 'envelope': return envelope(data);
     case 'plan': return planCard(data);
     case 'shares': return sharesCard(data);
+    case 'share_paid': {
+      const row = state.shareRows[data.invoiceId];
+      if (row) shareChip(row.querySelector('.chip'), 'PAID');
+      return add(step(`${data.friend} paid their share — ${fmt(data.amount)}`));
+    }
     case 'stopped': return add(step(data.stopped ? 'Stopped — no payment will be made until you resume.' : 'Resumed.'));
     case 'error': return add(errorStep(data.message));
   }
@@ -371,10 +378,74 @@ function planCard({ items }) {
     .join('')}</ol>`;
   add(card);
 }
+// Split bill: one real PayPal invoice per friend — emailed by PayPal, plus a pay link and a QR code.
+const SHARE_STATUS = { PAID: ['Paid', 'paid'], PARTIALLY_PAID: ['Part paid', 'part'], CANCELLED: ['Cancelled', 'off'], REFUNDED: ['Refunded', 'off'] };
+function shareChip(chip, status, mode) {
+  const [text, cls] = mode === 'offline' ? ['Demo', 'off'] : SHARE_STATUS[status] || ['Waiting', 'wait'];
+  chip.textContent = text;
+  chip.className = 'chip ' + cls;
+}
 function sharesCard({ label, per, links }) {
-  const li = el('li', 'card');
-  li.innerHTML = `<header><span class="avatar" style="background:#7b61ff">👥</span><div><b>Split sent with PayPal</b><small>${esc(label)} · ${fmt(per)} each</small></div></header><p style="margin:10px 0 0;font-size:14px;color:var(--ink-2)">${links.map((l) => esc(l.friend)).join(', ')}</p>`;
+  const li = el('li', 'card split');
+  li.innerHTML = `<header><span class="avatar" style="background:#7b61ff">👥</span><div><b>Split with PayPal invoices</b><small>${esc(label)} · ${fmt(per)} each</small></div></header><ul class="split-list"></ul>
+    <p class="split-foot">No app needed to pay: from PayPal's email, the link, or the QR code.</p>`;
+  const ul = li.querySelector('.split-list');
+  for (const l of links) {
+    const row = el('li', 'split-row');
+    if (l.error) {
+      row.innerHTML = `<div class="split-top"><span class="who"><b>${esc(l.friend)}</b><small>Could not create the invoice</small></span><span class="amt">${fmt(l.amount)}</span></div>`;
+      ul.append(row);
+      continue;
+    }
+    row.innerHTML = `<div class="split-top"><span class="who"><b>${esc(l.friend)}</b><small>${l.emailed ? 'Emailed by PayPal' : 'Pay link & QR code'}</small></span><span class="amt">${fmt(l.amount)}</span><span class="chip"></span></div>
+      <div class="split-actions"><button type="button" data-a="qr">${svg('qr')}QR code</button><button type="button" data-a="share">${svg('share')}Send</button><button type="button" data-a="copy">${svg('copy')}Copy link</button></div>
+      <figure class="qr-box" hidden>${l.qr ? `<img src="${l.qr}" alt="QR code to pay ${esc(l.friend)}'s share with PayPal" width="180" height="180">` : '<span>No QR code in demo mode</span>'}<figcaption>Scan with any phone camera to pay with PayPal</figcaption></figure>`;
+    shareChip(row.querySelector('.chip'), l.status, l.mode);
+    state.shareRows[l.invoiceId] = row;
+    const text = `${l.friend}, your share for ${label}: ${fmt(l.amount)}. Pay with PayPal:`;
+    row.querySelector('[data-a=qr]').addEventListener('click', (e) => {
+      const box = row.querySelector('.qr-box');
+      box.hidden = !box.hidden;
+      e.currentTarget.classList.toggle('on', !box.hidden);
+    });
+    row.querySelector('[data-a=share]').addEventListener('click', async (e) => {
+      if (navigator.share) return navigator.share({ title: 'Your share', text, url: l.payUrl }).catch(() => {});
+      await navigator.clipboard.writeText(`${text} ${l.payUrl}`).catch(() => {});
+      flashLabel(e.currentTarget, 'Copied');
+    });
+    row.querySelector('[data-a=copy]').addEventListener('click', async (e) => {
+      await navigator.clipboard.writeText(l.payUrl).catch(() => {});
+      flashLabel(e.currentTarget, 'Copied');
+    });
+    ul.append(row);
+  }
   add(li);
+  watchShares();
+}
+function flashLabel(b, text) {
+  const html = b.innerHTML;
+  b.innerHTML = svg('check') + text;
+  setTimeout(() => (b.innerHTML = html), 1400);
+}
+// While a mission is open and someone still owes their share, ask PayPal for news every 15 s.
+function watchShares() {
+  if (state.shareTimer || !state.mission) return;
+  const tick = async () => {
+    try {
+      const { shares } = await get(`/api/missions/${state.mission}/shares`);
+      for (const sh of shares) {
+        const row = state.shareRows[sh.invoiceId];
+        if (row) shareChip(row.querySelector('.chip'), sh.status, sh.mode);
+      }
+      if (!shares.some((sh) => !sh.error && sh.mode !== 'offline' && !['PAID', 'CANCELLED', 'REFUNDED'].includes(sh.status))) stopWatchingShares();
+    } catch {}
+  };
+  state.shareTimer = setInterval(tick, 15000);
+  setTimeout(tick, 1500);
+}
+function stopWatchingShares() {
+  clearInterval(state.shareTimer);
+  state.shareTimer = null;
 }
 function envelope(e) {
   state.currency = e.currency;
@@ -708,6 +779,7 @@ const ICON = {
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   listen: '<path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
   stop: '<rect x="7" y="7" width="10" height="10" rx="1.5"/>',
+  qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/>',
   share: '<path d="M12 15V4M8 7.5 12 3.5l4 4"/><path d="M7 11H6a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 18 11h-1"/>',
 };
 const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`;
