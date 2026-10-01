@@ -200,6 +200,25 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
 .orb.listening .orb-core { animation: spin 2s linear infinite, breathe 1s ease-in-out infinite; }
 .orb.speaking .orb-core { animation: spin 3s linear infinite, talk 0.35s ease-in-out infinite alternate; }
 .orb.thinking .orb-core { animation: spin 0.9s linear infinite; opacity: 0.85; }
+/* Morph: the orb becomes the send button as soon as there is text. */
+.orb-send { position: absolute; inset: 0; margin: auto; width: 22px; height: 22px; fill: #fff; opacity: 0; transform: scale(0.4) rotate(-90deg); transition: opacity 0.25s var(--smooth), transform 0.45s var(--spring); }
+.orb-core { transition: inset 0.4s var(--spring), filter 0.3s var(--smooth); }
+.composer.has-text .orb-core { inset: 2px; animation: none; background: var(--accent); filter: none; }
+.composer.has-text .orb-ring { opacity: 0; }
+.composer.has-text .orb-send { opacity: 1; transform: none; }
+/* A voice waveform on the orb, so it reads as "talk to the assistant" at a glance. */
+.orb-wave { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 3px; pointer-events: none; transition: opacity 0.2s var(--smooth), transform 0.45s var(--spring); }
+.orb-wave i { width: 3px; height: 8px; border-radius: 2px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+.orb-wave i:nth-child(2) { height: 16px; }
+.orb-wave i:nth-child(3) { height: 12px; }
+.orb.listening .orb-wave i, .orb.speaking .orb-wave i { animation: wave 0.6s ease-in-out infinite alternate; }
+.orb-wave i:nth-child(2) { animation-delay: -0.15s; }
+.orb-wave i:nth-child(3) { animation-delay: -0.3s; }
+.orb-wave i:nth-child(4) { animation-delay: -0.45s; }
+@keyframes wave { from { transform: scaleY(0.45); } to { transform: scaleY(1.25); } }
+.orb.thinking .orb-wave { opacity: 0.55; }
+.composer.has-text .orb-wave { opacity: 0; transform: scale(0.4); }
+@media (prefers-reduced-motion: reduce) { .orb-wave i { animation: none !important; } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes breathe { 50% { transform: scale(1.12) rotate(180deg); } }
 @keyframes talk { to { transform: scale(1.07); } }

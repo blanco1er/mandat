@@ -42,7 +42,8 @@ function box(id, user) {
   if (!b) {
     const s = getMission(id);
     if (!s) throw Object.assign(new Error('Unknown mission'), { status: 404 });
-    b = { s, clients: new Set(), busy: Promise.resolve(), log: s._log || [] };
+    s.feed ||= []; // the event feed is saved with the mission, so it survives a server restart
+    b = { s, clients: new Set(), busy: Promise.resolve(), log: s.feed };
     live.set(id, b);
   }
   if (user && b.s.userId !== user.id) throw Object.assign(new Error('Not your mission'), { status: 403 });
@@ -203,8 +204,9 @@ app.post('/api/missions', api(async (req, res) => {
   s.title = await titleFor(intent);
   u.missions.unshift(s.id);
   saveUser(u);
+  s.feed = [];
   saveMission(s);
-  const b = { s, clients: new Set(), busy: Promise.resolve(), log: [] };
+  const b = { s, clients: new Set(), busy: Promise.resolve(), log: s.feed };
   live.set(s.id, b);
   b.s._user = u;
   emitter(b)('user', { text: intent, image: !!image });

@@ -163,6 +163,7 @@ $('#say').addEventListener('submit', (e) => {
   const t = $('#sayText').value.trim();
   if (!t) return;
   $('#sayText').value = '';
+  syncComposer();
   send(t);
 });
 $('#photoBtn').addEventListener('click', () => pickPhoto((url) => send($('#sayText').value.trim(), url).then(() => ($('#sayText').value = ''))));
@@ -482,13 +483,22 @@ function listen(onText, button) {
   else orbState('listening');
   rec.start();
 }
+// One button: send when there is text, otherwise talk.
 $('#orb').addEventListener('click', () => {
+  if ($('#sayText').value.trim()) return $('#say').requestSubmit();
   if (state.listening) return rec?.stop();
   listen((t) => {
     $('#sayText').value = '';
+    syncComposer();
     send(t);
   });
 });
+function syncComposer() {
+  const has = !!$('#sayText').value.trim() && !state.listening;
+  $('#composer').classList.toggle('has-text', has);
+  $('#orb').setAttribute('aria-label', has ? 'Send' : 'Talk to Mandat');
+}
+$('#sayText').addEventListener('input', syncComposer);
 function speak(text) {
   if (!state.me?.voice?.on || !window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(text);
