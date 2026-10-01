@@ -8,7 +8,7 @@ import * as PayPal from './lib/paypal.mjs';
 import { geocode } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
-import { newUser, getUser, saveUser, getMission, saveMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
+import { newUser, getUser, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
 const app = express();
 const PORT = Number(process.env.PORT || 8790);
@@ -95,7 +95,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true, paypal: PayPal.MODE })
 
 app.get('/api/me', api(async (req, res) => {
   const u = me(req, res);
-  const missions = u.missions.map((id) => getMission(id)).filter(Boolean).map((s) => missionSummary(live.get(s.id)?.s || s));
+  const missions = u.missions.map((id) => getMission(id)).filter(Boolean).map((s) => missionSummary(live.get(s.id)?.s || s, { busy: !!live.get(s.id)?.running }));
   return { user: publicUser(u), missions, paypalMode: PayPal.MODE };
 }));
 
@@ -287,7 +287,7 @@ app.post('/api/missions', api(async (req, res) => {
 // A short, clean mission title (e.g. "Two weeks in Spain"), written by the fast model; plain fallback.
 function plainTitle(intent) {
   if (!intent.trim()) return 'Photo mission';
-  return intent.replace(/\s+/g, ' ').trim().split(/[,.;:!?]/)[0].slice(0, 40).trim() || 'New mission';
+  return intent.replace(/\s+/g, ' ').trim().split(/[,.;:!?]/)[0].slice(0, 40).trim().replace(/[\s,;:.\-–]+$/, '') || 'New mission';
 }
 async function titleFor(intent) {
   const fallback = plainTitle(intent);
@@ -331,6 +331,25 @@ app.get('/api/missions/:id/shares', api(async (req, res) => {
   }));
   if (changed) saveMission(b.s);
   return { shares: b.s.shares.filter((sh) => sh.invoiceId).map(({ qr, ...sh }) => sh) };
+}));
+
+// Archive keeps the history; delete only when no money is held for the mission.
+app.post('/api/missions/:id/archive', api(async (req, res) => {
+  const b = box(req.params.id, me(req, res));
+  b.s.archived = req.body?.archived !== false;
+  saveMission(b.s);
+  return { summary: missionSummary(b.s) };
+}));
+app.delete('/api/missions/:id', api(async (req, res) => {
+  const u = me(req, res);
+  const b = box(req.params.id, u);
+  if (b.s.envelope.entries.some((e) => e.state === 'held')) throw Object.assign(new Error('Money is still held for this mission. Release it or archive the mission instead.'), { status: 409 });
+  for (const c of b.clients) c.end();
+  live.delete(b.s.id);
+  u.missions = u.missions.filter((id) => id !== b.s.id);
+  saveUser(u);
+  deleteMission(b.s.id);
+  return { ok: true };
 }));
 
 app.post('/api/missions/:id/location', api(async (req, res) => {

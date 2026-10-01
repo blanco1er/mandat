@@ -2,7 +2,7 @@
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const state = { me: null, mission: null, es: null, currency: 'EUR', speaking: false, listening: false, cards: {}, verified: {}, photo: null, voiceTurn: false, live: false };
-const fmt = (v) => new Intl.NumberFormat(navigator.language || 'en-US', { style: 'currency', currency: state.currency, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
+const fmt = (v) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: state.currency, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
 const PLURAL = { bakery: 'bakeries', florist: 'florists', restaurant: 'restaurants', hotel: 'hotels', bar: 'bars', cafe: 'cafés', hairdresser: 'hair salons', cinema: 'cinemas' };
 const many = (c) => PLURAL[c] || c + 's';
 
@@ -24,6 +24,7 @@ function show(view) {
   window.scrollTo({ top: 0 });
 }
 
+history.scrollRestoration = 'manual'; // every screen opens at its top
 async function boot() {
   const r = await get('/api/me');
   state.me = r.user;
@@ -59,24 +60,249 @@ $('#signMandate').addEventListener('click', async () => {
 });
 
 // ---------- home ----------
-function renderHome(missions) {
-  const name = (state.me.profile.name || state.me.paypal.payerName || '').split(' ')[0];
-  $('#hello').textContent = name ? `Hi ${name} — what can I take off your plate?` : 'What can I take off your plate?';
-  $('#stoppedBanner').hidden = !state.me.frozen;
-  const ol = $('#missions');
-  ol.innerHTML = '';
-  $('#empty').hidden = missions.length > 0;
-  for (const m of missions) ol.append(missionRow(m));
+// ---------- home: one place to ask, then missions sorted by what needs you ----------
+const IDEAS = [
+  { e: '🧳', t: 'Weekend away', d: 'Hotel, train and a plan', b: 600, q: 'A weekend in Lisbon for two in November, leaving from Paris. A nice hotel near the center and one good dinner.' },
+  { e: '🎂', t: 'Birthday evening', d: 'Table, cake, flowers', b: 300, q: "My partner's birthday this Saturday: dinner for 6 around 8pm near me, a cake and flowers." },
+  { e: '🧾', t: 'Split a bill', d: 'Everyone pays their share', b: 150, q: 'Dinner came to 128 euros and I paid. Split it with Sam, Lina and Tom.' },
+  { e: '🔧', t: 'Get something fixed', d: 'Snap a photo, done', b: 80, q: 'My bike has a flat tyre. Find a repair shop near me that can fix it today.' },
+  { e: '💐', t: 'Send flowers', d: 'Delivered with a note', b: 70, q: 'Flowers delivered to my mum on Sunday morning, something cheerful, with a short note from me.' },
+  { e: '🇪🇸', t: 'Two weeks in Spain', d: 'Trains, stays, budget kept', b: 700, q: 'Two weeks in Spain in October, I leave from Paris. 700 euros all in.' },
+];
+const EMOJI = [[/spain|españa|espagne|lisbon|travel|trip|voyage|vacation|weekend/i, '🧳'], [/birthday|anniversaire/i, '🎂'], [/split|share|bill|addition/i, '🧾'], [/dinner|restaurant|dîner|table/i, '🍽️'], [/repair|fix|tyre|tire|répar/i, '🔧'], [/hair|coiff/i, '💇'], [/concert|ticket|billet/i, '🎟️'], [/flower|fleur/i, '💐'], [/hotel|hôtel/i, '🛎️']];
+const compose = { budget: 400, auto: false, touched: false, emoji: null, photo: null, voice: false };
+
+// Ideas: tapping one fills the box — it never starts anything by itself.
+for (const i of IDEAS) {
+  const b = el('button', 'idea');
+  b.type = 'button';
+  b.innerHTML = `<span class="idea-e">${i.e}</span><b>${esc(i.t)}</b><small>${esc(i.d)}</small>`;
+  b.addEventListener('click', () => {
+    $('#cText').value = i.q;
+    compose.emoji = i.e;
+    setBudget(i.b, { auto: false, touched: false }); // an amount you then type still wins
+    onCompose();
+    $('#cText').focus();
+    $('#cText').setSelectionRange(i.q.length, i.q.length);
+  });
+  $('#ideas').append(b);
 }
-const STATUS = { needs_you: 'Needs you', working: 'Working', done: 'Done', stopped: 'Stopped', new: 'New' };
+
+// A rotating example in the empty box, typed in softly.
+const HINTS = ['Book a table for 4 tonight, around 40 € each…', 'Two weeks in Spain, 700 € all in…', 'Get my bike fixed today…', 'Split last night’s dinner with Sam and Lina…'];
+let hintI = 0, hintTimer;
+function typeHint() {
+  const box = $('#cText');
+  if (box.value || document.activeElement === box) return (box.placeholder = 'Say what you need and what you can spend…');
+  const h = HINTS[hintI++ % HINTS.length];
+  let n = 0;
+  clearInterval(hintTimer);
+  hintTimer = setInterval(() => {
+    box.placeholder = h.slice(0, ++n);
+    if (n >= h.length) clearInterval(hintTimer);
+  }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 28);
+}
+setInterval(typeHint, 4200);
+
+// The budget is read from your words ("700 euros", "€50 each") unless you set it yourself.
+function budgetFromText(t) {
+  const m = t.match(/(?:€|eur\s?)\s?(\d[\d\s.,]*)|(\d[\d\s.,]*)\s?(?:€|euros?|eur\b)/i);
+  if (!m) return null;
+  const n = Number((m[1] || m[2]).replace(/\s/g, '').replace(/,(\d{1,2})$/, '.$1').replace(/,/g, ''));
+  return n > 0 && n < 100000 ? Math.round(n) : null;
+}
+function setBudget(v, { auto = false, touched = compose.touched } = {}) {
+  compose.budget = v;
+  compose.auto = auto;
+  compose.touched = touched;
+  $('#cBudget').textContent = fmtC(v);
+  $('#cBudgetAuto').hidden = !auto;
+  $('#cBudgetIn').value = v;
+  $$('#cChips button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === v));
+}
+function onCompose() {
+  const t = $('#cText').value;
+  const found = budgetFromText(t);
+  if (found && !compose.touched) setBudget(found, { auto: true, touched: false });
+  $('#cGo').disabled = !t.trim() && !compose.photo;
+  $('#cText').style.height = 'auto';
+  $('#cText').style.height = Math.min($('#cText').scrollHeight, 220) + 'px';
+}
+$('#cText').addEventListener('input', onCompose);
+$('#cText').addEventListener('focus', typeHint);
+$('#cText').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) $('#compose').requestSubmit();
+});
+for (const v of [50, 100, 200, 400, 700, 1000]) {
+  const b = el('button', '', fmtC(v));
+  b.type = 'button';
+  b.dataset.v = v;
+  b.addEventListener('click', () => { setBudget(v, { touched: true }); toggleBudget(false); });
+  $('#cChips').append(b);
+}
+function toggleBudget(open = $('#cBudgetEdit').hidden) {
+  $('#cBudgetEdit').hidden = !open;
+  $('#cBudgetBtn').setAttribute('aria-expanded', String(open));
+}
+$('#cBudgetBtn').addEventListener('click', () => toggleBudget());
+$('#cBudgetIn').addEventListener('input', () => {
+  const v = Math.round(Number($('#cBudgetIn').value.replace(',', '.')));
+  if (v > 0) setBudget(v, { touched: true });
+});
+$('#cMic').addEventListener('click', () => listen((t) => {
+  $('#cText').value = ($('#cText').value + ' ' + t).trim();
+  compose.voice = true;
+  onCompose();
+}, $('#cMic')));
+$('#cPhoto').addEventListener('click', () => pickPhoto((url) => {
+  compose.photo = url;
+  $('#cPreview').src = url;
+  $('#cPhotoWrap').hidden = false;
+  onCompose();
+}));
+$('#cPhotoX').addEventListener('click', () => {
+  compose.photo = null;
+  $('#cPhotoWrap').hidden = true;
+  onCompose();
+});
+$('#compose').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const intent = $('#cText').value.trim();
+  if (!intent && !compose.photo) return;
+  $('#cGo').disabled = true;
+  $('#compose').classList.add('sending');
+  try {
+    const location = await locate();
+    const emoji = compose.emoji || EMOJI.find(([re]) => re.test(intent))?.[1] || '✦';
+    const r = await post('/api/missions', { intent, budget: compose.budget, emoji, location, image: compose.photo });
+    state.voiceTurn = compose.voice;
+    resetCompose();
+    openMission(r.id);
+  } catch (err) {
+    $('#cRule').textContent = err.message;
+    $('#cRule').classList.add('error');
+  } finally {
+    $('#compose').classList.remove('sending');
+    onCompose();
+  }
+});
+function resetCompose() {
+  $('#cText').value = '';
+  Object.assign(compose, { emoji: null, photo: null, voice: false, auto: false, touched: false });
+  $('#cPhotoWrap').hidden = true;
+  setBudget(400);
+  toggleBudget(false);
+  onCompose();
+}
+function ruleText() {
+  const lvl = state.me.rules.autonomy;
+  return lvl === 'autopilot' ? 'Autopilot · books and holds deposits on its own, inside this budget.' : lvl === 'careful' ? 'Careful · asks you before every payment.' : `Balanced · asks you before any payment over ${fmtC(state.me.rules.approveAbove)}.`;
+}
+$('#newMission').addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => $('#cText').focus(), 250);
+});
+
+// Missions, grouped by urgency; the newest activity first inside each group.
+const GROUPS = [
+  { key: 'needs', title: 'Needs you', match: (m) => m.status === 'needs_you' },
+  { key: 'progress', title: 'In progress', match: (m) => ['working', 'waiting', 'idle', 'new'].includes(m.status) },
+  { key: 'booked', title: 'Booked', match: (m) => m.status === 'done' },
+  { key: 'paused', title: 'Paused', match: (m) => m.status === 'stopped' },
+];
+const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto', style: 'short' }); // the interface is in English: no mixed languages
+function ago(t) {
+  const s = (Date.now() - t) / 1000;
+  if (s < 60) return 'now';
+  for (const [u, n] of [['minute', 60], ['hour', 3600], ['day', 86400], ['week', 604800]]) if (s < n * (u === 'week' ? 5 : u === 'day' ? 7 : u === 'hour' ? 24 : 60)) return rtf.format(-Math.floor(s / n), u);
+  return new Date(t).toLocaleDateString('en', { day: 'numeric', month: 'short' });
+}
+function renderHome(missions) {
+  state.missions = missions;
+  const name = (state.me.profile.name || state.me.paypal.payerName || '').split(' ')[0];
+  const h = new Date().getHours();
+  $('#hello').textContent = `${h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'}${name ? ', ' + name : ''}`;
+  $('#stoppedBanner').hidden = !state.me.frozen;
+  $('#cRule').textContent = ruleText();
+  $('#cRule').classList.remove('error');
+  $('#mSearchWrap').hidden = missions.filter((m) => !m.archived).length < 6;
+  drawGroups();
+}
+function drawGroups() {
+  const q = $('#mSearch').value.trim().toLowerCase();
+  const list = (state.missions || []).filter((m) => !q || (m.title + ' ' + m.last + ' ' + m.needs).toLowerCase().includes(q)).sort((a, b) => b.lastAt - a.lastAt);
+  const root = $('#mGroups');
+  root.innerHTML = '';
+  for (const g of GROUPS) {
+    const ms = list.filter((m) => !m.archived && g.match(m));
+    if (ms.length) root.append(group(g.title, ms, g.key));
+  }
+  const archived = list.filter((m) => m.archived);
+  if (archived.length) {
+    const sec = group(`Archived`, archived, 'archived');
+    sec.classList.toggle('closed', !state.showArchived && !q);
+    sec.querySelector('h2').append(el('span', 'count', String(archived.length)));
+    sec.querySelector('h2').addEventListener('click', () => { state.showArchived = !state.showArchived; sec.classList.toggle('closed'); });
+    root.append(sec);
+  }
+  if (q && !list.length) root.append(el('p', 'm-none', 'No mission matches.'));
+}
+$('#mSearch').addEventListener('input', drawGroups);
+function group(title, ms, key) {
+  const sec = el('section', 'm-group ' + key);
+  sec.append(el('h2', 'section-title', title));
+  const ol = el('ol', 'missions');
+  for (const m of ms) ol.append(missionRow(m));
+  sec.append(ol);
+  return sec;
+}
+const cleanTitle = (t) => String(t || 'Mission').replace(/[\s,;:.\-–]+$/, '');
+function missionLine(m) {
+  if (m.status === 'needs_you') return ['needs', m.needs || 'Waiting for you'];
+  if (m.status === 'working') return ['working', 'Working on it'];
+  if (m.status === 'waiting') return ['quiet', m.needs];
+  if (m.status === 'done') return ['quiet', m.held ? `All booked · ${fmtC(m.held, m.currency)} held until confirmed` : 'All booked'];
+  if (m.status === 'stopped') return ['quiet', 'Paused — no payment can be made'];
+  return ['quiet', m.last || 'Starting…'];
+}
 function missionRow(m) {
   const li = el('li', 'mission');
   li.dataset.id = m.id;
-  const p = (v) => (100 * v) / (m.total || 1);
-  li.innerHTML = `<span class="emoji">${esc(m.emoji)}</span><div class="info"><b>${esc(m.title)}</b><small>${fmtC(m.remaining, m.currency)} left of ${fmtC(m.total, m.currency)}${m.progress ? ` · ${m.progress.done}/${m.progress.of} booked` : ''}</small><div class="bar"><i class="s" style="width:${p(m.spent)}%"></i><i class="h" style="width:${p(m.held)}%"></i></div></div><span class="badge ${m.status}">${STATUS[m.status]}</span>`;
-  li.addEventListener('click', () => openMission(m.id));
+  const used = m.total ? Math.min(1, (m.spent + m.held) / m.total) : 0;
+  const [cls, line] = missionLine(m);
+  li.innerHTML = `<span class="emoji">${esc(m.emoji)}</span>
+    <div class="info"><div class="t-row"><b>${esc(cleanTitle(m.title))}</b><time>${ago(m.lastAt)}</time></div>
+      <p class="m-line ${cls}">${esc(line)}</p>
+      <div class="m-money"><span class="ring" style="--p:${used}"></span>${fmtC(m.remaining, m.currency)} left of ${fmtC(m.total, m.currency)}${m.progress ? ` · ${m.progress.done}/${m.progress.of} booked` : ''}</div></div>
+    <button type="button" class="m-more" aria-label="More for ${esc(m.title)}" aria-haspopup="menu">•••</button>`;
+  li.addEventListener('click', (e) => { if (!e.target.closest('.m-more')) openMission(m.id); });
+  li.querySelector('.m-more').addEventListener('click', (e) => rowMenu(e.currentTarget, m));
   return li;
 }
+// "•••": archive (keeps everything) or delete (only when no money is held).
+function rowMenu(btn, m) {
+  const menu = $('#rowMenu');
+  menu.innerHTML = '';
+  const item = (label, fn, danger) => {
+    const b = el('button', danger ? 'danger' : '', label);
+    b.setAttribute('role', 'menuitem');
+    b.addEventListener('click', async () => { closeMenu(); await fn(); });
+    menu.append(b);
+  };
+  item(m.archived ? 'Move back to missions' : 'Archive', async () => { await post(`/api/missions/${m.id}/archive`, { archived: !m.archived }); refreshHome(); });
+  if (!m.held) item('Delete…', async () => {
+    if (!confirm(`Delete “${m.title}”? Its conversation will be gone.`)) return;
+    const r = await fetch(`/api/missions/${m.id}`, { method: 'DELETE' });
+    if (!r.ok) return alert((await r.json()).error);
+    refreshHome();
+  }, true);
+  const r = btn.getBoundingClientRect();
+  menu.style.top = `${r.bottom + 6}px`;
+  menu.style.right = `${Math.max(12, innerWidth - r.right)}px`;
+  menu.hidden = false;
+  setTimeout(() => addEventListener('click', closeMenu, { once: true }), 0);
+}
+function closeMenu() { $('#rowMenu').hidden = true; }
 async function refreshHome() {
   const r = await get('/api/me');
   state.me = r.user;
@@ -88,54 +314,8 @@ $('#resumeAll').addEventListener('click', async () => {
   state.me = (await post('/api/me/stop', { stopped: false })).user;
   refreshHome();
 });
-
-// ---------- new mission sheet ----------
-const EMOJI = [[/spain|españa|espagne|travel|trip|voyage|vacation/i, '🧳'], [/birthday|anniversaire/i, '🎂'], [/dinner|restaurant|dîner/i, '🍽️'], [/hair|coiff/i, '💇'], [/concert|ticket|billet/i, '🎟️'], [/flower|fleur/i, '💐'], [/hotel|hôtel/i, '🛎️']];
-let nmEmoji = null;
-function openNew(text = '', budget = 400, emoji = null) {
-  $('#nmIntent').value = text;
-  $('#nmBudget').value = budget;
-  nmEmoji = emoji;
-  state.photo = null;
-  $('#nmPreview').hidden = true;
-  const lvl = state.me.rules.autonomy;
-  $('#nmRule').textContent = lvl === 'autopilot' ? 'Autopilot: it will book and hold deposits on its own inside this budget.' : lvl === 'careful' ? 'Careful: it will ask you before every payment.' : `Balanced: it asks you before any payment above ${fmtC(state.me.rules.approveAbove)}.`;
-  $('#nmScrim').hidden = false;
-  $('#nmSheet').hidden = false;
-  setTimeout(() => $('#nmIntent').focus(), 300);
-}
-function closeNew() {
-  $('#nmScrim').hidden = true;
-  $('#nmSheet').hidden = true;
-}
-$('#newMission').addEventListener('click', () => openNew());
-$('#nmCancel').addEventListener('click', closeNew);
-$('#nmScrim').addEventListener('click', closeNew);
-$$('.suggest').forEach((b) => b.addEventListener('click', () => openNew(b.dataset.t, Number(b.dataset.b), b.dataset.e)));
-$('#nmMic').addEventListener('click', () => listen((t) => { $('#nmIntent').value = t; state.nmVoice = true; }, $('#nmMic')));
-$('#nmPhoto').addEventListener('click', () => pickPhoto((url) => {
-  state.photo = url;
-  $('#nmPreview').src = url;
-  $('#nmPreview').hidden = false;
-}));
-$('#nmStart').addEventListener('click', async () => {
-  const intent = $('#nmIntent').value.trim() || (state.photo ? '' : $('#nmIntent').placeholder);
-  const budget = Number($('#nmBudget').value);
-  const emoji = nmEmoji || EMOJI.find(([re]) => re.test(intent))?.[1] || '✦';
-  $('#nmStart').disabled = true;
-  try {
-    const location = await locate();
-    const r = await post('/api/missions', { intent, budget, emoji, location, image: state.photo });
-    state.voiceTurn = !!state.nmVoice;
-    state.nmVoice = false;
-    closeNew();
-    openMission(r.id);
-  } catch (e) {
-    alert(e.message);
-  } finally {
-    $('#nmStart').disabled = false;
-  }
-});
+setBudget(400);
+typeHint();
 
 // ---------- a mission, live ----------
 async function openMission(id) {
@@ -145,7 +325,7 @@ async function openMission(id) {
   $('#newPill').hidden = true;
   $('#feed').innerHTML = '';
   const r = await get(`/api/missions/${id}`);
-  $('#topTitle').textContent = r.summary.title;
+  $('#topTitle').textContent = cleanTitle(r.summary.title);
   $('#stopMission').classList.toggle('on', r.summary.status === 'stopped');
   envelope(r.envelope);
   show('live');
@@ -546,7 +726,7 @@ function ledgerColumns(narrow) {
   return [
     { field: 'at', headerName: 'When', filter: 'agDateColumnFilter', sort: 'desc', width: 112, minWidth: 96,
       valueGetter: (p) => (p.data?.at ? new Date(p.data.at) : null),
-      valueFormatter: (p) => (p.value ? p.value.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' · ' + p.value.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : ''),
+      valueFormatter: (p) => (p.value ? p.value.toLocaleDateString('en', { day: 'numeric', month: 'short' }) + ' · ' + p.value.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''),
       filterParams: { comparator: (d, v) => { const x = new Date(v); x.setHours(0, 0, 0, 0); return x < d ? -1 : x > d ? 1 : 0; } } },
     { field: 'who', headerName: narrow ? 'Who' : 'Merchant / friend', filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110,
       cellRenderer: (p) => (p.data ? `<span class="led-who"><span class="led-emoji">${p.data.kind === 'Share' ? '👥' : esc(p.data.emoji)}</span>${esc(p.value)}</span>` : esc(p.value)) },
@@ -632,7 +812,7 @@ function renderSettings() {
   $('#sPayer').textContent = u.paypal.payerName || u.profile.name || 'PayPal account';
   $('#sPayerMail').textContent = u.paypal.payerEmail || (state.paypalMode === 'sandbox' ? '' : 'Demo account');
   $('#sVerified').hidden = !u.paypal.verified;
-  $('#sMandate').textContent = u.paypal.mandate ? `Active since ${new Date(u.paypal.mandate.signedAt).toLocaleDateString()} · ${u.paypal.mandate.mode === 'sandbox' ? 'PayPal sandbox' : 'demo'}` : 'Not signed';
+  $('#sMandate').textContent = u.paypal.mandate ? `Active since ${new Date(u.paypal.mandate.signedAt).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })} · ${u.paypal.mandate.mode === 'sandbox' ? 'PayPal sandbox' : 'demo'}` : 'Not signed';
   sAutonomy = u.rules.autonomy;
   setSeg('#sAutonomy', sAutonomy);
   $('#sAutonomyHelp').textContent = u.autonomyLevels[sAutonomy].help;
@@ -846,7 +1026,7 @@ for (const b of $$('.stepper button')) {
   });
 }
 function fmtC(v, cur = 'EUR') {
-  return new Intl.NumberFormat(navigator.language || 'en-US', { style: 'currency', currency: cur, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
+  return new Intl.NumberFormat('en-IE', { style: 'currency', currency: cur, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
 }
 // Follow new content only if you are already at the bottom; otherwise offer a "New message" pill.
 const nearBottom = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 160;
