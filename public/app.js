@@ -139,7 +139,8 @@ $('#nmStart').addEventListener('click', async () => {
 // ---------- a mission, live ----------
 async function openMission(id) {
   if (state.es) state.es.close();
-  Object.assign(state, { mission: id, cards: {}, verified: {}, live: false });
+  Object.assign(state, { mission: id, cards: {}, verified: {}, live: false, busy: false, streamLi: null });
+  $('#newPill').hidden = true;
   $('#feed').innerHTML = '';
   const r = await get(`/api/missions/${id}`);
   $('#topTitle').textContent = r.summary.title;
@@ -198,15 +199,26 @@ function handle({ type, data }) {
     case 'user': {
       const li = el('li', 'say user' + (data.image ? ' photo-bubble' : ''), data.text || '');
       if (data.image) li.prepend(el('span', '', '📷 Photo '));
-      return add(li);
+      return add(li, { stick: true }); // your own message always brings you to the bottom
     }
     case 'photo_read': return add(el('li', 'seen', data.summary));
     // Read aloud only live replies to a spoken message, never the replayed history or replies to typing.
-    case 'say': add(sayBubble(data.text)); return state.live && state.voiceTurn && speak(data.text);
-    case 'ready': state.live = true; return typing(data?.busy);
+    case 'say': {
+      const done = sayBubble(data.text);
+      if (state.streamLi) { done.classList.add('settled'); state.streamLi.replaceWith(done); state.streamLi = null; keepBottom(); }
+      else add(done);
+      typing(state.busy);
+      return state.live && state.voiceTurn && speak(data.text);
+    }
+    case 'say_delta': return streamText(data.t);
+    case 'say_reset': state.streamLi?.remove(); state.streamLi = null; return typing(state.busy);
+    case 'ready':
+      state.live = true;
+      typing(data?.busy);
+      return requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight })); // land on the latest, no animation
     case 'title': $('#topTitle').textContent = data.title; return;
-    case 'busy': typing(data.on); return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
-    case 'tool': return toolStep(data);
+    case 'busy': state.busy = data.on; typing(data.on); return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
+    case 'tool': typing(state.busy); return toolStep(data);
     case 'places': return placesCard(data);
     case 'verified': return verifiedMark(data);
     case 'negotiation': return negotiation(data);
@@ -293,7 +305,10 @@ function placesCard({ category, center, places }) {
     });
     map.fitBounds(bounds, { padding: { top: 46, bottom: 30, left: 30, right: 30 }, maxZoom: 16, duration: 0 });
     // Keep the (required) OpenStreetMap credit folded into its small "i" until asked for.
-    map.once('load', () => box.querySelector('.maplibregl-compact-show')?.classList.remove('maplibregl-compact-show'));
+    map.once('load', () => {
+      box.querySelector('.maplibregl-compact-show')?.classList.remove('maplibregl-compact-show');
+      box.classList.add('ready'); // fade in once tiles are drawn
+    });
     const popup = new ml.Popup({ offset: [0, -34], anchor: 'bottom', closeButton: false, focusAfterOpen: false, className: 'place-pop' });
     const select = (i) => {
       const p = shown[i];
@@ -643,12 +658,37 @@ for (const b of $$('.stepper button')) {
 function fmtC(v, cur = 'EUR') {
   return new Intl.NumberFormat(navigator.language || 'en-US', { style: 'currency', currency: cur, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
 }
-function add(node) {
+// Follow new content only if you are already at the bottom; otherwise offer a "New message" pill.
+const nearBottom = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 160;
+function add(node, { stick = false } = {}) {
+  const follow = stick || nearBottom();
   const t = $('#feed > li.typing');
   if (t) $('#feed').insertBefore(node, t);
   else $('#feed').append(node);
-  requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
+  if (!state.live) return; // replaying history: one jump at the end, not a scroll per item
+  if (follow) requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }));
+  else $('#newPill').hidden = false;
 }
+function keepBottom() {
+  if (nearBottom()) window.scrollTo({ top: document.documentElement.scrollHeight });
+}
+// The reply being written, word by word.
+function streamText(t) {
+  if (!state.streamLi) {
+    typing(false);
+    state.streamLi = el('li', 'say streaming');
+    state.streamLi.append(el('p', 'say-text', ''));
+    add(state.streamLi);
+  }
+  const follow = nearBottom();
+  state.streamLi.firstChild.textContent += t;
+  if (follow) window.scrollTo({ top: document.documentElement.scrollHeight });
+}
+$('#newPill').addEventListener('click', () => {
+  $('#newPill').hidden = true;
+  window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+});
+addEventListener('scroll', () => { if (nearBottom()) $('#newPill').hidden = true; }, { passive: true });
 function step(text) { return el('li', 'step', text); }
 
 // "…" bubble while the agent works; it always stays last in the feed.

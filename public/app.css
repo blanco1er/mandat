@@ -149,6 +149,19 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
 @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } }
 @media (prefers-reduced-motion: reduce) { .feed > li, .backdrop i { animation: none; } }
 .feed-spacer { height: 120px; }
+/* Live writing */
+.say.streaming .say-text::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -2px; background: var(--accent); animation: caret 0.9s steps(1) infinite; }
+@keyframes caret { 50% { opacity: 0; } }
+.feed > li.settled { animation: none; }
+.new-pill { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 19; height: 36px; padding: 0 16px; border-radius: 18px; font-size: 14px; font-weight: 600; color: var(--accent); animation: pill-in 0.4s var(--spring) both; }
+@keyframes pill-in { from { opacity: 0; transform: translate(-50%, 10px); } }
+/* Map: soft placeholder, then a fade-in once drawn */
+.place-map { position: relative; background: linear-gradient(100deg, var(--card-line) 30%, rgba(255,255,255,0.08) 50%, var(--card-line) 70%) 0 0 / 300% 100%; animation: shimmer 1.4s linear infinite; }
+.place-map.ready { animation: none; }
+.place-map .maplibregl-canvas, .place-map .maplibregl-marker, .place-map .maplibregl-ctrl { opacity: 0; transition: opacity 0.5s var(--smooth); }
+.place-map.ready .maplibregl-canvas, .place-map.ready .maplibregl-marker, .place-map.ready .maplibregl-ctrl { opacity: 1; }
+@keyframes shimmer { to { background-position: -150% 0; } }
+@media (prefers-reduced-motion: reduce) { .say.streaming .say-text::after, .place-map { animation: none; } }
 /* Assistant reply actions: quiet until needed. */
 .say .say-text { margin: 0; }
 .msg-actions { display: flex; gap: 2px; margin: 8px 0 -6px -8px; }

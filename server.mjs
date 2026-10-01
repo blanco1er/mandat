@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { createSession, userTurn, resolveApproval, resolveRequest, envelopeView, missionSummary } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
 import { geocode } from './lib/places.mjs';
-import { chat, MODELS } from './lib/deepseek.mjs';
+import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { newUser, getUser, saveUser, getMission, saveMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
 const app = express();
@@ -50,11 +50,15 @@ function box(id, user) {
   if (user) b.s._user = user;
   return b;
 }
+// Streaming pieces are shown live but not kept: the history keeps only the finished reply.
+const EPHEMERAL = new Set(['say_delta', 'say_reset']);
 function emitter(b) {
   return (type, data) => {
     const evt = { type, data, at: Date.now() };
-    b.log.push(evt);
-    if (b.log.length > 400) b.log.shift();
+    if (!EPHEMERAL.has(type)) {
+      b.log.push(evt);
+      if (b.log.length > 400) b.log.shift();
+    }
     for (const res of b.clients) res.write(`data: ${JSON.stringify(evt)}\n\n`);
   };
 }
@@ -321,4 +325,7 @@ app.post('/api/requests/:rid', api(async (req) => {
   throw Object.assign(new Error('Unknown request'), { status: 404 });
 }));
 
-app.listen(PORT, () => console.log(`Mandat on ${BASE()} (PayPal: ${PayPal.MODE})`));
+app.listen(PORT, () => {
+  console.log(`Mandat on ${BASE()} (PayPal: ${PayPal.MODE})`);
+  probe(); // know right away whether the fast model answers
+});
