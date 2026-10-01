@@ -7,10 +7,10 @@ const PLURAL = { bakery: 'bakeries', florist: 'florists', restaurant: 'restauran
 const many = (c) => PLURAL[c] || c + 's';
 
 // ---------- routing ----------
-const VIEWS = ['welcome', 'mandate', 'home', 'live', 'settings'];
+const VIEWS = ['welcome', 'mandate', 'home', 'live', 'activity', 'settings'];
 function show(view) {
   for (const v of VIEWS) $('#' + v).hidden = v !== view;
-  $('#tabbar').hidden = !['home', 'settings'].includes(view);
+  $('#tabbar').hidden = !['home', 'activity', 'settings'].includes(view);
   $('#composer').hidden = view !== 'live';
   $('#back').hidden = view !== 'live';
   $('#topBudget').hidden = view !== 'live';
@@ -82,7 +82,8 @@ async function refreshHome() {
   state.me = r.user;
   renderHome(r.missions);
 }
-$$('#tabbar button').forEach((b) => b.addEventListener('click', () => (b.dataset.tab === 'home' ? (refreshHome(), show('home')) : (renderSettings(), show('settings')))));
+const TABS = { home: () => refreshHome(), activity: () => openActivity(), settings: () => renderSettings() };
+$$('#tabbar button').forEach((b) => b.addEventListener('click', () => { TABS[b.dataset.tab](); show(b.dataset.tab); }));
 $('#resumeAll').addEventListener('click', async () => {
   state.me = (await post('/api/me/stop', { stopped: false })).user;
   refreshHome();
@@ -508,6 +509,124 @@ function closeSheet() {
 
 // ---------- settings ----------
 let sAutonomy = 'balanced';
+// ---------- activity: AG Grid ledger ----------
+const AG = 'https://cdn.jsdelivr.net/npm/ag-grid-community@36.2.0/dist/ag-grid-community.min.js';
+let agReady, ledger;
+function loadAgGrid() {
+  return (agReady ||= new Promise((ok, ko) => {
+    const s = document.createElement('script');
+    s.src = AG;
+    s.onload = () => ok(window.agGrid);
+    s.onerror = () => { agReady = null; ko(new Error('grid unavailable')); };
+    document.head.append(s);
+  }));
+}
+// The grid wears the app's materials, in light and dark.
+function ledgerTheme(ag) {
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  return ag.themeQuartz.withParams({
+    fontFamily: '-apple-system, "SF Pro Text", system-ui, sans-serif',
+    fontSize: 14,
+    headerFontSize: 12,
+    headerFontWeight: 600,
+    accentColor: '#0a84ff',
+    backgroundColor: dark ? '#1c1d22' : '#ffffff',
+    foregroundColor: dark ? '#f2f2f7' : '#1c1c1e',
+    headerBackgroundColor: dark ? '#22232a' : '#f7f6f3',
+    headerTextColor: dark ? '#9a9aa2' : '#6e6e73',
+    borderColor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)',
+    rowHoverColor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
+    wrapperBorderRadius: 16,
+    spacing: 7,
+    rowVerticalPaddingScale: 1.25,
+  });
+}
+const STATUS_CLS = { Held: 'wait', Paid: 'paid', 'Paid back': 'paid', Released: 'off', Refunded: 'part', 'Owed to you': 'wait', Failed: 'off' };
+function ledgerColumns(narrow) {
+  return [
+    { field: 'at', headerName: 'When', filter: 'agDateColumnFilter', sort: 'desc', width: 112, minWidth: 96,
+      valueGetter: (p) => (p.data?.at ? new Date(p.data.at) : null),
+      valueFormatter: (p) => (p.value ? p.value.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' · ' + p.value.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : ''),
+      filterParams: { comparator: (d, v) => { const x = new Date(v); x.setHours(0, 0, 0, 0); return x < d ? -1 : x > d ? 1 : 0; } } },
+    { field: 'who', headerName: narrow ? 'Who' : 'Merchant / friend', filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110,
+      cellRenderer: (p) => (p.data ? `<span class="led-who"><span class="led-emoji">${p.data.kind === 'Share' ? '👥' : esc(p.data.emoji)}</span>${esc(p.value)}</span>` : esc(p.value)) },
+    { field: 'mission', headerName: 'Mission', filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110, hide: narrow },
+    { field: 'what', headerName: 'What', filter: 'agTextColumnFilter', flex: 1.4, minWidth: 110, hide: narrow },
+    { field: 'kind', headerName: 'Type', filter: 'agTextColumnFilter', width: 100, hide: narrow },
+    { field: 'status', headerName: 'Status', filter: 'agTextColumnFilter', width: 128, minWidth: 104,
+      cellRenderer: (p) => (p.value ? `<span class="chip ${STATUS_CLS[p.value] || 'off'}">${esc(p.value)}</span>` : '') },
+    { field: 'amount', headerName: 'Amount', filter: 'agNumberColumnFilter', type: 'rightAligned', width: 112, minWidth: 92,
+      valueFormatter: (p) => (p.value ? (p.value > 0 ? '+' : '−') + fmt(Math.abs(p.value)) : p.data?.owed ? fmt(p.data.owed) : '—'),
+      // A cellClass function replaces the rightAligned type's class, so keep it explicitly.
+      cellClass: (p) => ['ag-right-aligned-cell', p.value > 0 ? 'led-in' : p.value < 0 ? 'led-out' : 'led-zero'] },
+    { field: 'ref', headerName: 'PayPal reference', filter: 'agTextColumnFilter', flex: 1, minWidth: 120, hide: narrow, cellClass: 'led-ref', tooltipField: 'ref' },
+  ];
+}
+async function openActivity() {
+  const [data, ag] = await Promise.all([get('/api/me/activity'), loadAgGrid().catch(() => null)]);
+  $('#tPaid').textContent = fmt(data.totals.paid);
+  $('#tHeld').textContent = fmt(data.totals.held);
+  $('#tOwed').textContent = fmt(data.totals.owed);
+  $('#tBack').textContent = fmt(data.totals.back);
+  $('#ledgerEmpty').hidden = data.rows.length > 0;
+  $('#ledger').hidden = !data.rows.length || !ag;
+  $('#ledgerCount').textContent = data.rows.length ? `${data.rows.length} movement${data.rows.length > 1 ? 's' : ''}` : '';
+  if (!ag || !data.rows.length) return;
+  const narrow = innerWidth < 720;
+  if (!ledger) {
+    ledger = ag.createGrid($('#ledger'), {
+      theme: ledgerTheme(ag),
+      columnDefs: ledgerColumns(narrow),
+      rowData: data.rows,
+      getRowId: (p) => p.data.id,
+      domLayout: 'autoHeight',
+      animateRows: true,
+      defaultColDef: { sortable: true, resizable: true, suppressHeaderMenuButton: false, floatingFilter: false },
+      rowSelection: undefined,
+      onRowClicked: (e) => e.data?.missionId && openMission(e.data.missionId),
+      onFilterChanged: () => {
+        const n = ledger.getDisplayedRowCount();
+        $('#ledgerCount').textContent = `${n} of ${data.rows.length}`;
+      },
+      overlayNoRowsTemplate: '<span class="led-none">No movement matches this filter.</span>',
+    });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => ledger.setGridOption('theme', ledgerTheme(ag)));
+    let wasNarrow = narrow;
+    addEventListener('resize', () => {
+      const n = innerWidth < 720;
+      if (n !== wasNarrow) { wasNarrow = n; ledger.setColumnsVisible(['mission', 'what', 'kind', 'ref'], !n); }
+    }, { passive: true });
+  } else ledger.setGridOption('rowData', data.rows);
+}
+// Plain words → grid filters (one small AI call); the chip shows what is applied.
+$('#askForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = $('#askText').value.trim();
+  if (!q || !ledger) return;
+  $('#askBtn').disabled = true;
+  $('#askBtn').textContent = '…';
+  try {
+    const r = await post('/api/me/activity/ask', { q });
+    ledger.setFilterModel(r.filterModel);
+    ledger.setGridOption('quickFilterText', r.quickFilter || '');
+    $('#filterText').textContent = r.summary;
+    $('#filterChip').hidden = false;
+  } catch (err) {
+    $('#filterText').textContent = 'Could not understand that — try other words.';
+    $('#filterChip').hidden = false;
+  } finally {
+    $('#askBtn').disabled = false;
+    $('#askBtn').textContent = 'Filter';
+  }
+});
+$('#filterClear').addEventListener('click', () => {
+  ledger?.setFilterModel(null);
+  ledger?.setGridOption('quickFilterText', '');
+  $('#filterChip').hidden = true;
+  $('#askText').value = '';
+});
+$('#csvBtn').addEventListener('click', () => ledger?.exportDataAsCsv({ fileName: `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv`, columnKeys: ['at', 'mission', 'who', 'what', 'kind', 'status', 'amount', 'ref'] }));
+
 function renderSettings() {
   const u = state.me;
   $('#sPayer').textContent = u.paypal.payerName || u.profile.name || 'PayPal account';

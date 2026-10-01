@@ -204,6 +204,57 @@ app.post('/api/me/mandate/revoke', api(async (req, res) => {
   return { user: publicUser(u) };
 }));
 
+// ---------- activity: every money movement across missions (shown in an AG Grid ledger) ----------
+const DEPOSIT_STATUS = { held: 'Held', captured: 'Paid', released: 'Released', refunded: 'Refunded' };
+function activityRows(u) {
+  const rows = [];
+  for (const id of u.missions) {
+    const m = getMission(id);
+    if (!m) continue;
+    const mission = { missionId: m.id, mission: m.title || 'Mission', emoji: m.emoji || '✦' };
+    for (const e of m.envelope.entries) {
+      const status = DEPOSIT_STATUS[e.state] || e.state;
+      // Money that actually left: captured minus refunds; a hold is reserved, not spent.
+      const amount = e.state === 'captured' || e.state === 'refunded' ? -(e.amount - (e.refunded || 0)) : e.state === 'held' ? -e.amount : 0;
+      rows.push({ ...mission, id: e.id, at: e.at, kind: 'Deposit', who: e.merchant, what: e.label, status, amount, gross: e.amount, refunded: e.refunded || 0, ref: e.paypal?.captureId || e.paypal?.authorizationId || '', mode: e.paypal?.mode || '' });
+    }
+    for (const sh of m.shares || []) {
+      if (!sh.invoiceId) continue;
+      rows.push({ ...mission, id: sh.invoiceId, at: sh.at || m.createdAt, kind: 'Share', who: sh.friend, what: sh.label || '', status: sh.status === 'PAID' ? 'Paid back' : sh.error ? 'Failed' : 'Owed to you', amount: sh.status === 'PAID' ? sh.amount : 0, owed: sh.status === 'PAID' ? 0 : sh.amount, gross: sh.amount, ref: sh.invoiceId, payUrl: sh.payUrl, mode: sh.mode || '' });
+    }
+  }
+  return rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+app.get('/api/me/activity', api(async (req, res) => {
+  const u = me(req, res);
+  const rows = activityRows(u);
+  const sum = (f) => Math.round(rows.reduce((t, r) => t + f(r), 0) * 100) / 100;
+  return {
+    rows,
+    totals: {
+      paid: sum((r) => (r.kind === 'Deposit' && (r.status === 'Paid' || r.status === 'Refunded') ? -r.amount : 0)),
+      held: sum((r) => (r.kind === 'Deposit' && r.status === 'Held' ? r.gross : 0)),
+      owed: sum((r) => r.owed || 0),
+      back: sum((r) => (r.kind === 'Share' ? r.amount : 0) + (r.refunded || 0)),
+    },
+  };
+}));
+// "Refunds in October", "what Sam still owes"… → an AG Grid filter model, in one small call.
+app.post('/api/me/activity/ask', api(async (req) => {
+  const q = String(req.body?.q || '').trim().slice(0, 200);
+  if (!q) throw new Error('Ask something');
+  const today = new Date().toISOString().slice(0, 10);
+  const { message } = await chat({
+    model: MODELS.fast, fallback: MODELS.smart, json: true, temperature: 0, maxTokens: 2000,
+    messages: [{ role: 'system', content: `Turn a request about a payments ledger into AG Grid filters. Today is ${today}. Columns: at (date), mission (text), who (merchant or friend name), what (text), kind ("Deposit" or "Share"), status ("Held","Paid","Released","Refunded","Owed to you","Paid back"), amount (number, negative = money out). Reply JSON only: {"filterModel":{<col>:<filter>}, "quickFilter": "<optional free text>", "summary":"<5-8 words describing the filter>"}. Text filter: {"filterType":"text","type":"contains"|"equals","filter":"..."}. Number: {"filterType":"number","type":"greaterThan"|"lessThan"|"equals","filter":n}. Date: {"filterType":"date","type":"inRange","dateFrom":"YYYY-MM-DD","dateTo":"YYYY-MM-DD"}. Use only these columns.` }, { role: 'user', content: q }],
+  });
+  let out = {};
+  try { out = JSON.parse(message.content || '{}'); } catch {}
+  const allowed = new Set(['at', 'mission', 'who', 'what', 'kind', 'status', 'amount']);
+  const filterModel = Object.fromEntries(Object.entries(out.filterModel || {}).filter(([k, v]) => allowed.has(k) && v && typeof v === 'object'));
+  return { filterModel, quickFilter: String(out.quickFilter || '').slice(0, 60), summary: String(out.summary || q).slice(0, 80) };
+}));
+
 // ---------- missions ----------
 app.post('/api/missions', api(async (req, res) => {
   const u = me(req, res);

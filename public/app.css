@@ -429,3 +429,37 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 .photo-bubble img { display: block; max-width: 220px; border-radius: 14px; margin-top: 6px; }
 .seen { font-size: 13px; color: var(--ink-3); padding: 0 6px; }
 .seen::before { content: "👁  "; }
+
+/* Activity ledger */
+.view.wide { max-width: 980px; }
+.stat-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0 16px; }
+.tile { padding: 14px 16px; border-radius: var(--r-l); background: var(--card); border: 1px solid var(--card-line); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px; }
+.tile small { font-size: 12px; color: var(--ink-3); }
+.tile b { font: 600 22px/28px -apple-system, "SF Pro Display", system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.tile:nth-child(1) b { color: var(--spent); }
+.tile:nth-child(2) b { color: var(--held); }
+.tile:nth-child(3) b { color: var(--accent); }
+.tile:nth-child(4) b { color: var(--ok); }
+@media (max-width: 640px) { .stat-tiles { grid-template-columns: repeat(2, 1fr); } }
+.ask-bar { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 6px 0 14px; border-radius: 24px; background: var(--card); border: 1px solid var(--card-line); box-shadow: var(--shadow); }
+.ask-bar svg { width: 18px; height: 18px; fill: var(--ink-3); flex: none; }
+.ask-bar input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-size: 16px; }
+.ask-bar button { height: 36px; padding: 0 16px; border-radius: 18px; background: var(--accent); color: #fff; font-weight: 600; font-size: 14px; }
+.ask-bar button:disabled { opacity: 0.6; }
+.filter-chip { display: inline-flex; align-items: center; gap: 8px; margin: 12px 0 0; padding: 6px 8px 6px 14px; border-radius: 16px; background: rgba(10, 132, 255, 0.14); color: var(--accent); font-size: 13px; font-weight: 600; animation: rise 0.35s var(--spring) both; }
+.filter-chip button { width: 22px; height: 22px; border-radius: 11px; color: var(--accent); font-size: 12px; }
+.ledger { margin-top: 14px; }
+.ledger .led-who { display: inline-flex; align-items: center; gap: 8px; }
+.ledger .led-emoji { width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; background: var(--card-line); font-size: 13px; }
+.ledger .led-in { color: var(--ok); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ledger .led-out { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ledger .led-zero { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.ledger .led-ref { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; color: var(--ink-3); }
+.ledger .ag-grid-scrolling-rows.ag-layout-auto-height { min-height: 0 !important; } /* no empty band under a short ledger */
+.ledger .ag-row { cursor: pointer; }
+.ledger .chip { display: inline-block; line-height: 16px; }
+.led-none { color: var(--ink-3); font-size: 14px; }
+.ledger-empty { margin: 18px 4px; color: var(--ink-3); font-size: 15px; }
+.ledger-actions { display: flex; align-items: center; justify-content: space-between; margin: 12px 2px 110px; }
+.ledger-actions button { height: 36px; padding: 0 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--card-line); color: var(--accent); font-weight: 600; font-size: 14px; }
+.ledger-actions small { color: var(--ink-3); font-size: 12px; }

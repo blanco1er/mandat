@@ -92,6 +92,27 @@
   </main>
 
   <!-- 4. Settings -->
+  <!-- 3. Activity: every money movement, in an AG Grid ledger -->
+  <main id="activity" class="view wide" hidden>
+    <h1 class="large-title">Activity</h1>
+    <p class="hello">Every euro your agent moved, with its PayPal reference.</p>
+    <div class="stat-tiles">
+      <div class="tile"><small>Paid</small><b id="tPaid">—</b></div>
+      <div class="tile"><small>Held now</small><b id="tHeld">—</b></div>
+      <div class="tile"><small>Friends owe you</small><b id="tOwed">—</b></div>
+      <div class="tile"><small>Back to you</small><b id="tBack">—</b></div>
+    </div>
+    <form class="ask-bar" id="askForm" autocomplete="off">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 0 1 5.2 10.4l4.4 4.4-1.4 1.4-4.4-4.4A6.5 6.5 0 1 1 10.5 4Zm0 2a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z"/></svg>
+      <input id="askText" placeholder="Ask: refunds in October, what Sam owes…" aria-label="Filter your activity in plain words">
+      <button type="submit" id="askBtn">Filter</button>
+    </form>
+    <div class="filter-chip" id="filterChip" hidden><span id="filterText"></span><button type="button" id="filterClear" aria-label="Clear filter">✕</button></div>
+    <div id="ledger" class="ledger"></div>
+    <p class="ledger-empty" id="ledgerEmpty" hidden>Nothing yet. When your agent holds a deposit, pays a merchant or splits a bill, it shows up here.</p>
+    <div class="ledger-actions"><button type="button" id="csvBtn">Export CSV</button><small id="ledgerCount"></small></div>
+  </main>
+
   <main id="settings" class="view" hidden>
     <h1 class="large-title">Settings</h1>
 
@@ -147,6 +168,7 @@
   <!-- Floating tab bar (home / settings) -->
   <nav class="tabbar glass" id="tabbar" hidden>
     <button data-tab="home" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z"/></svg><span>Missions</span></button>
+    <button data-tab="activity"><svg viewBox="0 0 24 24"><path d="M4 19h16v2H4zM5 10h3v7H5zm5.5-5h3v12h-3zM16 13h3v4h-3z"/></svg><span>Activity</span></button>
     <button data-tab="settings"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.6 2.3-1.9-.3a7 7 0 0 0-.7-1.7l1.1-1.6-1.6-1.6-1.6 1.1a7 7 0 0 0-1.7-.7l-.3-1.9h-2.2l-.3 1.9a7 7 0 0 0-1.7.7L7.5 5.6 5.9 7.2 7 8.8a7 7 0 0 0-.7 1.7l-1.9.3v2.2l1.9.3c.2.6.4 1.2.7 1.7l-1.1 1.6 1.6 1.6 1.6-1.1c.5.3 1.1.5 1.7.7l.3 1.9h2.2l.3-1.9c.6-.2 1.2-.4 1.7-.7l1.6 1.1 1.6-1.6-1.1-1.6c.3-.5.5-1.1.7-1.7l1.9-.3z"/></svg><span>Settings</span></button>
   </nav>
 
