@@ -1,1 +1,113 @@
-<!doctype html><title>Mandat</title>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f1ec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0c10" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mandat">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <title>Mandat</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true"><i></i><i></i><i></i></div>
+
+  <header class="topbar glass">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"></span>Mandat</div>
+    <button class="envelope-chip" id="envChip" hidden aria-label="Budget">
+      <svg viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" class="ring-bg"/><circle cx="18" cy="18" r="15" class="ring-spent"/><circle cx="18" cy="18" r="15" class="ring-held"/></svg>
+      <span><b id="envRemaining">—</b><small>left</small></span>
+    </button>
+  </header>
+
+  <!-- 1. Setup: say what you want, set the mandate -->
+  <main id="setup" class="view">
+    <h1 class="large-title">What should I<br>take care of?</h1>
+    <p class="lede">Tell me what you want and how much you can spend. I'll find it, negotiate with the merchants' agents, book and pay with PayPal — never a cent over your mandate.</p>
+
+    <div class="field-card">
+      <textarea id="intent" rows="3" placeholder="My girlfriend's birthday this Saturday: dinner for 6 around 8pm near me, a cake and flowers."></textarea>
+      <button class="mic-mini" id="dictate" aria-label="Dictate"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z"/></svg></button>
+    </div>
+
+    <div class="mandate-card">
+      <div class="row">
+        <label for="budget">Budget</label>
+        <div class="stepper">
+          <button data-step="-25" aria-label="Less">−</button>
+          <input id="budget" inputmode="numeric" value="400" aria-label="Budget in euros">
+          <span class="cur">€</span>
+          <button data-step="25" aria-label="More">+</button>
+        </div>
+      </div>
+      <div class="row">
+        <label>Ask me before paying above</label>
+        <div class="segmented" id="approve" role="radiogroup">
+          <button role="radio" data-v="0">Always</button>
+          <button role="radio" data-v="50">€50</button>
+          <button role="radio" data-v="100" aria-checked="true">€100</button>
+          <button role="radio" data-v="200">€200</button>
+        </div>
+      </div>
+      <p class="fine">You sign once with PayPal. Deposits are <b>held</b>, not charged, until each merchant confirms — cancel anytime and the money comes back to your mandate.</p>
+    </div>
+
+    <button class="cta" id="start"><span class="pp">Sign mandate with PayPal</span></button>
+    <p class="demo-note" id="demoNote"></p>
+  </main>
+
+  <!-- 2. Live: the agent at work -->
+  <main id="live" class="view" hidden>
+    <section class="envelope-card glass-card" id="envelopeCard">
+      <div class="env-head"><span>Mandate</span><span id="envPurpose"></span></div>
+      <div class="env-bar"><i class="spent"></i><i class="held"></i></div>
+      <div class="env-legend">
+        <div><b id="envSpent">€0</b><small>paid</small></div>
+        <div><b id="envHeld">€0</b><small>held</small></div>
+        <div><b id="envLeft">€0</b><small>left</small></div>
+      </div>
+    </section>
+    <ol class="feed" id="feed" aria-live="polite"></ol>
+    <div class="feed-spacer"></div>
+  </main>
+
+  <!-- Floating composer: voice orb + text -->
+  <footer class="composer glass" id="composer" hidden>
+    <button class="orb" id="orb" aria-label="Talk to Mandat"><span class="orb-core"></span><span class="orb-ring"></span></button>
+    <form id="say" autocomplete="off">
+      <input id="sayText" placeholder="Talk, or type…" aria-label="Message">
+      <button class="send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z"/></svg></button>
+    </form>
+  </footer>
+
+  <!-- Approval sheet (Apple Pay-style conventions, our own design) -->
+  <div class="sheet-scrim" id="scrim" hidden></div>
+  <section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+    <div class="grabber"></div>
+    <div class="sheet-head">
+      <span class="pp-badge">PayPal</span>
+      <button class="sheet-close" id="sheetDecline">Decline</button>
+    </div>
+    <div class="sheet-merchant" id="sheetMerchant"></div>
+    <div class="sheet-lines" id="sheetLines"></div>
+    <div class="sheet-total"><span id="sheetTitle">Hold deposit</span><b id="sheetAmount"></b></div>
+    <p class="sheet-fine" id="sheetFine"></p>
+    <button class="hold-btn" id="sheetApprove"><span class="fill"></span><span class="label">Hold to approve</span></button>
+  </section>
+
+  <template id="tpl-negotiation">
+    <li class="card nego">
+      <header><span class="avatar m"></span><div><b class="name"></b><small class="sub">AI agent</small></div><span class="shield" hidden>Verified</span></header>
+      <ol class="bubbles"></ol>
+      <div class="offer" hidden></div>
+    </li>
+  </template>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>
