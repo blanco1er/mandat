@@ -149,6 +149,21 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
 @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } }
 @media (prefers-reduced-motion: reduce) { .feed > li, .backdrop i { animation: none; } }
 .feed-spacer { height: 120px; }
+/* Assistant reply actions: quiet until needed. */
+.say .say-text { margin: 0; }
+.msg-actions { display: flex; gap: 2px; margin: 8px 0 -6px -8px; }
+.msg-actions button { width: 32px; height: 32px; border-radius: 16px; display: grid; place-items: center; color: var(--ink-3); transition: background 0.2s var(--smooth), color 0.2s var(--smooth); }
+.msg-actions button:hover, .msg-actions button.on { background: var(--card-line); color: var(--ink); }
+.msg-actions svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+/* Working indicator */
+.typing { align-self: flex-start; display: flex; gap: 5px; padding: 14px 16px; border-radius: 20px 20px 20px 6px; background: var(--card); border: 1px solid var(--card-line); }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); animation: dot 1.2s ease-in-out infinite; }
+.typing i:nth-child(2) { animation-delay: 0.15s; }
+.typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes dot { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .typing i { animation: none; opacity: 0.6; } }
+.step.error { color: var(--warn); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.step.error .retry { padding: 6px 12px; border-radius: 14px; background: var(--card); border: 1px solid var(--card-line); color: var(--accent); font-weight: 600; font-size: 13px; }
 
 .say { align-self: flex-start; max-width: 88%; padding: 12px 16px; border-radius: 20px 20px 20px 6px; background: var(--card); border: 1px solid var(--card-line); box-shadow: var(--shadow); }
 .say.user { align-self: flex-end; border-radius: 20px 20px 6px 20px; background: var(--accent); color: #fff; border: 0; }

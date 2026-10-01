@@ -61,6 +61,7 @@ function emitter(b) {
 function run(b, fn) {
   const emit = emitter(b);
   b.busy = b.busy.then(async () => {
+    b.running = true;
     emit('busy', { on: true });
     try {
       await fn(emit);
@@ -68,6 +69,7 @@ function run(b, fn) {
       console.error('[agent]', e);
       emit('error', { message: e.message });
     } finally {
+      b.running = false;
       emit('busy', { on: false });
       emit('envelope', envelopeView(b.s));
       emit('summary', missionSummary(b.s));
@@ -201,7 +203,7 @@ app.post('/api/missions', api(async (req, res) => {
   const used = monthCommitted(u, u.missions.map(getMission));
   if (used + budget > u.rules.monthlyCap) throw new Error(`This would exceed your monthly cap (${u.rules.monthlyCap} €, ${used} € already planned).`);
   const s = createSession({ budget, approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });
-  s.title = await titleFor(intent);
+  s.title = plainTitle(intent); // instant; the AI title replaces it in the background
   u.missions.unshift(s.id);
   saveUser(u);
   s.feed = [];
@@ -211,15 +213,25 @@ app.post('/api/missions', api(async (req, res) => {
   b.s._user = u;
   emitter(b)('user', { text: intent, image: !!image });
   run(b, (emit) => userTurn(b.s, intent, emit, { image }));
+  titleFor(intent).then((t) => {
+    if (!t || t === b.s.title) return;
+    b.s.title = t;
+    saveMission(b.s);
+    emitter(b)('title', { title: t });
+  });
   return { id: s.id, summary: missionSummary(s) };
 }));
 
 // A short, clean mission title (e.g. "Two weeks in Spain"), written by the fast model; plain fallback.
-async function titleFor(intent) {
-  const fallback = intent.replace(/\s+/g, ' ').trim().split(/[,.;:!?]/)[0].slice(0, 40) || 'New mission';
+function plainTitle(intent) {
   if (!intent.trim()) return 'Photo mission';
+  return intent.replace(/\s+/g, ' ').trim().split(/[,.;:!?]/)[0].slice(0, 40).trim() || 'New mission';
+}
+async function titleFor(intent) {
+  const fallback = plainTitle(intent);
+  if (!intent.trim()) return fallback;
   try {
-    const { message } = await chat({ model: MODELS.fast, maxTokens: 1500, temperature: 0.3, messages: [{ role: 'user', content: `Give a 2-5 word title, in the same language, for this errand: "${intent.slice(0, 300)}". No quotes, no emoji, no final period.` }] });
+    const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, maxTokens: 1500, temperature: 0.3, messages: [{ role: 'user', content: `Give a 2-5 word title, in the same language, for this errand: "${intent.slice(0, 300)}". No quotes, no emoji, no final period.` }] });
     const t = (message.content || '').trim().replace(/^["'«]|["'»]$/g, '').slice(0, 42);
     return t || fallback;
   } catch {
@@ -276,6 +288,7 @@ app.get('/api/missions/:id/events', (req, res) => {
   }
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   for (const evt of b.log) res.write(`data: ${JSON.stringify(evt)}\n\n`);
+  res.write(`data: ${JSON.stringify({ type: 'ready', data: { busy: !!b.running } })}\n\n`); // end of the replayed history
   b.clients.add(res);
   const ping = setInterval(() => res.write(': ping\n\n'), 20000);
   req.on('close', () => {

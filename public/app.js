@@ -1,7 +1,7 @@
 // Mandat — client. Welcome (PayPal login) → mandate → missions → a mission live; settings.
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { me: null, mission: null, es: null, currency: 'EUR', speaking: false, listening: false, cards: {}, verified: {}, photo: null };
+const state = { me: null, mission: null, es: null, currency: 'EUR', speaking: false, listening: false, cards: {}, verified: {}, photo: null, voiceTurn: false, live: false };
 const fmt = (v) => new Intl.NumberFormat(navigator.language || 'en-US', { style: 'currency', currency: state.currency, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
 const PLURAL = { bakery: 'bakeries', florist: 'florists', restaurant: 'restaurants', hotel: 'hotels', bar: 'bars', cafe: 'cafés', hairdresser: 'hair salons', cinema: 'cinemas' };
 const many = (c) => PLURAL[c] || c + 's';
@@ -111,7 +111,7 @@ $('#newMission').addEventListener('click', () => openNew());
 $('#nmCancel').addEventListener('click', closeNew);
 $('#nmScrim').addEventListener('click', closeNew);
 $$('.suggest').forEach((b) => b.addEventListener('click', () => openNew(b.dataset.t, Number(b.dataset.b), b.dataset.e)));
-$('#nmMic').addEventListener('click', () => listen((t) => ($('#nmIntent').value = t), $('#nmMic')));
+$('#nmMic').addEventListener('click', () => listen((t) => { $('#nmIntent').value = t; state.nmVoice = true; }, $('#nmMic')));
 $('#nmPhoto').addEventListener('click', () => pickPhoto((url) => {
   state.photo = url;
   $('#nmPreview').src = url;
@@ -125,6 +125,8 @@ $('#nmStart').addEventListener('click', async () => {
   try {
     const location = await locate();
     const r = await post('/api/missions', { intent, budget, emoji, location, image: state.photo });
+    state.voiceTurn = !!state.nmVoice;
+    state.nmVoice = false;
     closeNew();
     openMission(r.id);
   } catch (e) {
@@ -137,7 +139,7 @@ $('#nmStart').addEventListener('click', async () => {
 // ---------- a mission, live ----------
 async function openMission(id) {
   if (state.es) state.es.close();
-  Object.assign(state, { mission: id, cards: {}, verified: {} });
+  Object.assign(state, { mission: id, cards: {}, verified: {}, live: false });
   $('#feed').innerHTML = '';
   const r = await get(`/api/missions/${id}`);
   $('#topTitle').textContent = r.summary.title;
@@ -176,13 +178,18 @@ $('#say').addEventListener('submit', (e) => {
   e.preventDefault();
   const t = $('#sayText').value.trim();
   if (!t) return;
+  state.voiceTurn = false; // typed: the reply stays silent
   $('#sayText').value = '';
   syncComposer();
   send(t);
 });
-$('#photoBtn').addEventListener('click', () => pickPhoto((url) => send($('#sayText').value.trim(), url).then(() => ($('#sayText').value = ''))));
+$('#photoBtn').addEventListener('click', () => pickPhoto((url) => {
+  state.voiceTurn = false;
+  send($('#sayText').value.trim(), url).then(() => ($('#sayText').value = ''));
+}));
 function send(text, image) {
   stopSpeaking();
+  state.last = { text, image };
   return post(`/api/missions/${state.mission}/messages`, { text, image });
 }
 
@@ -194,8 +201,11 @@ function handle({ type, data }) {
       return add(li);
     }
     case 'photo_read': return add(el('li', 'seen', data.summary));
-    case 'say': add(el('li', 'say', data.text)); return speak(data.text);
-    case 'busy': return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
+    // Read aloud only live replies to a spoken message, never the replayed history or replies to typing.
+    case 'say': add(sayBubble(data.text)); return state.live && state.voiceTurn && speak(data.text);
+    case 'ready': state.live = true; return typing(data?.busy);
+    case 'title': $('#topTitle').textContent = data.title; return;
+    case 'busy': typing(data.on); return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
     case 'tool': return toolStep(data);
     case 'places': return placesCard(data);
     case 'verified': return verifiedMark(data);
@@ -208,7 +218,7 @@ function handle({ type, data }) {
     case 'plan': return planCard(data);
     case 'shares': return sharesCard(data);
     case 'stopped': return add(step(data.stopped ? 'Stopped — no payment will be made until you resume.' : 'Resumed.'));
-    case 'error': return add(step('Something went wrong: ' + data.message));
+    case 'error': return add(errorStep(data.message));
   }
 }
 
@@ -499,6 +509,7 @@ $('#orb').addEventListener('click', () => {
   if ($('#sayText').value.trim()) return $('#say').requestSubmit();
   if (state.listening) return rec?.stop();
   listen((t) => {
+    state.voiceTurn = true;
     $('#sayText').value = '';
     syncComposer();
     send(t);
@@ -510,19 +521,20 @@ function syncComposer() {
   $('#orb').setAttribute('aria-label', has ? 'Send' : 'Talk to Mandat');
 }
 $('#sayText').addEventListener('input', syncComposer);
-function speak(text) {
-  if (!state.me?.voice?.on || !window.speechSynthesis) return;
+function speak(text, { force = false, onend } = {}) {
+  if (!window.speechSynthesis || (!force && !state.me?.voice?.on)) return;
   const u = new SpeechSynthesisUtterance(text);
   const voices = speechSynthesis.getVoices();
   const lang = (navigator.language || 'en').slice(0, 2);
   u.voice = voices.find((v) => v.lang.startsWith(lang) && /premium|enhanced|siri/i.test(v.name)) || voices.find((v) => v.lang.startsWith(lang)) || null;
   u.rate = 1.02;
   u.onstart = () => { state.speaking = true; orbState('speaking'); };
-  u.onend = () => { state.speaking = false; orbState('idle'); };
+  u.onend = u.onerror = () => { state.speaking = false; orbState('idle'); onend?.(); };
   speechSynthesis.speak(u);
 }
 function stopSpeaking() {
   if (window.speechSynthesis) speechSynthesis.cancel();
+  $$('.msg-actions .on').forEach((x) => { x.classList.remove('on'); x.innerHTML = svg('listen'); });
   state.speaking = false;
 }
 function orbState(s) {
@@ -563,10 +575,81 @@ function fmtC(v, cur = 'EUR') {
   return new Intl.NumberFormat(navigator.language || 'en-US', { style: 'currency', currency: cur, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
 }
 function add(node) {
-  $('#feed').append(node);
+  const t = $('#feed > li.typing');
+  if (t) $('#feed').insertBefore(node, t);
+  else $('#feed').append(node);
   requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }));
 }
 function step(text) { return el('li', 'step', text); }
+
+// "…" bubble while the agent works; it always stays last in the feed.
+function typing(on) {
+  const t = $('#feed > li.typing');
+  if (on && !t) {
+    const li = el('li', 'typing');
+    li.setAttribute('aria-label', 'Mandat is working');
+    li.innerHTML = '<i></i><i></i><i></i>';
+    $('#feed').append(li);
+  } else if (!on && t) t.remove();
+}
+
+// An assistant reply, with Copy / Listen / Share under it.
+const ICON = {
+  copy: '<path d="M8 8V5.5A1.5 1.5 0 0 1 9.5 4h9A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H16"/><rect x="4" y="8" width="12" height="12" rx="1.5"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  listen: '<path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
+  stop: '<rect x="7" y="7" width="10" height="10" rx="1.5"/>',
+  share: '<path d="M12 15V4M8 7.5 12 3.5l4 4"/><path d="M7 11H6a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 18 11h-1"/>',
+};
+const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`;
+function sayBubble(text) {
+  const li = el('li', 'say');
+  li.append(el('p', 'say-text', text));
+  const bar = el('div', 'msg-actions');
+  const btn = (name, label, fn) => {
+    const b = el('button');
+    b.type = 'button';
+    b.innerHTML = svg(name);
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    b.addEventListener('click', () => fn(b));
+    bar.append(b);
+    return b;
+  };
+  const flash = (b, name) => {
+    b.innerHTML = svg('check');
+    setTimeout(() => (b.innerHTML = svg(name)), 1400);
+  };
+  btn('copy', 'Copy', async (b) => {
+    try { await navigator.clipboard.writeText(text); flash(b, 'copy'); } catch {}
+  });
+  btn('listen', 'Listen', (b) => {
+    if (b.classList.contains('on')) return stopSpeaking();
+    stopSpeaking();
+    $$('.msg-actions .on').forEach((x) => { x.classList.remove('on'); x.innerHTML = svg('listen'); });
+    b.classList.add('on');
+    b.innerHTML = svg('stop');
+    speak(text, { force: true, onend: () => { b.classList.remove('on'); b.innerHTML = svg('listen'); } });
+  });
+  btn('share', 'Share', async (b) => {
+    if (navigator.share) return navigator.share({ title: 'Mandat', text }).catch(() => {});
+    try { await navigator.clipboard.writeText(text); flash(b, 'share'); } catch {}
+  });
+  li.append(bar);
+  return li;
+}
+
+// A failed turn: plain words and one way out.
+function errorStep(message) {
+  const li = el('li', 'step error', /too long/i.test(message) ? 'The AI is slow right now and did not answer.' : "Mandat couldn't finish that step.");
+  if (state.last && state.live) {
+    const b = el('button', 'retry', 'Try again');
+    b.type = 'button';
+    b.addEventListener('click', () => { li.remove(); send(state.last.text, state.last.image); });
+    li.append(b);
+  }
+  return li;
+}
 function el(tag, cls, text) {
   const n = document.createElement(tag);
   if (cls) n.className = cls;
