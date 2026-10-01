@@ -133,6 +133,24 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
 .env-legend div { display: flex; flex-direction: column; }
 .env-legend b { font: 600 20px/25px inherit; font-variant-numeric: tabular-nums; }
 .env-legend small { font-size: 12px; color: var(--ink-3); }
+/* The mission budget stays pinned under the top bar; it slims down once the feed scrolls. */
+.envelope-card {
+  position: sticky; top: calc(68px + env(safe-area-inset-top)); z-index: 9;
+  background: var(--card); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%);
+  border-color: var(--glass-line);
+  transition: padding 0.4s var(--spring), border-radius 0.4s var(--spring);
+}
+.envelope-card .env-head, .envelope-card .env-bar, .envelope-card .env-legend, .envelope-card .env-legend b, .envelope-card .env-legend small {
+  transition: font-size 0.35s var(--smooth), line-height 0.35s var(--smooth), height 0.35s var(--smooth), margin 0.35s var(--smooth);
+}
+.envelope-card.compact { padding: 9px 16px 10px; border-radius: 20px; }
+.envelope-card.compact .env-head { font-size: 12px; margin-bottom: 6px; }
+.envelope-card.compact .env-bar { height: 6px; }
+.envelope-card.compact .env-legend { margin-top: 6px; }
+.envelope-card.compact .env-legend div { flex-direction: row; align-items: baseline; gap: 5px; }
+.envelope-card.compact .env-legend b { font-size: 14px; line-height: 18px; }
+.envelope-card.compact .env-legend small { font-size: 11px; }
+@media (prefers-reduced-transparency: reduce) { .envelope-card { background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; } }
 .env-legend div:nth-child(1) b { color: var(--spent); }
 .env-legend div:nth-child(2) b { color: var(--held); }
 

@@ -145,6 +145,13 @@ async function openMission(id) {
   state.es = new EventSource(`/api/missions/${id}/events`);
   state.es.onmessage = (m) => handle(JSON.parse(m.data));
 }
+// Slim the pinned budget card once the feed scrolls (hysteresis avoids flicker as its height changes).
+addEventListener('scroll', () => {
+  const card = $('.envelope-card');
+  const y = scrollY;
+  if (y > 40) card.classList.add('compact');
+  else if (y < 8) card.classList.remove('compact');
+}, { passive: true });
 $('#back').addEventListener('click', () => {
   if (state.es) state.es.close();
   state.mission = null;
