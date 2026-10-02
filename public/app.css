@@ -1194,3 +1194,4 @@ body.iv-open { overflow: hidden; }
 .loc-ok { color: var(--ok); display: grid; place-items: center; }
 .loc-ok .i { width: 20px; height: 20px; stroke-width: 2.2; }
 .m-rename { flex: 1; min-width: 0; font: inherit; font-size: 15.5px; font-weight: 600; color: var(--ink); background: var(--card-line); border: 0; outline: 2px solid var(--accent); border-radius: 8px; padding: 3px 8px; margin: -3px 0; }
+.ob-chip.skip { color: var(--ink-3); border-style: dashed; }

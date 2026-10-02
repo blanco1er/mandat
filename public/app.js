@@ -1546,6 +1546,13 @@ async function ivAsk(answer) {
       b.addEventListener('click', () => ivAsk(c));
       $('#ivChoices').append(b);
     }
+    if (!r.done) {
+      // Never forced to answer: Skip moves to the next question.
+      const skip = el('button', 'ob-chip skip', t('Skip'));
+      skip.type = 'button';
+      skip.addEventListener('click', () => ivAsk(t('I would rather skip this one.')));
+      $('#ivChoices').append(skip);
+    }
     $('#ivSay').hidden = !!r.done;
     if (r.done) {
       const b = el('button', 'iv-done', t('Done'));

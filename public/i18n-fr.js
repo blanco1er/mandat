@@ -529,4 +529,6 @@ export default {
   "No answer from the phone. Try again.": "Pas de réponse du téléphone. Réessayez.",
   "Rename": "Renommer",
   "Mission name": "Nom de la mission",
+  "Skip": "Passer",
+  "I would rather skip this one.": "Je préfère passer celle-ci.",
 };
