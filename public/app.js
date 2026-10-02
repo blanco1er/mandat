@@ -1546,7 +1546,7 @@ function renderMemory(list) {
   }
 }
 // Getting to know you: Mandat asks one short question at a time, offers ready answers, and remembers.
-const iv = { history: [], busy: false };
+const iv = { history: [], busy: false, sel: new Set() };
 function ivBubble(cls, text) {
   const li = el('li', 'iv-' + cls, text);
   $('#ivFeed').append(li);
@@ -1567,12 +1567,21 @@ async function ivAsk(answer) {
     iv.history.push({ role: 'mandat', text: r.say });
     ivBubble('mandat', r.say);
     state.me = r.user;
+    // Several answers can be ticked at once, and words added in the field; Confirm sends it all together.
+    iv.sel = new Set();
     for (const c of r.done ? [] : r.choices || []) {
       const b = el('button', 'ob-chip', c);
       b.type = 'button';
-      b.addEventListener('click', () => ivAsk(c));
+      b.setAttribute('aria-pressed', 'false');
+      b.addEventListener('click', () => {
+        if (iv.sel.has(c)) iv.sel.delete(c); else iv.sel.add(c);
+        b.classList.toggle('on', iv.sel.has(c));
+        b.setAttribute('aria-pressed', String(iv.sel.has(c)));
+        ivSync();
+      });
       $('#ivChoices').append(b);
     }
+    ivSync();
     if (!r.done) {
       // Never forced to answer: Skip moves to the next question.
       const skip = el('button', 'ob-chip skip', t('Skip'));
@@ -1611,13 +1620,24 @@ function ivClose() {
 }
 $('#memTalk').addEventListener('click', ivOpen);
 $('#ivClose').addEventListener('click', ivClose);
+// The answer: ticked choices plus your own words, in one message.
+function ivSync() {
+  const n = iv.sel.size, typed = $('#ivText').value.trim();
+  $('#ivGo').disabled = !n && !typed;
+  $('#ivGo').textContent = n ? t('Confirm ({n})', { n }) : t('Confirm');
+  $('#ivGo').hidden = !n;
+  $('#ivText').placeholder = n ? t('Add something else…') : t('Your answer…');
+}
+$('#ivText').addEventListener('input', ivSync);
 $('#ivSay').addEventListener('submit', (e) => {
   e.preventDefault();
-  const a = $('#ivText').value.trim();
+  const a = [...iv.sel, $('#ivText').value.trim()].filter(Boolean).join(', ');
   if (!a) return;
   $('#ivText').value = '';
+  iv.sel = new Set();
   ivAsk(a);
 });
+$('#ivGo').addEventListener('click', () => $('#ivSay').requestSubmit());
 // Your people: the agent reads this list, so "split it with Sam" reaches Sam's PayPal inbox without asking again.
 function renderPeople(people) {
   const g = $('#people');

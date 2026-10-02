@@ -1230,3 +1230,5 @@ body.iv-open { overflow: hidden; }
 .sg-actions button { height: 34px; padding: 0 14px; border-radius: 17px; font-size: 14px; font-weight: 600; }
 .sg-later { color: var(--ink-3); }
 .sg-go { background: var(--accent); color: #fff; }
+.iv-go { align-self: flex-end; height: 38px; padding: 0 18px; border-radius: 19px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; animation: storyIn 0.3s var(--spring) both; }
+.iv-choices .ob-chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
