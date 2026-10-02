@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="google" content="notranslate">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#f4f1ec" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0b0c10" media="(prefers-color-scheme: dark)">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -51,6 +51,35 @@
       <button class="pp-btn" id="start"><span>Continue with</span><b class="pp-word" aria-label="PayPal"><i>Pay</i><i>Pal</i></b></button>
       <p class="w-fine">Your card and password stay with PayPal. This demo uses the PayPal sandbox: no real money moves.</p>
     </div>
+  </main>
+
+  <!-- 1b. First run, after the mandate: a few things that make every mission better. Each step can wait. -->
+  <main id="onboard" class="view" hidden>
+    <div class="ob-top"><div class="ob-progress" aria-hidden="true"><i></i><i></i><i></i><i></i></div><button type="button" class="ob-skip" id="obSkip">Later</button></div>
+    <section class="ob-step" data-step="0">
+      <h1 class="ob-title">Where are you usually?</h1>
+      <p class="ob-lede">Mandat searches around you. You can change this anytime in Settings.</p>
+      <button type="button" class="ob-option" id="obLocate"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg><span><b>Use my location</b><small id="obLocState">Only when a mission needs it</small></span></button>
+      <label class="ob-field"><span>Usual address</span><input id="obHome" autocomplete="street-address" placeholder="12 rue Oberkampf, Paris"></label>
+    </section>
+    <section class="ob-step" data-step="1" hidden>
+      <h1 class="ob-title">Anything to avoid?</h1>
+      <p class="ob-lede">Allergies and diet. Mandat will never book against them.</p>
+      <div class="ob-chips" id="obDiet"></div>
+      <label class="ob-field"><span>Something else</span><input id="obDietMore" placeholder="Shellfish, spicy food…"></label>
+    </section>
+    <section class="ob-step" data-step="2" hidden>
+      <h1 class="ob-title">What do you like?</h1>
+      <p class="ob-lede">It quietly shapes every choice Mandat makes for you.</p>
+      <div class="ob-chips" id="obLikes"></div>
+      <label class="ob-field"><span>Something else</span><input id="obLikesMore" placeholder="Rooftops, vintage shops…"></label>
+    </section>
+    <section class="ob-step" data-step="3" hidden>
+      <h1 class="ob-title">Stay in the loop</h1>
+      <p class="ob-lede">A reminder before each booking, and a ping when a payment needs you. Nothing else.</p>
+      <button type="button" class="ob-option" id="obPush"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg><span><b>Turn on notifications</b><small id="obPushState">You can turn them off anytime</small></span></button>
+    </section>
+    <div class="ob-bottom"><button type="button" class="ob-next" id="obNext">Continue</button></div>
   </main>
 
   <!-- 1. Mandate: sign once -->

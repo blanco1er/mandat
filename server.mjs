@@ -233,6 +233,7 @@ app.post('/api/me', api(async (req, res) => {
     for (const k of ['approveAbove', 'monthlyCap', 'dailyCap']) if (Number.isFinite(rules[k]) && rules[k] >= 0 && rules[k] <= 20000) u.rules[k] = rules[k];
   }
   if (voice && typeof voice.on === 'boolean') u.voice.on = voice.on;
+  if (req.body?.onboarded === true) u.onboarded = true;
   saveUser(u);
   return { user: publicUser(u) };
 }));

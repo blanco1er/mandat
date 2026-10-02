@@ -997,3 +997,37 @@ body.on-welcome #topbar, body.on-welcome .backdrop { display: none; }
 .card.pay { display: block; }
 .card.pay > header { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
 .card.pay > header .pay-main { flex: 1; min-width: 0; }
+
+/* An app does not zoom. On touch screens: no double-tap zoom, and inputs at 16px so iOS never zooms on focus. */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (pointer: coarse) {
+  input, textarea, select { font-size: 16px !important; }
+}
+
+/* ---------- First run ---------- */
+#onboard { min-height: 100svh; display: flex; flex-direction: column; padding: 14px 22px calc(18px + env(safe-area-inset-bottom)); max-width: 460px; margin: 0 auto; }
+.ob-top { display: flex; align-items: center; gap: 16px; height: 36px; }
+.ob-progress { flex: 1; display: flex; gap: 5px; }
+.ob-progress i { flex: 1; height: 3px; border-radius: 2px; background: var(--card-line); transition: background 0.35s var(--smooth); }
+.ob-progress i.on { background: var(--ink); }
+.ob-skip { font-size: 15px; font-weight: 600; color: var(--ink-3); padding: 6px 0 6px 6px; }
+.ob-step { animation: storyIn 0.45s var(--spring) both; }
+.ob-title { margin: 30px 0 8px; font-size: 28px; line-height: 33px; font-weight: 700; letter-spacing: -0.025em; }
+.ob-lede { margin: 0 0 22px; font-size: 15.5px; line-height: 22px; color: var(--ink-2); }
+.ob-option { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--card-line); text-align: left; margin-bottom: 12px; transition: border-color 0.2s, background 0.2s; }
+.ob-option > .i { width: 22px; height: 22px; color: var(--accent); flex: none; }
+.ob-option span { display: flex; flex-direction: column; min-width: 0; }
+.ob-option b { font-size: 15.5px; font-weight: 600; }
+.ob-option small { font-size: 12.5px; color: var(--ink-3); line-height: 17px; }
+.ob-option.on { border-color: rgba(25, 164, 99, 0.5); }
+.ob-option.on > .i { color: var(--ok); }
+.ob-field { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--card-line); }
+.ob-field span { font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.ob-field input { border: 0; outline: 0; background: none; font-size: 16px; color: var(--ink); padding: 0; }
+.ob-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.ob-chip { height: 36px; padding: 0 14px; border-radius: 18px; background: var(--card); border: 1px solid var(--card-line); font-size: 14.5px; font-weight: 500; transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.2s var(--spring); }
+.ob-chip:active { transform: scale(0.96); }
+.ob-chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.ob-bottom { margin-top: auto; padding-top: 24px; }
+.ob-next { width: 100%; height: 54px; border-radius: 27px; background: var(--ink); color: var(--bg); font-size: 17px; font-weight: 600; transition: transform 0.25s var(--spring); }
+.ob-next:active { transform: scale(0.98); }

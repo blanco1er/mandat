@@ -9,9 +9,9 @@ const PLURAL = { bakery: 'bakeries', florist: 'florists', restaurant: 'restauran
 const many = (c) => t(PLURAL[c] || c + 's');
 
 // ---------- routing ----------
-const VIEWS = ['welcome', 'mandate', 'home', 'live', 'activity', 'settings'];
+const VIEWS = ['welcome', 'onboard', 'mandate', 'home', 'live', 'activity', 'settings'];
 function show(view) {
-  document.body.classList.toggle('on-welcome', view === 'welcome');
+  document.body.classList.toggle('on-welcome', view === 'welcome' || view === 'onboard');
   if (view === 'welcome') playStory(); else stopStory();
   for (const v of VIEWS) $('#' + v).hidden = v !== view;
   $('#tabbar').hidden = !['home', 'activity', 'settings'].includes(view);
@@ -74,6 +74,10 @@ function storyRow(kind, title, sub) {
 }
 function stopStory() { clearTimeout(storyTimer); storyTimer = null; }
 
+// Like a native app, the screen never pinch-zooms (Safari gesture events); the photo viewer keeps its own zoom.
+for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
+  document.addEventListener(ev, (e) => { if (!e.target.closest?.('#lightbox')) e.preventDefault(); }, { passive: false });
+}
 history.scrollRestoration = 'manual'; // every screen opens at its top
 async function boot() {
   const r = await get('/api/me');
@@ -83,6 +87,7 @@ async function boot() {
   const p = new URLSearchParams(location.search);
   history.replaceState(null, '', '/');
   if (!state.me.paypal.mandate) return p.get('mandate') === 'cancelled' ? mandateView() : show('welcome');
+  if (!state.me.onboarded) return onboardView();
   renderHome(r.missions);
   navigator.serviceWorker?.register('/sw.js').catch(() => {});
   const open = p.get('mission');
@@ -111,6 +116,72 @@ $('#signMandate').addEventListener('click', async () => {
   await post('/api/me', { rules: { autonomy: mAutonomy, monthlyCap: Number($('#mCap').value) } });
   const setup = await post('/api/me/mandate', {});
   location.href = setup.approveUrl;
+});
+
+// ---------- first run: where, what to avoid, what you like, notifications ----------
+const OB_DIET = ['Vegetarian', 'Vegan', 'Halal', 'Kosher', 'Gluten-free', 'No pork', 'No alcohol', 'Nut allergy', 'Lactose-free', 'Seafood allergy'];
+const OB_LIKES = ['Quiet places', 'Terraces', 'Local spots', 'Fine dining', 'Good value', 'Italian', 'Japanese', 'Trains over planes', 'Central hotels', 'Early dinners'];
+let obStep = 0;
+function obChips(box, labels, saved) {
+  box.innerHTML = '';
+  for (const l of labels) {
+    const b = el('button', 'ob-chip' + (saved.toLowerCase().includes(t(l).toLowerCase()) ? ' on' : ''), t(l));
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(b.classList.contains('on')));
+    b.addEventListener('click', () => b.setAttribute('aria-pressed', String(b.classList.toggle('on'))));
+    box.append(b);
+  }
+}
+const obPicked = (box, more) => [...$$(box + ' .ob-chip.on')].map((b) => b.textContent).concat($(more).value.trim() ? [$(more).value.trim()] : []).join(', ');
+function onboardView() {
+  const p = state.me.profile;
+  $('#obHome').value = p.home?.label || '';
+  obChips($('#obDiet'), OB_DIET, p.diet || '');
+  obChips($('#obLikes'), OB_LIKES, p.preferences || '');
+  obGo(0);
+  show('onboard');
+}
+function obGo(i) {
+  obStep = i;
+  $$('.ob-step').forEach((s) => (s.hidden = Number(s.dataset.step) !== i));
+  $$('.ob-progress i').forEach((d, k) => d.classList.toggle('on', k <= i));
+  $('#obNext').textContent = i === 3 ? t('Start') : t('Continue');
+  if (i === 3) obPushState();
+  window.scrollTo({ top: 0 });
+}
+function obPushState() {
+  const why = pushSupport();
+  const on = state.me.notifications > 0 && why === 'ok' && Notification.permission === 'granted';
+  $('#obPush').classList.toggle('on', on);
+  $('#obPush b').textContent = on ? t('Notifications on') : t('Turn on notifications');
+  $('#obPushState').textContent = on ? t('On for this device') : why === 'install' ? t('Add Mandat to your Home Screen first, then turn them on here or in Settings.') : why === 'blocked' ? t('Blocked in your phone settings') : why === 'none' ? t('Not available in this browser') : t('You can turn them off anytime');
+}
+async function obSave(i) {
+  const profile = {};
+  if (i === 0 && $('#obHome').value.trim()) profile.home = { label: $('#obHome').value.trim() };
+  if (i === 1) profile.diet = obPicked('#obDiet', '#obDietMore');
+  if (i === 2) profile.preferences = obPicked('#obLikes', '#obLikesMore');
+  if (Object.keys(profile).length) state.me = (await post('/api/me', { profile })).user;
+}
+async function obFinish() {
+  state.me = (await post('/api/me', { onboarded: true })).user;
+  const r = await get('/api/me');
+  renderHome(r.missions);
+  show('home');
+}
+$('#obNext').addEventListener('click', async () => {
+  try { await obSave(obStep); } catch {}
+  if (obStep < 3) obGo(obStep + 1); else obFinish();
+});
+$('#obSkip').addEventListener('click', () => (obStep < 3 ? obGo(obStep + 1) : obFinish()));
+$('#obLocate').addEventListener('click', async () => {
+  const l = await locate();
+  $('#obLocate').classList.toggle('on', !!l);
+  $('#obLocState').textContent = l ? t('On, used to search around you') : t('Not allowed: Mandat will use your usual address');
+});
+$('#obPush').addEventListener('click', async () => {
+  try { await enablePush(); } catch {}
+  obPushState();
 });
 
 // ---------- home ----------
