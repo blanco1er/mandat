@@ -40,23 +40,23 @@
 
   <!-- 0. Welcome: what Mandat does, shown rather than told, then one way in -->
   <main id="welcome" class="view" hidden>
-    <div class="w-top"><span class="w-mark" aria-label="Mandat"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="7" fill="currentColor"/><circle cx="11.2" cy="11.2" r="4.6" fill="none" stroke="var(--bg)" stroke-width="2.4"/><circle cx="17" cy="17" r="2.3" fill="#ffc439"/></svg>Mandat</span><span class="w-badge" data-i18n="welcome.brand.demo"></span></div>
-    <h1 class="w-title" data-i18n="welcome.title"></h1>
-    <p class="w-lede" data-i18n="welcome.lede"></p>
+    <div class="w-top"><span class="w-mark" aria-label="Mandat"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="7" fill="currentColor"/><circle cx="11.2" cy="11.2" r="4.6" fill="none" stroke="var(--bg)" stroke-width="2.4"/><circle cx="17" cy="17" r="2.3" fill="#ffc439"/></svg>Mandat</span><span class="w-badge">PayPal sandbox</span></div>
+    <h1 class="w-title" data-i18n>Say what you need.<br>Set what you’ll spend.</h1>
+    <p class="w-lede">Mandat finds the place, negotiates, books and pays with PayPal. It never goes a cent over.</p>
     <figure class="story" id="story" aria-hidden="true">
       <div class="story-budget"><span class="sb-bar"><i id="sbHeld"></i></span><small id="sbText"></small></div>
       <ol class="story-steps" id="storySteps"></ol>
     </figure>
     <div class="w-bottom">
-      <button class="pp-btn" id="start"><span data-i18n="welcome.cta"></span><b class="pp-word" aria-label="PayPal"><i>Pay</i><i>Pal</i></b></button>
-      <p class="w-fine" data-i18n="welcome.fine"></p>
+      <button class="pp-btn" id="start"><span>Continue with</span><b class="pp-word" aria-label="PayPal"><i>Pay</i><i>Pal</i></b></button>
+      <p class="w-fine">Your card and password stay with PayPal. This demo uses the PayPal sandbox: no real money moves.</p>
     </div>
   </main>
 
   <!-- 1. Mandate: sign once -->
   <main id="mandate" class="view" hidden>
     <h1 class="large-title">Sign your mandate</h1>
-    <p class="lede">One signature with PayPal lets your agent hold deposits for you — only inside each mission's budget and your rules.</p>
+    <p class="lede">One signature with PayPal lets your agent hold deposits for you, only inside each mission’s budget and your rules.</p>
     <div class="group">
       <div class="row"><label>Monthly limit</label>
         <div class="stepper" data-for="monthlyCap"><button data-step="-100">−</button><input id="mCap" inputmode="numeric" value="1500"><span class="cur">€</span><button data-step="100">+</button></div>
@@ -98,7 +98,7 @@
 
     <div class="idea-row" id="ideas" role="group" aria-label="Ideas to start from"></div>
 
-    <div class="stopped-banner" id="stoppedBanner" hidden>Mandat is stopped — no payment can be made. <button id="resumeAll">Resume</button></div>
+    <div class="stopped-banner" id="stoppedBanner" hidden>Mandat is stopped. No payment can be made. <button id="resumeAll">Resume</button></div>
 
     <!-- Your missions: three discreet tabs (tap or swipe), one compact list -->
     <section class="m-panel" aria-label="Your missions">
@@ -204,6 +204,13 @@
       <div class="row"><div class="grow"><b>Spoken replies</b><small>Mandat answers out loud</small></div><label class="switch"><input type="checkbox" id="sVoice"><i></i></label></div>
       <div class="row"><div class="grow"><b>Notifications</b><small id="sPushInfo">When a payment needs you, a merchant answers or a friend pays</small></div><label class="switch"><input type="checkbox" id="sPush"><i></i></label></div>
       <div class="row" id="sPushTestRow" hidden><div class="grow"><small>Check that this device receives them</small></div><button class="link" id="sPushTest">Send a test</button></div>
+      <div class="row col"><label>Language</label>
+        <div class="segmented wide" id="sLang" role="radiogroup" aria-label="Language">
+          <button role="radio" data-v="auto">Auto</button>
+          <button role="radio" data-v="en" lang="en">English</button>
+          <button role="radio" data-v="fr" lang="fr">Français</button>
+        </div>
+      </div>
     </div>
 
     <h2 class="group-title">Privacy</h2>

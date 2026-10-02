@@ -14,6 +14,7 @@ import { KINDS } from './lib/memory.mjs';
 import { emojiFor, isEmoji } from './lib/emoji.mjs';
 import { budgetFromText } from './lib/budget.mjs';
 import * as Push from './lib/push.mjs';
+import { tr, trn, langOf, money } from './lib/i18n-server.mjs';
 import { merchant, checkInbox } from './lib/merchants.mjs';
 import { newUser, getUser, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
@@ -25,15 +26,23 @@ const live = new Map(); // missionId -> { s, clients:Set, busy:Promise, log:[] }
 app.set('trust proxy', 1); // behind Render / a tunnel: the client IP is in X-Forwarded-For
 app.use(express.json({ limit: '3mb' })); // photos arrive as data URLs, resized to 1280 px by the app
 
-// The app sends the person's time zone; reminders and "tomorrow at 5" are understood in it.
+// The app sends the person's time zone and interface language: reminders and "tomorrow at 5" are understood
+// in the first, notifications and the agent's replies follow the second.
 app.use('/api', (req, res, next) => {
   const tz = req.get('X-TZ');
-  if (tz && validTz(tz)) {
+  const lang = req.get('X-Lang');
+  const okTz = tz && validTz(tz), okLang = lang === 'fr' || lang === 'en';
+  if (okTz || okLang) {
     const u = getUser(cookie(req, 'mandat_uid'));
-    if (u && u.tz !== tz) { u.tz = tz; saveUser(u); }
+    if (u && ((okTz && u.tz !== tz) || (okLang && u.lang !== lang))) {
+      if (okTz) u.tz = tz;
+      if (okLang) u.lang = lang;
+      saveUser(u);
+    }
   }
   next();
 });
+const reqLang = (req) => langOf(req.get('X-Lang'));
 
 // ---------- protections for a public demo (keeps the AI bill bounded until judging ends) ----------
 // Short burst limit per IP on every write.
@@ -56,8 +65,8 @@ function allowance(u, kind = 'turns') {
   const day = new Date().toISOString().slice(0, 10);
   if (usage.day !== day) usage = { day, global: 0, users: new Map() };
   const mine = usage.users.get(u.id) || { turns: 0, missions: 0 };
-  if (usage.global >= LIMITS.global) throw Object.assign(new Error('Mandat has reached its daily demo limit. Please come back tomorrow.'), { status: 429 });
-  if (mine[kind] >= LIMITS[kind]) throw Object.assign(new Error(kind === 'missions' ? `That's ${LIMITS.missions} new missions today — the demo limit. Continue an existing one, or come back tomorrow.` : 'You reached today\'s demo limit for the AI. It resets at midnight (UTC).'), { status: 429 });
+  if (usage.global >= LIMITS.global) throw Object.assign(new Error(tr(u.lang, 'Mandat has reached its daily demo limit. Please come back tomorrow.')), { status: 429 });
+  if (mine[kind] >= LIMITS[kind]) throw Object.assign(new Error(kind === 'missions' ? tr(u.lang, "That's {n} new missions today, the demo limit. Continue an existing one, or come back tomorrow.", { n: LIMITS.missions }) : tr(u.lang, "You reached today's demo limit for the AI. It resets at midnight (UTC).")), { status: 429 });
   mine[kind]++;
   if (kind === 'turns') usage.global++;
   usage.users.set(u.id, mine);
@@ -122,7 +131,9 @@ function emitter(b) {
 }
 
 // ---------- notifications: only the moments that need the user, and only when they are not looking ----------
-const EUR = (v, s) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: s.envelope.currency || 'EUR' }).format(v);
+// In the mission owner's app language.
+const langFor = (s) => langOf(s._user?.lang || getUser(s.userId)?.lang);
+const EUR = (v, s, L) => money(L, v, s.envelope.currency || 'EUR');
 function needsCount(u) {
   return u.missions.map(getMission).filter(Boolean).map((s) => missionSummary(live.get(s.id)?.s || s, { busy: !!live.get(s.id)?.running })).filter((m) => m.status === 'needs_you' && !m.archived).length;
 }
@@ -134,19 +145,23 @@ async function pushTo(s, msg) {
 }
 function pushFor(b, { type, data }) {
   if (b.clients.size && type !== 'wrapup') return; // they are looking at this mission right now (the recap always goes to the phone)
+  if (!['approval', 'request', 'collected', 'wrapup', 'share_paid'].includes(type)) return;
   const s = b.s;
   const title = s.title || 'Mandat';
-  if (type === 'approval' && data.status !== 'approved' && data.status !== 'declined') pushTo(s, { title, body: `Approve ${EUR(data.amount, s)} at ${data.merchant}? Tap to review.`, tag: 'ap-' + data.id });
-  else if (type === 'request' && data.status === 'accepted') pushTo(s, { title, body: `${data.merchant} accepted your booking${data.slot ? ' for ' + data.slot : ''}.`, tag: 'rq-' + data.id });
-  else if (type === 'request' && data.status === 'declined') pushTo(s, { title, body: `${data.merchant} can't take it. Mandat is looking for another option.`, tag: 'rq-' + data.id });
-  else if (type === 'request' && data.status === 'countered') pushTo(s, { title, body: `${data.merchant} proposes ${data.counterSlot} instead. Does that work?`, tag: 'rq-' + data.id });
-  else if (type === 'collected') pushTo(s, { title, body: `${data.merchant} confirmed your booking — ${EUR(data.amount, s)} deposit paid with PayPal.`, tag: 'cf-' + s.id });
+  const L = langFor(s);
+  if (type === 'approval' && data.status !== 'approved' && data.status !== 'declined') pushTo(s, { title, body: tr(L, 'Approve {amount} at {merchant}? Tap to review.', { amount: EUR(data.amount, s, L), merchant: data.merchant }), tag: 'ap-' + data.id });
+  else if (type === 'request' && data.status === 'accepted') pushTo(s, { title, body: tr(L, data.slot ? '{merchant} accepted your booking for {slot}.' : '{merchant} accepted your booking.', { merchant: data.merchant, slot: data.slot }), tag: 'rq-' + data.id });
+  else if (type === 'request' && data.status === 'declined') pushTo(s, { title, body: tr(L, "{merchant} can't take it. Mandat is looking for another option.", { merchant: data.merchant }), tag: 'rq-' + data.id });
+  else if (type === 'request' && data.status === 'countered') pushTo(s, { title, body: tr(L, '{merchant} proposes {slot} instead. Does that work?', { merchant: data.merchant, slot: data.counterSlot }), tag: 'rq-' + data.id });
+  else if (type === 'collected') pushTo(s, { title, body: tr(L, '{merchant} confirmed your booking. {amount} deposit paid with PayPal.', { merchant: data.merchant, amount: EUR(data.amount, s, L) }), tag: 'cf-' + s.id });
   else if (type === 'wrapup' && !b.s.closed) {
     b.s.closed = true;
     const first = data.lines?.find((l) => l.when);
-    pushTo(s, { title: '✓ ' + data.headline, body: `${first ? `${first.what} · ${String(first.when).replace(/^\d{4}-/, '').replace(' ', ' at ')}. ` : ''}${data.reminders?.length ? `${data.reminders.length} reminder${data.reminders.length > 1 ? 's' : ''} planned. ` : ''}Tell me if you want to change anything.`, tag: 'done-' + s.id });
+    const [d, time] = first ? String(first.when).replace(/^\d{4}-/, '').split(' ') : [];
+    const when = time ? tr(L, '{date} at {time}', { date: d, time }) : d;
+    pushTo(s, { title: '✓ ' + data.headline, body: `${first ? `${first.what} · ${when}. ` : ''}${data.reminders?.length ? trn(L, data.reminders.length, '{n} reminder planned.', '{n} reminders planned.') + ' ' : ''}${tr(L, 'Tell me if you want to change anything.')}`, tag: 'done-' + s.id });
   }
-  else if (type === 'share_paid') pushTo(s, { title, body: `${data.friend} paid their share: ${EUR(data.amount, s)}.`, tag: 'sh-' + data.invoiceId });
+  else if (type === 'share_paid') pushTo(s, { title, body: tr(L, '{friend} paid their share: {amount}.', { friend: data.friend, amount: EUR(data.amount, s, L) }), tag: 'sh-' + data.invoiceId });
 }
 // When everything is booked: make sure reminders exist and the "All set" recap is on screen and on the phone.
 function closeLoop(b, emit) {
@@ -192,7 +207,7 @@ const api = (h) => async (req, res) => {
   try {
     res.json(await h(req, res));
   } catch (e) {
-    res.status(e.status || 400).json({ error: e.message });
+    res.status(e.status || 400).json({ error: tr(reqLang(req), e.message) }); // fixed messages are translated as they are
   }
 };
 
@@ -346,7 +361,7 @@ app.post('/api/me/activity/ask', api(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   const { message } = await chat({
     model: MODELS.fast, fallback: MODELS.smart, json: true, temperature: 0, maxTokens: 2000,
-    messages: [{ role: 'system', content: `Turn a request about a payments ledger into AG Grid filters. Today is ${today}. Columns: at (date), mission (text), who (merchant or friend name), what (text), kind ("Deposit" or "Share"), status ("Held","Paid","Released","Refunded","Owed to you","Paid back"), amount (number, negative = money out). Reply JSON only: {"filterModel":{<col>:<filter>}, "quickFilter": "<optional free text>", "summary":"<5-8 words describing the filter>"}. Text filter: {"filterType":"text","type":"contains"|"equals","filter":"..."}. Number: {"filterType":"number","type":"greaterThan"|"lessThan"|"equals","filter":n}. Date: {"filterType":"date","type":"inRange","dateFrom":"YYYY-MM-DD","dateTo":"YYYY-MM-DD"}. Use only these columns.` }, { role: 'user', content: q }],
+    messages: [{ role: 'system', content: `Turn a request about a payments ledger into AG Grid filters. Today is ${today}. Columns: at (date), mission (text), who (merchant or friend name), what (text), kind ("Deposit" or "Share"), status ("Held","Paid","Released","Refunded","Owed to you","Paid back"), amount (number, negative = money out). Reply JSON only: {"filterModel":{<col>:<filter>}, "quickFilter": "<optional free text>", "summary":"<5-8 words describing the filter, in ${reqLang(req) === 'fr' ? 'French' : 'English'}>"}. Text filter: {"filterType":"text","type":"contains"|"equals","filter":"..."}. Number: {"filterType":"number","type":"greaterThan"|"lessThan"|"equals","filter":n}. Date: {"filterType":"date","type":"inRange","dateFrom":"YYYY-MM-DD","dateTo":"YYYY-MM-DD"}. Use only these columns.` }, { role: 'user', content: q }],
   });
   let out = {};
   try { out = JSON.parse(message.content || '{}'); } catch {}
@@ -368,12 +383,13 @@ app.post('/api/missions', api(async (req, res) => {
   const said = budgetFromText(intent);
   const source = req.body?.budgetSource === 'pill' && budget > 0 ? 'pill' : said ? 'words' : budget > 0 ? 'suggested' : 'limit';
   const total = source === 'pill' || source === 'suggested' ? Math.round(budget) : source === 'words' ? said.amount : Math.min(u.rules.dailyCap || 300, Math.max(0, u.rules.monthlyCap - used));
-  if (source === 'limit' && total < 1) throw new Error(`Your monthly limit (${u.rules.monthlyCap} €) is already planned. Raise it in Settings, or say a budget.`);
+  const L = reqLang(req);
+  if (source === 'limit' && total < 1) throw new Error(tr(L, 'Your monthly limit ({cap}) is already planned. Raise it in Settings, or say a budget.', { cap: money(L, u.rules.monthlyCap) }));
   if (!(total > 0 && total <= 5000)) throw new Error('A mission budget goes from 1 to 5,000 €.');
-  if (used + total > u.rules.monthlyCap) throw new Error(`This would exceed your monthly limit (${u.rules.monthlyCap} €, ${used} € already planned).`);
+  if (used + total > u.rules.monthlyCap) throw new Error(tr(L, 'This would exceed your monthly limit ({cap}, {used} already planned).', { cap: money(L, u.rules.monthlyCap), used: money(L, used) }));
   allowance(u, 'missions');
   allowance(u, 'turns');
-  const s = createSession({ budget: total, approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });
+  const s = createSession({ budget: total, approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.get('X-Lang') || req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });
   s.envelope.source = source;
   s.title = plainTitle(intent); // instant; the AI title replaces it in the background
   u.missions.unshift(s.id);
@@ -491,7 +507,7 @@ app.post('/api/me/push/off', api(async (req, res) => {
 }));
 app.post('/api/me/push/test', api(async (req, res) => {
   const u = me(req, res);
-  const changed = await Push.notify(u, { title: 'Mandat', body: 'Notifications are on. I will only ping you when something needs you.', url: '/', tag: 'test', badge: needsCount(u) });
+  const changed = await Push.notify(u, { title: 'Mandat', body: tr(u.lang, 'Notifications are on. I will only ping you when something needs you.'), url: '/', tag: 'test', badge: needsCount(u) });
   if (changed) saveUser(u);
   return { devices: (u.push || []).length };
 }));
@@ -507,8 +523,8 @@ app.get('/api/missions/:id/calendar.ics', (req, res) => {
     const u = me(req, res);
     const b = box(req.params.id, u);
     const ev = planEvents(b.s);
-    if (!ev.length) return res.status(404).send('Nothing with a date in this plan yet.');
-    sendIcs(res, b.s.title || 'Mandat plan', ev, u.tz || 'UTC');
+    if (!ev.length) return res.status(404).send(tr(u.lang, 'Nothing with a date in this plan yet.'));
+    sendIcs(res, b.s.title || tr(u.lang, 'Mandat plan'), ev, u.tz || 'UTC');
   } catch (e) { res.status(e.status || 400).send(e.message); }
 });
 app.get('/api/missions/:id/reminders/:rid.ics', (req, res) => {
@@ -516,11 +532,11 @@ app.get('/api/missions/:id/reminders/:rid.ics', (req, res) => {
     const u = me(req, res);
     const b = box(req.params.id, u);
     const r = (b.s.reminders || []).find((x) => x.id === req.params.rid);
-    if (!r) return res.status(404).send('Unknown reminder');
+    if (!r) return res.status(404).send(tr(u.lang, 'Unknown reminder'));
     // The calendar event is the event itself when known, with an alert at the reminder time.
     const start = r.eventAt || r.local;
     const before = Math.max(0, Math.round((localToUtc(start, u.tz || 'UTC') - new Date(r.at)) / 60000));
-    sendIcs(res, r.text.slice(0, 60), [{ uid: r.id, summary: r.text, start, minutes: 60, location: r.place, description: `${b.s.title || 'Mandat'} · reminder from Mandat`, alarms: [before] }], u.tz || 'UTC');
+    sendIcs(res, r.text.slice(0, 60), [{ uid: r.id, summary: r.text, start, minutes: 60, location: r.place, description: tr(u.lang, '{title} · reminder from Mandat', { title: b.s.title || 'Mandat' }), alarms: [before] }], u.tz || 'UTC');
   } catch (e) { res.status(e.status || 400).send(e.message); }
 });
 // Due reminders become phone notifications (and a line in the mission), checked every 30 seconds.
@@ -533,7 +549,7 @@ setInterval(() => {
       for (const r of b.s.reminders.filter((x) => !x.sent && Date.parse(x.at) <= now)) {
         r.sent = true;
         emitter(b)('reminder_due', { id: r.id, text: r.text });
-        pushTo(b.s, { title: '⏰ ' + (b.s.title || 'Mandat'), body: r.text, tag: 'rm-' + r.id });
+        pushTo(b.s, { title: '⏰ ' + (b.s.title || 'Mandat'), body: r.text, tag: 'rm-' + r.id }); // the reminder's own words
       }
       saveMission(b.s);
     }

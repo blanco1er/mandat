@@ -1,12 +1,12 @@
 // Mandat — client. Welcome (PayPal login) → mandate → missions → a mission live; settings.
-import { t, lang, locale, applyI18n } from '/i18n.js';
+import { t, tn, lang, locale, applyI18n, setLang, chosenLang } from '/i18n.js';
 import { budgetFromText } from '/budget.mjs'; // same reader as the server: "700 €", "40 € each for 4", "budget 250"…
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const state = { me: null, mission: null, es: null, currency: 'EUR', speaking: false, listening: false, cards: {}, verified: {}, photo: null, voiceTurn: false, live: false };
-const fmt = (v) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: state.currency, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
+const fmt = (v) => new Intl.NumberFormat(locale(), { style: 'currency', currency: state.currency, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
 const PLURAL = { bakery: 'bakeries', florist: 'florists', restaurant: 'restaurants', hotel: 'hotels', bar: 'bars', cafe: 'cafés', hairdresser: 'hair salons', cinema: 'cinemas' };
-const many = (c) => PLURAL[c] || c + 's';
+const many = (c) => t(PLURAL[c] || c + 's');
 
 // ---------- routing ----------
 const VIEWS = ['welcome', 'mandate', 'home', 'live', 'activity', 'settings'];
@@ -48,14 +48,14 @@ function playStory() {
   const money = (v) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'EUR', maximumFractionDigits: v % 1 ? 2 : 0 }).format(v);
   const budget = (held) => {
     $('#sbHeld').style.width = (held / 160) * 100 + '%';
-    $('#sbText').textContent = t('story.budget', { held: money(held), total: money(160) });
+    $('#sbText').textContent = t('{held} held of {total}', { held: money(held), total: money(160) });
   };
   const steps = [
-    () => list.append(el('li', 'st-ask', t('story.ask'))),
-    () => list.append(storyRow('found', t('story.found'), t('story.foundSub'))),
-    () => list.append(storyRow('deal', t('story.deal'), t('story.dealSub'))),
-    () => { list.append(storyRow('hold', t('story.hold'), t('story.holdSub'))); budget(28.8); },
-    () => list.append(storyRow('done', t('story.done'), t('story.doneSub'))),
+    () => list.append(el('li', 'st-ask', t('Dinner for 4 on Saturday, €160 max'))),
+    () => list.append(storyRow('found', t('3 restaurants compared'), t('Lumière · Paris 11 · ★ 4.6'))),
+    () => list.append(storyRow('deal', t('Negotiated −10% for the group'), t('€144 instead of €160'))),
+    () => { list.append(storyRow('hold', t('Deposit held with PayPal'), t('Paid only when Lumière confirms'))); budget(28.8); },
+    () => list.append(storyRow('done', t('All set · Sat 7:30 pm'), t('Reminder Friday 8 pm · in your calendar'))),
   ];
   const reset = () => { list.innerHTML = ''; budget(0); $('#story').classList.remove('fading'); };
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) { reset(); steps.forEach((f) => f()); return; }
@@ -79,7 +79,7 @@ async function boot() {
   const r = await get('/api/me');
   state.me = r.user;
   state.paypalMode = r.paypalMode;
-  $('#demoNote').textContent = r.paypalMode === 'sandbox' ? 'PayPal sandbox — no real money moves.' : 'Demo mode — PayPal sandbox keys not configured yet.';
+  $('#demoNote').textContent = r.paypalMode === 'sandbox' ? t('PayPal sandbox: no real money moves.') : t('Demo mode: PayPal sandbox keys are not set up yet.');
   const p = new URLSearchParams(location.search);
   history.replaceState(null, '', '/');
   if (!state.me.paypal.mandate) return p.get('mandate') === 'cancelled' ? mandateView() : show('welcome');
@@ -97,12 +97,12 @@ function mandateView() {
   $('#mCap').value = state.me.rules.monthlyCap;
   setSeg('#mAutonomy', state.me.rules.autonomy);
   mAutonomy = state.me.rules.autonomy;
-  $('#mAutonomyHelp').textContent = state.me.autonomyLevels[mAutonomy].help;
+  $('#mAutonomyHelp').textContent = t(state.me.autonomyLevels[mAutonomy].help);
   show('mandate');
 }
 segmented('#mAutonomy', (v) => {
   mAutonomy = v;
-  $('#mAutonomyHelp').textContent = state.me.autonomyLevels[v].help;
+  $('#mAutonomyHelp').textContent = t(state.me.autonomyLevels[v].help);
 });
 $('#signMandate').addEventListener('click', async () => {
   await post('/api/me', { rules: { autonomy: mAutonomy, monthlyCap: Number($('#mCap').value) } });
@@ -128,26 +128,27 @@ const compose = { budget: null, suggested: null, auto: false, touched: false, em
 for (const i of IDEAS) {
   const b = el('button', 'idea');
   b.type = 'button';
-  b.innerHTML = `<span aria-hidden="true">${i.e}</span>${esc(i.t)}`;
-  b.title = i.d;
+  b.innerHTML = `<span aria-hidden="true">${i.e}</span>${esc(t(i.t))}`;
+  b.title = t(i.d);
   b.addEventListener('click', () => {
-    $('#cText').value = i.q;
+    const q = t(i.q);
+    $('#cText').value = q;
     compose.emoji = i.e;
     compose.suggested = i.b;
     setBudget(i.b, { auto: false, touched: false }); // an amount you then type still wins
     onCompose();
     $('#cText').focus();
-    $('#cText').setSelectionRange(i.q.length, i.q.length);
+    $('#cText').setSelectionRange(q.length, q.length);
   });
   $('#ideas').append(b);
 }
 
 // A rotating example in the empty box, typed in softly.
-const HINTS = ['Book a table for 4 tonight, around 40 € each…', 'Two weeks in Spain, 700 € all in…', 'Get my bike fixed today…', 'Split last night’s dinner with Sam and Lina…'];
+const HINTS = ['Book a table for 4 tonight, around 40 € each…', 'Two weeks in Spain, 700 € all in…', 'Get my bike fixed today…', 'Split last night’s dinner with Sam and Lina…'].map((h) => t(h));
 let hintI = 0, hintTimer;
 function typeHint() {
   const box = $('#cText');
-  if (box.value || document.activeElement === box) return (box.placeholder = 'Say what you need and what you can spend…');
+  if (box.value || document.activeElement === box) return (box.placeholder = t('Say what you need and what you can spend…'));
   const h = HINTS[hintI++ % HINTS.length];
   let n = 0;
   clearInterval(hintTimer);
@@ -162,7 +163,7 @@ function setBudget(v, { auto = false, touched = compose.touched } = {}) {
   compose.budget = v || null;
   compose.auto = auto;
   compose.touched = touched;
-  $('#cBudget').textContent = v ? fmtC(v) : 'Optional';
+  $('#cBudget').textContent = v ? fmtC(v) : t('Optional');
   $('#cBudgetBtn').classList.toggle('unset', !v);
   $('#cBudgetAuto').hidden = !auto;
   $('#cBudgetIn').value = v || '';
@@ -170,16 +171,16 @@ function setBudget(v, { auto = false, touched = compose.touched } = {}) {
   if (state.me && !$('#cRule').classList.contains('error')) $('#cRule').textContent = ruleText();
 }
 function onCompose() {
-  const t = $('#cText').value;
-  const found = budgetFromText(t)?.amount;
+  const text = $('#cText').value;
+  const found = budgetFromText(text)?.amount;
   if (!compose.touched) {
     if (found) { if (found !== compose.budget || !compose.auto) setBudget(found, { auto: true, touched: false }); }
     else if (compose.auto) setBudget(compose.suggested, { auto: false, touched: false }); // the amount was deleted
   }
   // One button, as in a mission: the voice orb while empty, the send arrow as soon as there is something.
-  const has = !!t.trim() || compose.photos.length > 0;
+  const has = !!text.trim() || compose.photos.length > 0;
   $('#compose').classList.toggle('has-text', has);
-  $('#cGo').setAttribute('aria-label', has ? 'Start mission' : 'Talk to Mandat');
+  $('#cGo').setAttribute('aria-label', has ? t('Start mission') : t('Talk to Mandat'));
   $('#cText').style.height = 'auto';
   $('#cText').style.height = Math.min($('#cText').scrollHeight, 220) + 'px';
 }
@@ -249,11 +250,11 @@ function drawComposeThumbs() {
   box.innerHTML = '';
   box.hidden = !compose.photos.length;
   compose.photos.forEach((src, i) => {
-    const t = el('div', 'tray-item');
-    t.innerHTML = `<img src="${src}" alt="Photo ${i + 1}"><button type="button" aria-label="Remove photo ${i + 1}">${svg('close')}</button>`;
-    t.querySelector('img').addEventListener('click', () => openLightbox(src));
-    t.querySelector('button').addEventListener('click', () => { compose.photos.splice(i, 1); drawComposeThumbs(); onCompose(); });
-    box.append(t);
+    const it = el('div', 'tray-item');
+    it.innerHTML = `<img src="${src}" alt="${esc(t('Photo {n}', { n: i + 1 }))}"><button type="button" aria-label="${esc(t('Remove photo {n}', { n: i + 1 }))}">${svg('close')}</button>`;
+    it.querySelector('img').addEventListener('click', () => openLightbox(src));
+    it.querySelector('button').addEventListener('click', () => { compose.photos.splice(i, 1); drawComposeThumbs(); onCompose(); });
+    box.append(it);
   });
 }
 $('#cPhoto').addEventListener('click', () => pickPhotos(addComposePhotos));
@@ -292,8 +293,8 @@ function resetCompose() {
 }
 function ruleText() {
   const lvl = state.me.rules.autonomy;
-  if (!compose.budget) return `No budget? Say it in your message — or Mandat stays under your daily limit (${fmtC(state.me.rules.dailyCap)}).`;
-  return lvl === 'autopilot' ? 'Autopilot · books and holds deposits on its own, inside this budget.' : lvl === 'careful' ? 'Careful · asks you before every payment.' : `Balanced · asks you before any payment over ${fmtC(state.me.rules.approveAbove)}.`;
+  if (!compose.budget) return t('No budget? Say one in your message, or Mandat stays under your daily limit ({limit}).', { limit: fmtC(state.me.rules.dailyCap) });
+  return lvl === 'autopilot' ? t('Autopilot · books and holds deposits on its own, inside this budget.') : lvl === 'careful' ? t('Careful · asks you before every payment.') : t('Balanced · asks you before any payment over {amount}.', { amount: fmtC(state.me.rules.approveAbove) });
 }
 $('#newMission').addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -307,12 +308,12 @@ const MTABS = {
   done: { match: (m) => m.status === 'done' || m.status === 'stopped', empty: 'Finished missions land here.' },
 };
 const TAB_ORDER = ['needs', 'progress', 'done'];
-const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto', style: 'short' }); // the interface is in English: no mixed languages
+const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: 'auto', style: 'short' }); // same language as the interface
 function ago(t) {
   const s = (Date.now() - t) / 1000;
-  if (s < 60) return 'now';
+  if (s < 60) return rtf.format(0, 'second');
   for (const [u, n] of [['minute', 60], ['hour', 3600], ['day', 86400], ['week', 604800]]) if (s < n * (u === 'week' ? 5 : u === 'day' ? 7 : u === 'hour' ? 24 : 60)) return rtf.format(-Math.floor(s / n), u);
-  return new Date(t).toLocaleDateString('en', { day: 'numeric', month: 'short' });
+  return new Date(t).toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
 }
 function renderHome(missions) {
   state.missions = missions;
@@ -357,14 +358,14 @@ function drawList(slide = 0) {
   if (slide) { void list.offsetWidth; list.classList.add(slide > 0 ? 'slide-l' : 'slide-r'); }
   const shown = q ? all.filter((m) => (m.title + ' ' + m.last + ' ' + m.needs).toLowerCase().includes(q)) : all.filter((m) => !m.archived && MTABS[state.mtab].match(m));
   if (shown.length) list.append(rows(shown));
-  else list.append(el('p', 'm-empty', q ? 'No mission matches.' : MTABS[state.mtab].empty));
+  else list.append(el('p', 'm-empty', q ? t('No mission matches.') : t(MTABS[state.mtab].empty)));
   // Archived missions sit, folded, at the bottom of "Done".
   const archived = all.filter((m) => m.archived);
   if (!q && state.mtab === 'done' && archived.length) {
-    const t = el('button', 'm-archived-toggle', `${state.showArchived ? 'Hide' : 'Show'} archived (${archived.length})`);
-    t.type = 'button';
-    t.addEventListener('click', () => { state.showArchived = !state.showArchived; drawList(); });
-    list.append(t);
+    const tg = el('button', 'm-archived-toggle', t(state.showArchived ? 'Hide archived ({n})' : 'Show archived ({n})', { n: archived.length }));
+    tg.type = 'button';
+    tg.addEventListener('click', () => { state.showArchived = !state.showArchived; drawList(); });
+    list.append(tg);
     if (state.showArchived) list.append(rows(archived, true));
   }
 }
@@ -394,14 +395,21 @@ $('#mSearch').addEventListener('input', () => drawList());
     if (TAB_ORDER[i]) setTab(TAB_ORDER[i], { by: 'swipe' });
   }, { passive: true });
 })();
-const cleanTitle = (t) => String(t || 'Mission').replace(/[\s,;:.\-–]+$/, '');
+const cleanTitle = (x) => String(x || t('Mission')).replace(/[\s,;:.\-–]+$/, '');
 function missionLine(m) {
-  if (m.status === 'needs_you') return ['needs', m.needs || 'Waiting for you'];
-  if (m.status === 'working') return ['working', 'Working on it'];
-  if (m.status === 'waiting') return ['quiet', m.needs];
-  if (m.status === 'done') return ['quiet', m.held ? `All booked · ${fmtC(m.held, m.currency)} held until confirmed` : 'All booked'];
-  if (m.status === 'stopped') return ['quiet', 'Paused — no payment can be made'];
-  return ['quiet', m.last || 'Starting…'];
+  if (m.status === 'needs_you') return ['needs', needText(m) || t('Waiting for you')];
+  if (m.status === 'working') return ['working', t('Working on it')];
+  if (m.status === 'waiting') return ['quiet', needText(m)];
+  if (m.status === 'done') return ['quiet', m.held ? t('All booked · {amount} held until confirmed', { amount: fmtC(m.held, m.currency) }) : t('All booked')];
+  if (m.status === 'stopped') return ['quiet', t('Paused · no payment can be made')];
+  return ['quiet', m.last || t('Starting…')];
+}
+// What a mission waits for, in the interface language (the server also sends it in English for search).
+const NEED = { approve: 'Approve {amount} at {merchant}', answer: 'Answer: {question}', accept: 'Waiting for {merchant} to accept', confirm: 'Deposit held · waiting for {merchant} to confirm' };
+function needText(m) {
+  const n = m.need;
+  if (!n || !NEED[n.k]) return m.needs;
+  return t(NEED[n.k], { ...n, amount: n.amount != null ? fmtC(n.amount, m.currency) : '' });
 }
 // One compact row per mission: icon · title · what is going on · when · money left.
 function missionRow(m) {
@@ -410,8 +418,8 @@ function missionRow(m) {
   const [cls, line] = missionLine(m);
   li.innerHTML = `<span class="m-ic">${esc(m.emoji)}</span>
     <div class="m-txt"><div class="m-l1"><b>${esc(cleanTitle(m.title))}</b><time>${ago(m.lastAt)}</time></div>
-      <div class="m-l2"><span class="m-line ${cls}">${esc(line)}</span><span class="m-left">${fmtC(m.remaining, m.currency)} left</span></div></div>
-    <button type="button" class="m-more" aria-label="More for ${esc(m.title)}" aria-haspopup="menu"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>`;
+      <div class="m-l2"><span class="m-line ${cls}">${esc(line)}</span><span class="m-left">${esc(t('{amount} left', { amount: fmtC(m.remaining, m.currency) }))}</span></div></div>
+    <button type="button" class="m-more" aria-label="${esc(t('More for {title}', { title: m.title }))}" aria-haspopup="menu"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>`;
   li.addEventListener('click', (e) => { if (!e.target.closest('.m-more')) openMission(m.id); });
   li.querySelector('.m-more').addEventListener('click', (e) => rowMenu(e.currentTarget, m));
   return li;
@@ -426,10 +434,10 @@ function rowMenu(btn, m) {
     b.addEventListener('click', async () => { closeMenu(); await fn(); });
     menu.append(b);
   };
-  item(m.archived ? 'Move back to missions' : 'Archive', async () => { await post(`/api/missions/${m.id}/archive`, { archived: !m.archived }); refreshHome(); });
-  if (!m.held) item('Delete…', async () => {
-    if (!confirm(`Delete “${m.title}”? Its conversation will be gone.`)) return;
-    const r = await fetch(`/api/missions/${m.id}`, { method: 'DELETE' });
+  item(m.archived ? t('Move back to missions') : t('Archive'), async () => { await post(`/api/missions/${m.id}/archive`, { archived: !m.archived }); refreshHome(); });
+  if (!m.held) item(t('Delete…'), async () => {
+    if (!confirm(t('Delete “{title}”? Its conversation will be gone.', { title: m.title }))) return;
+    const r = await fetch(`/api/missions/${m.id}`, { method: 'DELETE', headers: HEADERS });
     if (!r.ok) return alert((await r.json()).error);
     refreshHome();
   }, true);
@@ -571,16 +579,16 @@ function renderTray() {
   tray.innerHTML = '';
   tray.hidden = !state.attach.length || $('#live').hidden;
   state.attach.forEach((src, i) => {
-    const t = el('div', 'tray-item');
-    t.innerHTML = `<img src="${src}" alt="Photo ${i + 1} to send"><button type="button" aria-label="Remove photo ${i + 1}">${svg('close')}</button>`;
-    t.querySelector('img').addEventListener('click', () => openLightbox(src));
-    t.querySelector('button').addEventListener('click', () => { state.attach.splice(i, 1); renderTray(); syncComposer(); });
-    tray.append(t);
+    const it = el('div', 'tray-item');
+    it.innerHTML = `<img src="${src}" alt="${esc(t('Photo {n} to send', { n: i + 1 }))}"><button type="button" aria-label="${esc(t('Remove photo {n}', { n: i + 1 }))}">${svg('close')}</button>`;
+    it.querySelector('img').addEventListener('click', () => openLightbox(src));
+    it.querySelector('button').addEventListener('click', () => { state.attach.splice(i, 1); renderTray(); syncComposer(); });
+    tray.append(it);
   });
   if (state.attach.length && state.attach.length < 4) {
     const more = el('button', 'tray-add', '+');
     more.type = 'button';
-    more.setAttribute('aria-label', 'Add another photo');
+    more.setAttribute('aria-label', t('Add another photo'));
     more.addEventListener('click', () => pickPhotos(addImages));
     tray.append(more);
   }
@@ -603,12 +611,12 @@ function handle({ type, data }) {
         for (const src of imgs) {
           const im = el('img', 'zoomable');
           im.src = src;
-          im.alt = 'Photo you sent';
+          im.alt = t('Photo you sent');
           im.loading = 'lazy';
           g.append(im);
         }
         li.append(g);
-      } else if (data.image) li.append(el('span', 'u-legacy', '📷 Photo'));
+      } else if (data.image) li.append(el('span', 'u-legacy', '📷 ' + t('Photo')));
       if (data.text) li.append(el('div', 'u-text', data.text));
       return add(li, { stick: true }); // your own message always brings you to the bottom
     }
@@ -630,7 +638,7 @@ function handle({ type, data }) {
       return requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight })); // land on the latest, no animation
     case 'title': $('#topTitle').textContent = data.title; if (data.emoji) setTopEmoji(data.emoji); return;
     case 'memory': return memoryStep(data);
-    case 'budget_changed': return addStep(`Budget changed · ${fmtC(data.from, data.currency)} → ${fmtC(data.to, data.currency)}`);
+    case 'budget_changed': return addStep(t('Budget changed · {from} → {to}', { from: fmtC(data.from, data.currency), to: fmtC(data.to, data.currency) }));
     case 'clash': return clashCard(data);
     case 'busy': state.busy = data.on; if (!data.on) closeSteps(); typing(data.on); return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
     case 'tool': typing(state.busy); return toolStep(data);
@@ -655,20 +663,20 @@ function handle({ type, data }) {
     case 'share_paid': {
       const row = state.shareRows[data.invoiceId];
       if (row) shareChip(row.querySelector('.chip'), 'PAID');
-      return add(step(`${data.friend} paid their share — ${fmt(data.amount)}`));
+      return add(step(t('{friend} paid their share: {amount}', { friend: data.friend, amount: fmt(data.amount) })));
     }
-    case 'stopped': return add(step(data.stopped ? 'Stopped — no payment will be made until you resume.' : 'Resumed.'));
+    case 'stopped': return add(step(data.stopped ? t('Stopped. No payment will be made until you resume.') : t('Resumed.')));
     case 'error': return add(errorStep(data.message));
   }
 }
 
 const TOOL_LABEL = {
-  show_place_preview: (a) => `Looking up ${a.name}`,
-  check_schedule: () => 'Checking your schedule',
-  find_real_places: (a) => `Looking for real ${many(a.category)} nearby`,
-  find_network_merchants: (a) => `Checking ${many(a.category)} I can book and pay`,
-  cancel_hold: () => 'Releasing a hold',
-  split_bill: () => 'Preparing PayPal links for your friends',
+  show_place_preview: (a) => t('Looking up {name}', { name: a.name }),
+  check_schedule: () => t('Checking your schedule'),
+  find_real_places: (a) => t('Looking for real {places} nearby', { places: many(a.category) }),
+  find_network_merchants: (a) => t('Checking {places} I can book and pay', { places: many(a.category) }),
+  cancel_hold: () => t('Releasing a hold'),
+  split_bill: () => t('Preparing PayPal links for your friends'),
 };
 function toolStep({ name, args }) {
   const label = TOOL_LABEL[name]?.(args);
@@ -693,7 +701,7 @@ function addStep(text, cls = 'step') {
 function closeSteps() {
   for (const g of $$('#feed > li.steps:not(.closed-group)')) {
     const n = g.querySelectorAll('.steps-list li').length;
-    if (n > 1) g.querySelector('.steps-label').textContent = `Worked through ${n} steps`;
+    if (n > 1) g.querySelector('.steps-label').textContent = tn(n, 'Worked through {n} step', 'Worked through {n} steps');
     g.classList.add('closed-group');
   }
 }
@@ -744,8 +752,8 @@ function placesCard({ category, center, places }) {
   if (!places?.length) return;
   const shown = places.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon)).slice(0, 5);
   const li = el('li', 'card places');
-  li.innerHTML = `<header><span class="avatar" style="background:#19a463">⌖</span><div><b>${places.length} real ${many(category)} nearby</b><small>${esc(places.slice(0, 2).map((p) => p.name).join(', '))}${places.length > 2 ? '…' : ''} · map</small></div></header>
-    ${shown.length ? `<div class="place-map" role="region" aria-label="Map of ${esc(many(category))} nearby"></div>` : ''}
+  li.innerHTML = `<header><span class="avatar" style="background:#19a463">⌖</span><div><b>${esc(t('{n} real {places} nearby', { n: places.length, places: many(category) }))}</b><small>${esc(places.slice(0, 2).map((p) => p.name).join(', '))}${places.length > 2 ? '…' : ''} · ${t('map')}</small></div></header>
+    ${shown.length ? `<div class="place-map" role="region" aria-label="${esc(t('Map of {places} nearby', { places: many(category) }))}"></div>` : ''}
     <ol class="place-list">${(shown.length ? shown : places.slice(0, 4)).map((p, i) => `<li><button type="button" data-i="${i}"><span class="pin-n">${i + 1}</span><span class="pl-name">${esc(p.name)}</span><span class="pl-meta">${p.distance} m${p.openingHours ? ' · ' + esc(p.openingHours.slice(0, 28)) : ''}</span></button></li>`).join('')}</ol>`;
   add(fold(li));
   const box = li.querySelector('.place-map');
@@ -791,7 +799,7 @@ function placesCard({ category, center, places }) {
       pins.forEach((pin, j) => pin.classList.toggle('on', j === i));
       map.flyTo({ center: [p.lon, p.lat], offset: [0, 55], zoom: Math.max(map.getZoom(), 16), duration: 700 }); // pin sits low, bubble fits above
       popup.setLngLat([p.lon, p.lat])
-        .setHTML(`<b>${esc(p.name)}</b><span>${p.distance} m away</span><a href="https://maps.apple.com/?daddr=${p.lat},${p.lon}" target="_blank" rel="noopener">Directions</a>`)
+        .setHTML(`<b>${esc(p.name)}</b><span>${esc(t('{n} m away', { n: p.distance }))}</span><a href="https://maps.apple.com/?daddr=${p.lat},${p.lon}" target="_blank" rel="noopener">${t('Directions')}</a>`)
         .addTo(map);
     };
     li.querySelectorAll('.place-list button').forEach((b) => b.addEventListener('click', () => select(+b.dataset.i)));
@@ -802,13 +810,13 @@ function placesCard({ category, center, places }) {
 function previewCard(v) {
   const li = el('li', 'card preview');
   const photos = v.photos || [];
-  const meta = [v.rating ? `★ ${v.rating.toFixed(1)}${v.ratings ? ` (${v.ratings.toLocaleString('en')})` : ''}` : '', v.cuisine || v.category, v.distance != null ? `${v.distance} m` : '', v.openingHours ? v.openingHours.slice(0, 40) : ''].filter(Boolean).map(esc).join(' · ');
+  const meta = [v.rating ? `★ ${v.rating.toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}${v.ratings ? ` (${v.ratings.toLocaleString(locale())})` : ''}` : '', v.cuisine || v.category, v.distance != null ? `${v.distance} m` : '', v.openingHours ? v.openingHours.slice(0, 40) : ''].filter(Boolean).map(esc).join(' · ');
   li.innerHTML = `${photos.length
     ? `<div class="pv-photos">${photos.map((p) => `<img class="zoomable" src="${esc(p.url)}" alt="${esc(v.name)}" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>`
     : noPhoto(v)}
     <div class="pv-body"><b>${esc(v.name)}</b><small>${meta}</small>${v.address ? `<small>${esc(v.address)}</small>` : ''}
-      <div class="pv-actions"><a class="pill-btn" href="${esc(v.googleMaps)}" target="_blank" rel="noopener">Photos on Google Maps</a>${v.directions ? `<a href="${esc(v.directions)}" target="_blank" rel="noopener">Directions</a>` : ''}${v.website ? `<a href="${esc(/^https?:/.test(v.website) ? v.website : 'https://' + v.website)}" target="_blank" rel="noopener">Website</a>` : ''}</div>
-      ${photos.length ? `<p class="pv-src">Photos: ${esc([...new Set(photos.map((p) => p.source))].join(', '))}</p>` : ''}</div>`;
+      <div class="pv-actions"><a class="pill-btn" href="${esc(v.googleMaps)}" target="_blank" rel="noopener">${t('Photos on Google Maps')}</a>${v.directions ? `<a href="${esc(v.directions)}" target="_blank" rel="noopener">${t('Directions')}</a>` : ''}${v.website ? `<a href="${esc(/^https?:/.test(v.website) ? v.website : 'https://' + v.website)}" target="_blank" rel="noopener">${t('Website')}</a>` : ''}</div>
+      ${photos.length ? `<p class="pv-src">${esc(t('Photos: {sources}', { sources: [...new Set(photos.map((p) => p.source))].join(', ') }))}</p>` : ''}</div>`;
   // A photo that cannot load disappears instead of leaving a broken frame.
   // A photo that cannot load (or a Google link that expired) gives way to the Google Maps button.
   li.querySelectorAll('.pv-photos img').forEach((im) => im.addEventListener('error', () => {
@@ -825,16 +833,16 @@ function wrapupCard(w) {
   const day = (x) => {
     if (!x) return '';
     const d = new Date(String(x).slice(0, 10) + 'T12:00:00');
-    const t = /\d{2}:\d{2}/.test(x) ? String(x).match(/\d{2}:\d{2}/)[0] : '';
-    return `${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}${t ? ' · ' + t : ''}`;
+    const hm = /\d{2}:\d{2}/.test(x) ? String(x).match(/\d{2}:\d{2}/)[0] : '';
+    return `${d.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })}${hm ? ' · ' + hm : ''}`;
   };
-  const money = [w.paid ? `${fmtC(w.paid, w.currency)} paid` : '', w.held ? `${fmtC(w.held, w.currency)} held until confirmed` : ''].filter(Boolean).join(' · ');
-  li.innerHTML = `<div class="wu-head"><span class="wu-check">${svg('check')}</span><div><b>${esc(w.headline)}</b><small>${money || 'Nothing left to do'}</small></div></div>
+  const money = [w.paid ? t('{amount} paid', { amount: fmtC(w.paid, w.currency) }) : '', w.held ? t('{amount} held until confirmed', { amount: fmtC(w.held, w.currency) }) : ''].filter(Boolean).join(' · ');
+  li.innerHTML = `<div class="wu-head"><span class="wu-check">${svg('check')}</span><div><b>${esc(t(w.headline))}</b><small>${esc(money || t('Nothing left to do'))}</small></div></div>
     <ol class="wu-lines">${(w.lines || []).map((l) => `<li><span class="wu-when">${esc(day(l.when))}</span><span class="wu-what">${esc(l.what)}${l.where ? ` <i>· ${esc(l.where)}</i>` : ''}</span></li>`).join('')}</ol>
     ${w.note ? `<p class="wu-note">${esc(w.note)}</p>` : ''}
-    ${w.reminders?.length ? `<p class="wu-rem">⏰ ${w.reminders.map((r) => esc(new Date(r.at).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))).join(' · ')} — on your phone</p>` : ''}
-    <div class="wu-actions"><a class="pill-btn" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} Add all to Calendar</a><button type="button" class="wu-change">Change something</button></div>`;
-  li.querySelector('.wu-change').addEventListener('click', () => { const t = $('#sayText'); t.value = 'I would like to change '; syncComposer(); t.focus(); });
+    ${w.reminders?.length ? `<p class="wu-rem">⏰ ${esc(t('{times} · on your phone', { times: w.reminders.map((r) => new Date(r.at).toLocaleString(locale(), { weekday: 'short', hour: '2-digit', minute: '2-digit' })).join(' · ') }))}</p>` : ''}
+    <div class="wu-actions"><a class="pill-btn" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} ${t('Add all to Calendar')}</a><button type="button" class="wu-change">${t('Change something')}</button></div>`;
+  li.querySelector('.wu-change').addEventListener('click', () => { const box = $('#sayText'); box.value = t('I would like to change '); syncComposer(); box.focus(); });
   add(li);
 }
 // The mission's emoji replaces the brand mark in the top bar.
@@ -845,15 +853,15 @@ function setTopEmoji(e) {
 }
 // Memory: a quiet line in the steps ("Noted for next time · Ana is vegetarian").
 function memoryStep(m) {
-  if (m.action === 'forgotten') return addStep('Updated my memory', 'step mem');
-  addStep(`${m.scope === 'mission' ? 'Noted for this mission' : 'Noted for next time'} · ${m.text}`, 'step mem');
+  if (m.action === 'forgotten') return addStep(t('Updated my memory'), 'step mem');
+  addStep(`${m.scope === 'mission' ? t('Noted for this mission') : t('Noted for next time')} · ${m.text}`, 'step mem');
   if (m.scope === 'global' && state.me) state.me.memory = [...(state.me.memory || []).filter((x) => x.id !== m.id), m];
 }
 // A clash with something already planned (here or in another mission), with a way to look at it.
 const CLASH_TITLE = { overlap: 'Schedule clash', too_close: 'Tight timing', double_stay: 'Two stays on the same night', away: 'You may be away' };
 function clashCard(c) {
   const li = el('li', 'card clash');
-  li.innerHTML = `<span class="cl-ic" aria-hidden="true">!</span><div class="cl-main"><b>${esc(CLASH_TITLE[c.type] || 'Clash')}</b><small>${esc(c.text)}</small></div>${c.with?.missionId ? '<button type="button" class="cl-open">Open</button>' : ''}`;
+  li.innerHTML = `<span class="cl-ic" aria-hidden="true">!</span><div class="cl-main"><b>${esc(t(CLASH_TITLE[c.type] || 'Clash'))}</b><small>${esc(c.shown || c.text)}</small></div>${c.with?.missionId ? `<button type="button" class="cl-open">${t('Open')}</button>` : ''}`;
   li.querySelector('.cl-open')?.addEventListener('click', () => openMission(c.with.missionId));
   add(li);
 }
@@ -862,19 +870,19 @@ function reminderCard(r) {
   if (state.cards['rm:' + r.id]) return;
   const li = el('li', 'card reminder' + (r.sent ? ' done' : ''));
   const when = new Date(r.at);
-  const label = when.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  li.innerHTML = `<span class="rm-ic">${svg('bell')}</span><div class="rm-main"><b>${esc(r.text)}</b><small>Notification · ${esc(label)}</small></div><a class="rm-cal" href="/api/missions/${state.mission}/reminders/${r.id}.ics" aria-label="Add to Calendar">${svg('cal')}</a>`;
+  const label = when.toLocaleString(locale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  li.innerHTML = `<span class="rm-ic">${svg('bell')}</span><div class="rm-main"><b>${esc(r.text)}</b><small>${esc(t('Notification · {when}', { when: label }))}</small></div><a class="rm-cal" href="/api/missions/${state.mission}/reminders/${r.id}.ics" aria-label="${esc(t('Add to Calendar'))}">${svg('cal')}</a>`;
   state.cards['rm:' + r.id] = li;
   add(li);
 }
 function noPhoto(v) {
-  return `<a class="pv-none" href="${esc(v.googleMaps)}" target="_blank" rel="noopener"><span>📍</span><b>See photos on Google Maps</b><small>People's photos and reviews of ${esc(v.name)}</small></a>`;
+  return `<a class="pv-none" href="${esc(v.googleMaps)}" target="_blank" rel="noopener"><span>📍</span><b>${t('See photos on Google Maps')}</b><small>${esc(t('People’s photos and reviews of {name}', { name: v.name }))}</small></a>`;
 }
 function verifiedMark({ merchant_id, name, ok }) {
   state.verified[merchant_id] = ok;
   const card = state.cards['n:' + merchant_id];
   if (card) card.querySelector('.shield').hidden = !ok;
-  addStep(`${name} — identity ${ok ? 'verified' : 'could not be verified'}`);
+  addStep(t(ok ? '{name}: identity verified' : '{name}: identity could not be verified', { name }));
 }
 function negotiation({ merchant_id, name, from, text, offer }) {
   let card = state.cards['n:' + merchant_id];
@@ -888,12 +896,12 @@ function negotiation({ merchant_id, name, from, text, offer }) {
   }
   card.querySelector('.bubbles').append(el('li', from, text));
   const n = card.querySelectorAll('.bubbles li').length;
-  card.querySelector('.sub').textContent = offer?.total ? `Offer ${fmt(offer.total)}${offer.discount ? ` · −${fmt(offer.discount)}` : ''} · ${n} messages` : `Negotiating with their AI agent · ${n} message${n > 1 ? 's' : ''}`;
+  card.querySelector('.sub').textContent = offer?.total ? `${t('Offer {amount}', { amount: fmt(offer.total) })}${offer.discount ? ` · −${fmt(offer.discount)}` : ''} · ${tn(n, '{n} message', '{n} messages')}` : `${t('Negotiating with their AI agent')} · ${tn(n, '{n} message', '{n} messages')}`;
   fold(card);
   if (offer) {
     const o = card.querySelector('.offer');
     o.hidden = false;
-    o.innerHTML = [offer.slot && `<span>${esc(offer.slot)}</span>`, offer.discount ? `<span>−${fmt(offer.discount)}</span>` : '', offer.deposit ? `<span>deposit ${fmt(offer.deposit)}</span>` : '', offer.total ? `<span class="total">${fmt(offer.total)}</span>` : ''].filter(Boolean).join('');
+    o.innerHTML = [offer.slot && `<span>${esc(offer.slot)}</span>`, offer.discount ? `<span>−${fmt(offer.discount)}</span>` : '', offer.deposit ? `<span>${esc(t('deposit {amount}', { amount: fmt(offer.deposit) }))}</span>` : '', offer.total ? `<span class="total">${fmt(offer.total)}</span>` : ''].filter(Boolean).join('');
   }
 }
 function requestCard(r) {
@@ -905,10 +913,10 @@ function requestCard(r) {
   }
   card.classList.toggle('accepted', r.status !== 'pending');
   const [label, cls] = { accepted: ['Accepted', 'wait'], confirmed: ['Confirmed', 'paid'], declined: ['Declined', 'off'], countered: ['Other time', 'part'] }[r.status] || ['Waiting', 'wait'];
-  const sub = r.status === 'pending' ? 'No AI agent · request sent to their inbox' : r.status === 'countered' ? `Proposes ${esc(r.counterSlot)} instead` : r.status === 'accepted' ? 'Accepted · confirms when the deposit is held' : r.status === 'confirmed' ? 'Confirmed · deposit paid with PayPal' : 'Declined';
-  card.innerHTML = `<header><span class="avatar m">${esc(r.merchant[0])}</span><div><b>${esc(r.merchant)}</b><small>${sub}</small></div><span class="chip ${cls}">${label}</span></header>
-    <p>${r.items.map((i) => `${i.qty}× ${esc(i.label)}`).join(', ')}${r.slot ? ' · ' + esc(r.slot) : ''} — ${fmt(r.total)}, deposit ${fmt(r.deposit)}</p>${r.reply ? `<p class="req-reply">“${esc(r.reply)}”</p>` : ''}
-    ${r.inbox && (r.status === 'pending' || r.status === 'accepted') ? `<a class="inbox-link" href="${esc(r.inbox)}" target="_blank" rel="noopener">See it from ${esc(r.merchant)}'s side (demo inbox) ↗</a>` : ''}`;
+  const sub = r.status === 'pending' ? t('No AI agent · request sent to their inbox') : r.status === 'countered' ? t('Proposes {slot} instead', { slot: r.counterSlot }) : r.status === 'accepted' ? t('Accepted · confirms when the deposit is held') : r.status === 'confirmed' ? t('Confirmed · deposit paid with PayPal') : t('Declined');
+  card.innerHTML = `<header><span class="avatar m">${esc(r.merchant[0])}</span><div><b>${esc(r.merchant)}</b><small>${esc(sub)}</small></div><span class="chip ${cls}">${t(label)}</span></header>
+    <p>${r.items.map((i) => `${i.qty}× ${esc(i.label)}`).join(', ')}${r.slot ? ' · ' + esc(r.slot) : ''} · ${esc(t('{total}, deposit {deposit}', { total: fmt(r.total), deposit: fmt(r.deposit) }))}</p>${r.reply ? `<p class="req-reply">${esc(t('“{text}”', { text: r.reply }))}</p>` : ''}
+    ${r.inbox && (r.status === 'pending' || r.status === 'accepted') ? `<a class="inbox-link" href="${esc(r.inbox)}" target="_blank" rel="noopener">${esc(t('See it from {merchant}’s side (demo inbox)', { merchant: r.merchant }))} ↗</a>` : ''}`;
   fold(card);
 }
 // Money moments: held (reserved, not charged), paid (merchant confirmed), refunded.
@@ -920,11 +928,11 @@ function paymentCard({ kind, entry, mode, why, reason }) {
   const isNew = !li;
   if (isNew) li = state.cards['p:' + entry.id] = el('li', 'card pay');
   li.className = 'card pay ' + kind + (kind === 'capture' ? ' captured' : '');
-  const [icon, title, sub] = kind === 'hold' ? ['lock', 'Held with PayPal', 'Not charged until the merchant confirms']
-    : kind === 'capture' ? ['check', 'Paid with PayPal', why ? why + ' · deposit captured' : 'Merchant confirmed · deposit captured']
-    : ['undo', 'Refunded with PayPal', reason || 'Back to your PayPal'];
+  const [icon, title, sub] = kind === 'hold' ? ['lock', t('Held with PayPal'), t('Not charged until the merchant confirms')]
+    : kind === 'capture' ? ['check', t('Paid with PayPal'), why ? t(why) + ' · ' + t('deposit captured') : t('Merchant confirmed · deposit captured')]
+    : ['undo', t('Refunded with PayPal'), reason || t('Back to your PayPal')];
   li.innerHTML = `<header><span class="lock">${svg(icon)}</span><div class="pay-main"><b>${esc(entry.merchant)}</b><small>${title}</small></div><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span></header>
-    <div class="pay-detail"><p>${esc(shortLabel(entry.merchant, entry.label))}</p><p class="why">${esc(sub)} · PayPal${mode === 'sandbox' ? ' sandbox' : mode ? ' (demo)' : ''}</p></div>`;
+    <div class="pay-detail"><p>${esc(shortLabel(entry.merchant, entry.label))}</p><p class="why">${esc(sub)} · ${mode === 'sandbox' ? t('PayPal sandbox') : mode ? t('PayPal (demo)') : 'PayPal'}</p></div>`;
   fold(li);
   if (isNew) add(li);
 }
@@ -944,25 +952,25 @@ function planCard({ items }) {
     groups[groups.length - 1].items.push(it);
   }
   const label = (d) => {
-    if (d === 'later') return 'To schedule';
+    if (d === 'later') return t('To schedule');
     const dt = new Date(d + 'T12:00:00');
     const n = first ? Math.round((dt - new Date(first + 'T12:00:00')) / 864e5) + 1 : 0;
-    return `${dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}${n > 0 && groups.length > 1 ? ` · Day ${n}` : ''}`;
+    return `${dt.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })}${n > 0 && groups.length > 1 ? ' · ' + t('Day {n}', { n }) : ''}`;
   };
   const planned = items.filter((i) => i.status !== 'cancelled' && i.total > 0).reduce((t, i) => t + i.total, 0);
   const budget = state.envTotal || 0;
   const multiDay = groups.filter((g) => g.key !== 'later').length > 1;
   const booked = items.filter((i) => i.status === 'confirmed' || i.status === 'held').length;
-  card.innerHTML = `<header><span class="avatar plan-ic">${svg('route')}</span><div><b>${multiDay ? 'Your trip, day by day' : 'Your plan'}</b><small>${booked}/${items.length} booked${planned ? ` · ${fmt(planned)}${budget ? ' of ' + fmt(budget) : ''}` : ''}</small></div></header>
+  card.innerHTML = `<header><span class="avatar plan-ic">${svg('route')}</span><div><b>${multiDay ? t('Your trip, day by day') : t('Your plan')}</b><small>${t('{done}/{total} booked', { done: booked, total: items.length })}${planned ? ` · ${budget ? t('{amount} of {total}', { amount: fmt(planned), total: fmt(budget) }) : fmt(planned)}` : ''}</small></div></header>
     <div class="timeline">${groups.map((g) => `<section class="tl-day"><h3>${label(g.key)}</h3>${g.items.map((it) => {
       const [st, cls] = PLAN_STATUS[it.status] || [it.status, 'off'];
       const time = /\d{2}:\d{2}/.test(it.when || '') ? it.when.match(/\d{2}:\d{2}/)[0] : !it.d && it.when ? it.when : '';
       return `<div class="tl-item ${it.status === 'cancelled' ? 'off' : ''}"><span class="tl-ic">${KIND[it.kind] || (/(train|flight|bus|→)/i.test(it.what) ? '🚆' : /(night|hostel|hotel|room|stay)/i.test(it.what) ? '🛏️' : '•')}</span>
-        <div class="tl-main"><b>${esc(it.what)}${it.nights ? ` · ${it.nights} night${it.nights > 1 ? 's' : ''}` : ''}</b><small>${[it.merchant, time].filter(Boolean).map(esc).join(' · ')}</small></div>
-        <div class="tl-side">${it.total ? `<span class="tl-amt">${fmt(it.total)}</span>` : ''}<span class="chip ${cls}">${st}</span></div></div>`;
+        <div class="tl-main"><b>${esc(it.what)}${it.nights ? ` · ${tn(it.nights, '{n} night', '{n} nights')}` : ''}</b><small>${[it.merchant, time].filter(Boolean).map(esc).join(' · ')}</small></div>
+        <div class="tl-side">${it.total ? `<span class="tl-amt">${fmt(it.total)}</span>` : ''}<span class="chip ${cls}">${t(st)}</span></div></div>`;
     }).join('')}</section>`).join('')}</div>
-    ${items.some((i) => /^\d{4}-\d{2}-\d{2}/.test(i.when || '') && i.status !== 'cancelled') ? `<a class="tl-cal" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} Add ${multiDay ? 'the whole trip' : 'to Calendar'}</a>` : ''}
-    ${planned ? `<div class="tl-total"><span>Planned ${fmt(planned)}${budget ? ` of ${fmt(budget)}` : ''}</span>${budget ? `<span class="${planned > budget ? 'over' : ''}">${planned > budget ? 'Over by ' + fmt(planned - budget) : fmt(budget - planned) + ' left for food & extras'}</span>` : ''}</div>
+    ${items.some((i) => /^\d{4}-\d{2}-\d{2}/.test(i.when || '') && i.status !== 'cancelled') ? `<a class="tl-cal" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} ${multiDay ? t('Add the whole trip') : t('Add to Calendar')}</a>` : ''}
+    ${planned ? `<div class="tl-total"><span>${budget ? t('Planned {amount} of {total}', { amount: fmt(planned), total: fmt(budget) }) : t('Planned {amount}', { amount: fmt(planned) })}</span>${budget ? `<span class="${planned > budget ? 'over' : ''}">${esc(planned > budget ? t('Over by {amount}', { amount: fmt(planned - budget) }) : t('{amount} left for food & extras', { amount: fmt(budget - planned) }))}</span>` : ''}</div>
     <div class="tl-bar"><i style="width:${budget ? Math.min(100, (100 * planned) / budget) : 0}%"></i></div>` : ''}`;
   fold(card);
   if (!card.isConnected) add(card);
@@ -971,41 +979,42 @@ function planCard({ items }) {
 const SHARE_STATUS = { PAID: ['Paid', 'paid'], PARTIALLY_PAID: ['Part paid', 'part'], CANCELLED: ['Cancelled', 'off'], REFUNDED: ['Refunded', 'off'] };
 function shareChip(chip, status, mode) {
   const [text, cls] = mode === 'offline' ? ['Demo', 'off'] : SHARE_STATUS[status] || ['Waiting', 'wait'];
-  chip.textContent = text;
+  chip.textContent = t(text);
   chip.className = 'chip ' + cls;
 }
 function splitDetails(b) {
   if (!b) return '';
-  const when = b.date ? new Date(b.date + 'T12:00:00').toLocaleDateString('en', { day: 'numeric', month: 'short' }) : '';
+  const when = b.date ? new Date(b.date + 'T12:00:00').toLocaleDateString(locale(), { day: 'numeric', month: 'short' }) : '';
   const payer = b.people.find((p) => p.payer);
-  return `<details class="split-how"><summary>How it was split</summary>
-    <p class="split-paid">${esc(payer?.name || 'You')} paid <b>${fmt(b.total)}</b>${b.where ? ` at ${esc(b.where)}` : ''}${when ? ` · ${when}` : ''}</p>
+  const paid = esc(t(b.where ? '{name} paid {amount} at {place}' : '{name} paid {amount}', { name: payer?.name || t('You'), place: b.where })).replace('{amount}', `<b>${fmt(b.total)}</b>`);
+  return `<details class="split-how"><summary>${t('How it was split')}</summary>
+    <p class="split-paid">${paid}${when ? ` · ${when}` : ''}</p>
     ${b.items?.length ? `<ul class="split-lines">${b.items.map((i) => `<li><span>${esc(i.name)}</span><span>${fmt(i.total)}</span></li>`).join('')}</ul>` : ''}
-    <ul class="split-lines people">${b.people.map((p) => `<li><span>${esc(p.name)}${p.payer ? ' <em>paid</em>' : ''}</span><span>${fmt(p.amount)}</span></li>`).join('')}</ul>
-    <p class="split-note">${b.equal ? `Split equally between ${b.people.length} people.` : 'Unequal split, as you asked.'}${b.rounding ? ` ${esc(b.rounding.name)} covers the extra ${fmt(b.rounding.amount)} from rounding.` : ''} Each invoice lists these lines and the person's own part.</p>
+    <ul class="split-lines people">${b.people.map((p) => `<li><span>${esc(p.name)}${p.payer ? ` <em>${t('paid the bill')}</em>` : ''}</span><span>${fmt(p.amount)}</span></li>`).join('')}</ul>
+    <p class="split-note">${esc(b.equal ? t('Split equally between {n} people.', { n: b.people.length }) : t('Unequal split, as you asked.'))}${b.rounding ? ' ' + esc(t('{name} covers the extra {amount} from rounding.', { name: b.rounding.name, amount: fmt(b.rounding.amount) })) : ''} ${t('Each invoice lists these lines and the person’s own part.')}</p>
   </details>`;
 }
 function sharesCard({ label, per, links, breakdown }) {
   const li = el('li', 'card split');
-  li.innerHTML = `<header><span class="avatar" style="background:#7b61ff">👥</span><div><b>Split · ${esc(label)}</b><small class="split-sum">${breakdown ? fmt(breakdown.total) + ' · ' : ''}${links.length} invoice${links.length > 1 ? 's' : ''} sent</small></div></header>
+  li.innerHTML = `<header><span class="avatar" style="background:#7b61ff">👥</span><div><b>${esc(t('Split · {label}', { label }))}</b><small class="split-sum">${breakdown ? fmt(breakdown.total) + ' · ' : ''}${tn(links.length, '{n} invoice sent', '{n} invoices sent')}</small></div></header>
     ${splitDetails(breakdown)}<ul class="split-list"></ul>
-    <p class="split-foot">No app needed to pay: from PayPal's email, the link, or the QR code.</p>`;
+    <p class="split-foot">${t('No app needed to pay: from PayPal’s email, the link, or the QR code.')}</p>`;
   const ul = li.querySelector('.split-list');
   for (const l of links) {
     const row = el('li', 'split-row');
     if (l.error) {
-      row.innerHTML = `<div class="split-top"><span class="who"><b>${esc(l.friend)}</b><small>Could not create the invoice</small></span><span class="amt">${fmt(l.amount)}</span></div>`;
+      row.innerHTML = `<div class="split-top"><span class="who"><b>${esc(l.friend)}</b><small>${t('Could not create the invoice')}</small></span><span class="amt">${fmt(l.amount)}</span></div>`;
       ul.append(row);
       continue;
     }
-    row.innerHTML = `<span class="who"><b>${esc(l.friend)}</b><small>${l.emailed ? 'Emailed' : 'Link & QR'}</small></span><span class="amt">${fmt(l.amount)}</span><span class="chip"></span>
-      <span class="split-actions"><button type="button" data-a="qr" aria-label="Show ${esc(l.friend)}'s QR code">${svg('qr')}</button><button type="button" data-a="share" aria-label="Send ${esc(l.friend)} the link">${svg('share')}</button><button type="button" data-a="copy" aria-label="Copy ${esc(l.friend)}'s pay link">${svg('copy')}</button></span>`;
+    row.innerHTML = `<span class="who"><b>${esc(l.friend)}</b><small>${l.emailed ? t('Emailed') : t('Link & QR')}</small></span><span class="amt">${fmt(l.amount)}</span><span class="chip"></span>
+      <span class="split-actions"><button type="button" data-a="qr" aria-label="${esc(t('Show {name}’s QR code', { name: l.friend }))}">${svg('qr')}</button><button type="button" data-a="share" aria-label="${esc(t('Send {name} the link', { name: l.friend }))}">${svg('share')}</button><button type="button" data-a="copy" aria-label="${esc(t('Copy {name}’s pay link', { name: l.friend }))}">${svg('copy')}</button></span>`;
     shareChip(row.querySelector('.chip'), l.status, l.mode);
     state.shareRows[l.invoiceId] = row;
-    const text = `${l.friend}, your share for ${label}: ${fmt(l.amount)}. Pay with PayPal:`;
-    row.querySelector('[data-a=qr]').addEventListener('click', () => (l.qr ? openLightbox(l.qr) : alert('No QR code in demo mode.')));
+    const text = t('{name}, your share for {label}: {amount}. Pay with PayPal:', { name: l.friend, label, amount: fmt(l.amount) });
+    row.querySelector('[data-a=qr]').addEventListener('click', () => (l.qr ? openLightbox(l.qr) : alert(t('No QR code in demo mode.'))));
     row.querySelector('[data-a=share]').addEventListener('click', async (e) => {
-      if (navigator.share) return navigator.share({ title: 'Your share', text, url: l.payUrl }).catch(() => {});
+      if (navigator.share) return navigator.share({ title: t('Your share'), text, url: l.payUrl }).catch(() => {});
       await navigator.clipboard.writeText(`${text} ${l.payUrl}`).catch(() => {});
       flashIcon(e.currentTarget, 'share');
     });
@@ -1023,7 +1032,9 @@ function updateSplitSummary(card) {
   const chips = [...card.querySelectorAll('.split-row .chip')];
   const paid = chips.filter((c) => c.classList.contains('paid')).length;
   const s = card.querySelector('.split-sum');
-  if (s && chips.length) s.textContent = s.textContent.replace(/ · \d+\/\d+ paid$|$/, ` · ${paid}/${chips.length} paid`);
+  if (!s || !chips.length) return;
+  s.dataset.base ??= s.textContent;
+  s.textContent = s.dataset.base + ' · ' + t('{paid}/{total} paid', { paid, total: chips.length });
 }
 function flashIcon(b, name) {
   b.innerHTML = svg('check');
@@ -1060,7 +1071,7 @@ function envelope(e) {
   $('#envSpent').textContent = fmt(e.spent);
   $('#envHeld').textContent = fmt(e.held);
   $('#envLeft').textContent = fmt(e.remaining);
-  $('#topSub').textContent = `${fmt(e.remaining)} left of ${fmt(e.total)}${e.held ? ` · ${fmt(e.held)} held` : ''}${e.spent ? ` · ${fmt(e.spent)} paid` : ''}`;
+  $('#topSub').textContent = `${t('{amount} left of {total}', { amount: fmt(e.remaining), total: fmt(e.total) })}${e.held ? ' · ' + t('{amount} held', { amount: fmt(e.held) }) : ''}${e.spent ? ' · ' + t('{amount} paid', { amount: fmt(e.spent) }) : ''}`;
   const p = (v) => (100 * v) / (e.total || 1);
   $('.env-bar .spent').style.width = p(e.spent) + '%';
   $('.env-bar .held').style.width = p(e.held) + '%';
@@ -1070,9 +1081,9 @@ function envelope(e) {
     ? e.entries.map((x) => {
       const [st, cls] = RS[x.state] || [x.state, 'off'];
       const ref = x.paypal?.captureId || x.paypal?.authorizationId || '';
-      return `<li><div><b>${esc(x.merchant)}</b><small>${esc(shortLabel(x.merchant, x.label))}${ref ? ` · <span class="ref">${esc(ref)}</span>` : ''}</small></div><span class="chip ${cls}">${st}</span><span class="r-amt">${fmt(x.amount - (x.refunded || 0))}</span></li>`;
+      return `<li><div><b>${esc(x.merchant)}</b><small>${esc(shortLabel(x.merchant, x.label))}${ref ? ` · <span class="ref">${esc(ref)}</span>` : ''}</small></div><span class="chip ${cls}">${t(st)}</span><span class="r-amt">${fmt(x.amount - (x.refunded || 0))}</span></li>`;
     }).join('')
-    : '<li class="none">No payment yet in this mission.</li>';
+    : `<li class="none">${t('No payment yet in this mission.')}</li>`;
 }
 
 // ---------- approval sheet: hold to approve ----------
@@ -1080,13 +1091,13 @@ let pending = null;
 function openSheet(a) {
   if (a.status && a.status !== 'pending') return;
   pending = a;
-  $('#sheetMerchant').textContent = `Pay ${a.merchant} (via Mandat)`;
-  $('#sheetLines').innerHTML = `<div><span>${esc(a.label)}</span><span>${fmt(a.amount)}</span></div>${a.offer_total ? `<div><span>Booking total</span><span>${fmt(a.offer_total)}</span></div>` : ''}`;
+  $('#sheetMerchant').textContent = t('Pay {merchant} (via Mandat)', { merchant: a.merchant });
+  $('#sheetLines').innerHTML = `<div><span>${esc(a.label)}</span><span>${fmt(a.amount)}</span></div>${a.offer_total ? `<div><span>${t('Booking total')}</span><span>${fmt(a.offer_total)}</span></div>` : ''}`;
   $('#sheetAmount').textContent = fmt(a.amount);
-  $('#sheetFine').textContent = (a.reason ? a.reason + '. ' : '') + 'Held with PayPal, not charged until the merchant confirms. Cancel anytime and it returns to your mission budget.';
+  $('#sheetFine').textContent = (a.reason ? a.reason + '. ' : '') + t('Held with PayPal, not charged until the merchant confirms. Cancel anytime and it returns to your mission budget.');
   const btn = $('#sheetApprove');
   btn.className = 'hold-btn';
-  btn.querySelector('.label').textContent = 'Hold to approve';
+  btn.querySelector('.label').textContent = t('Hold to approve');
   $('#scrim').hidden = false;
   $('#sheet').hidden = false;
 }
@@ -1108,7 +1119,7 @@ function approvalCard(a) {
   card.data = d;
   const open = d.status === 'pending' || !d.status;
   card.className = 'card approve ' + (open ? 'open' : d.status);
-  card.innerHTML = `<span class="pp-mini">PayPal</span><div class="ap-main"><b>${open ? 'Approve' : d.status === 'approved' ? 'Approved' : 'Declined'} ${fmt(d.amount)}</b><small>${esc(d.merchant)} · ${esc(shortLabel(d.merchant, d.label))}</small></div>${open ? '<button type="button" class="pill-btn">Review</button>' : `<span class="chip ${d.status === 'approved' ? 'paid' : 'off'}">${d.status === 'approved' ? 'Approved' : 'Declined'}</span>`}`;
+  card.innerHTML = `<span class="pp-mini">PayPal</span><div class="ap-main"><b>${esc(t(open ? 'Approve {amount}' : d.status === 'approved' ? 'Approved {amount}' : 'Declined {amount}', { amount: fmt(d.amount) }))}</b><small>${esc(d.merchant)} · ${esc(shortLabel(d.merchant, d.label))}</small></div>${open ? `<button type="button" class="pill-btn">${t('Review')}</button>` : `<span class="chip ${d.status === 'approved' ? 'paid' : 'off'}">${d.status === 'approved' ? t('Approved') : t('Declined')}</span>`}`;
   if (open) card.querySelector('button').addEventListener('click', () => openSheet(d));
 }
 $('#scrim').addEventListener('click', closeSheet);
@@ -1122,7 +1133,7 @@ $('#sheetLater').addEventListener('click', closeSheet);
     btn.classList.add('holding');
     timer = setTimeout(async () => {
       btn.classList.add('done');
-      btn.querySelector('.label').textContent = 'Approved';
+      btn.querySelector('.label').textContent = t('Approved');
       const id = pending.id;
       setTimeout(closeSheet, 500);
       await post(`/api/missions/${state.mission}/approvals/${id}`, { approved: true });
@@ -1176,25 +1187,28 @@ function ledgerTheme(ag) {
   });
 }
 const STATUS_CLS = { Held: 'wait', Paid: 'paid', 'Paid back': 'paid', Released: 'off', Refunded: 'part', 'Owed to you': 'wait', Failed: 'off' };
+// Statuses and kinds stay in English in the data (the plain-words filter uses them); only their display is translated.
+const kindLabel = (k) => t(k === 'Share' ? 'Bill share' : k || '');
+const dayMonth = (d) => d.toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
 function ledgerColumns(narrow) {
   return [
-    { field: 'at', headerName: 'When', filter: 'agDateColumnFilter', sort: 'desc', width: 112, minWidth: 96, hide: narrow,
+    { field: 'at', headerName: t('When'), filter: 'agDateColumnFilter', sort: 'desc', width: 112, minWidth: 96, hide: narrow,
       valueGetter: (p) => (p.data?.at ? new Date(p.data.at) : null),
-      valueFormatter: (p) => (p.value ? p.value.toLocaleDateString('en', { day: 'numeric', month: 'short' }) + ' · ' + p.value.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''),
+      valueFormatter: (p) => (p.value ? dayMonth(p.value) + ' · ' + p.value.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) : ''),
       filterParams: { comparator: (d, v) => { const x = new Date(v); x.setHours(0, 0, 0, 0); return x < d ? -1 : x > d ? 1 : 0; } } },
-    { field: 'who', headerName: narrow ? 'Who' : 'Merchant / friend', filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110,
+    { field: 'who', headerName: narrow ? t('Who') : t('Merchant / friend'), filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110,
       // On a phone the date sits under the name, so three columns are enough: who, status, amount.
-      cellRenderer: (p) => (p.data ? `<span class="led-who"><span class="led-emoji">${p.data.kind === 'Share' ? '👥' : esc(p.data.emoji)}</span><span class="led-name">${esc(p.value)}${innerWidth < 720 && p.data.at ? `<small>${new Date(p.data.at).toLocaleDateString('en', { day: 'numeric', month: 'short' })}</small>` : ''}</span></span>` : esc(p.value)) },
-    { field: 'mission', headerName: 'Mission', filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110, hide: narrow },
-    { field: 'what', headerName: 'What', filter: 'agTextColumnFilter', flex: 1.4, minWidth: 110, hide: narrow },
-    { field: 'kind', headerName: 'Type', filter: 'agTextColumnFilter', width: 100, hide: narrow },
-    { field: 'status', headerName: 'Status', filter: 'agTextColumnFilter', width: narrow ? 84 : 128, minWidth: 76,
-      cellRenderer: (p) => (p.value ? `<span class="chip ${STATUS_CLS[p.value] || 'off'}">${esc(narrow ? { 'Owed to you': 'Owed', 'Paid back': 'Back' }[p.value] || p.value : p.value)}</span>` : '') },
-    { field: 'amount', headerName: 'Amount', filter: 'agNumberColumnFilter', type: 'rightAligned', width: narrow ? 92 : 112, minWidth: 84,
+      cellRenderer: (p) => (p.data ? `<span class="led-who"><span class="led-emoji">${p.data.kind === 'Share' ? '👥' : esc(p.data.emoji)}</span><span class="led-name">${esc(p.value)}${innerWidth < 720 && p.data.at ? `<small>${dayMonth(new Date(p.data.at))}</small>` : ''}</span></span>` : esc(p.value)) },
+    { field: 'mission', headerName: t('Mission'), filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110, hide: narrow },
+    { field: 'what', headerName: t('What'), filter: 'agTextColumnFilter', flex: 1.4, minWidth: 110, hide: narrow },
+    { field: 'kind', headerName: t('Type'), filter: 'agTextColumnFilter', width: 100, hide: narrow, valueFormatter: (p) => kindLabel(p.value) },
+    { field: 'status', headerName: t('Status'), filter: 'agTextColumnFilter', width: narrow ? 84 : 128, minWidth: 76,
+      cellRenderer: (p) => (p.value ? `<span class="chip ${STATUS_CLS[p.value] || 'off'}">${esc(t(narrow ? { 'Owed to you': 'Owed', 'Paid back': 'Back' }[p.value] || p.value : p.value))}</span>` : '') },
+    { field: 'amount', headerName: t('Amount'), filter: 'agNumberColumnFilter', type: 'rightAligned', width: narrow ? 92 : 112, minWidth: 84,
       valueFormatter: (p) => (p.value ? (p.value > 0 ? '+' : '−') + fmt(Math.abs(p.value)) : p.data?.owed ? fmt(p.data.owed) : '—'),
       // A cellClass function replaces the rightAligned type's class, so keep it explicitly.
       cellClass: (p) => ['ag-right-aligned-cell', p.value > 0 ? 'led-in' : p.value < 0 ? 'led-out' : 'led-zero'] },
-    { field: 'ref', headerName: 'PayPal reference', filter: 'agTextColumnFilter', flex: 1, minWidth: 120, hide: narrow, cellClass: 'led-ref', tooltipField: 'ref' },
+    { field: 'ref', headerName: t('PayPal reference'), filter: 'agTextColumnFilter', flex: 1, minWidth: 120, hide: narrow, cellClass: 'led-ref', tooltipField: 'ref' },
   ];
 }
 async function openActivity() {
@@ -1205,7 +1219,7 @@ async function openActivity() {
   $('#tBack').textContent = fmt(data.totals.back);
   $('#ledgerEmpty').hidden = data.rows.length > 0;
   $('#ledger').hidden = !data.rows.length || !ag;
-  $('#ledgerCount').textContent = data.rows.length ? `${data.rows.length} movement${data.rows.length > 1 ? 's' : ''}` : '';
+  $('#ledgerCount').textContent = data.rows.length ? tn(data.rows.length, '{n} movement', '{n} movements') : '';
   if (!ag || !data.rows.length) return;
   const narrow = innerWidth < 720;
   if (!ledger) {
@@ -1223,9 +1237,9 @@ async function openActivity() {
       onRowClicked: (e) => e.data?.missionId && openMission(e.data.missionId),
       onFilterChanged: () => {
         const n = ledger.getDisplayedRowCount();
-        $('#ledgerCount').textContent = `${n} of ${data.rows.length}`;
+        $('#ledgerCount').textContent = t('{n} of {total}', { n, total: data.rows.length });
       },
-      overlayNoRowsTemplate: '<span class="led-none">No movement matches this filter.</span>',
+      overlayNoRowsTemplate: `<span class="led-none">${t('No movement matches this filter.')}</span>`,
     });
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => ledger.setGridOption('theme', ledgerTheme(ag)));
     let wasNarrow = narrow;
@@ -1249,7 +1263,7 @@ $('#askForm').addEventListener('submit', async (e) => {
     $('#filterText').textContent = r.summary;
     $('#filterChip').hidden = false;
   } catch (err) {
-    $('#filterText').textContent = 'Could not understand that — try other words.';
+    $('#filterText').textContent = t('Could not understand that. Try other words.');
     $('#filterChip').hidden = false;
   } finally {
     $('#askBtn').disabled = false;
@@ -1262,17 +1276,18 @@ $('#filterClear').addEventListener('click', () => {
   $('#filterChip').hidden = true;
   $('#askText').value = '';
 });
-$('#csvBtn').addEventListener('click', () => ledger?.exportDataAsCsv({ fileName: `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv`, columnKeys: ['at', 'mission', 'who', 'what', 'kind', 'status', 'amount', 'ref'] }));
+$('#csvBtn').addEventListener('click', () => ledger?.exportDataAsCsv({ fileName: `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv`, columnKeys: ['at', 'mission', 'who', 'what', 'kind', 'status', 'amount', 'ref'],
+  processCellCallback: (p) => (p.column.getColId() === 'kind' ? kindLabel(p.value) : p.column.getColId() === 'status' ? t(p.value || '') : p.value instanceof Date ? p.value.toISOString() : p.value) }));
 
 function renderSettings() {
   const u = state.me;
-  $('#sPayer').textContent = u.paypal.payerName || u.profile.name || 'PayPal account';
-  $('#sPayerMail').textContent = u.paypal.payerEmail || (state.paypalMode === 'sandbox' ? '' : 'Demo account');
+  $('#sPayer').textContent = u.paypal.payerName || u.profile.name || t('PayPal account');
+  $('#sPayerMail').textContent = u.paypal.payerEmail || (state.paypalMode === 'sandbox' ? '' : t('Demo account'));
   $('#sVerified').hidden = !u.paypal.verified;
-  $('#sMandate').textContent = u.paypal.mandate ? `Active since ${new Date(u.paypal.mandate.signedAt).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })} · ${u.paypal.mandate.mode === 'sandbox' ? 'PayPal sandbox' : 'demo'}` : 'Not signed';
+  $('#sMandate').textContent = u.paypal.mandate ? `${t('Active since {date}', { date: new Date(u.paypal.mandate.signedAt).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }).replace(/^1 /, lang === 'fr' ? '1er ' : '1 ') })} · ${u.paypal.mandate.mode === 'sandbox' ? t('PayPal sandbox') : t('demo')}` : t('Not signed');
   sAutonomy = u.rules.autonomy;
   setSeg('#sAutonomy', sAutonomy);
-  $('#sAutonomyHelp').textContent = u.autonomyLevels[sAutonomy].help;
+  $('#sAutonomyHelp').textContent = t(u.autonomyLevels[sAutonomy].help);
   $('#sApproveRow').hidden = sAutonomy !== 'balanced';
   $('#sApprove').value = u.rules.approveAbove;
   $('#sDaily').value = u.rules.dailyCap;
@@ -1285,9 +1300,10 @@ function renderSettings() {
   $('#pDiet').value = u.profile.diet;
   $('#pPrefs').value = u.profile.preferences;
   $('#sVoice').checked = u.voice.on;
-  $('#sInit').textContent = (u.profile.name || u.paypal.payerName || 'You').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  $('#sInit').textContent = (u.profile.name || u.paypal.payerName || t('You')).split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   renderPush();
-  $('#sKnows').textContent = u.knows || 'Nothing yet.';
+  setSeg('#sLang', chosenLang());
+  $('#sKnows').textContent = u.knows || t('Nothing yet.');
   renderPeople(u.profile.people);
   renderMemory(u.memory || []);
 }
@@ -1296,15 +1312,15 @@ function renderMemory(list) {
   const box = $('#memList');
   box.innerHTML = '';
   $('#memCount').textContent = list.length ? `${list.length}` : '';
-  if (!list.length) return box.append(el('p', 'mem-empty', 'Nothing yet. Mandat learns as you go — your tastes, the people you plan with, the places you love.'));
+  if (!list.length) return box.append(el('p', 'mem-empty', t('Nothing yet. Mandat learns as you go: your tastes, the people you plan with, the places you love.')));
   const order = Object.keys(KIND_LABEL);
   for (const m of [...list].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || String(b.at).localeCompare(String(a.at)))) {
     const row = el('div', 'mem-row');
-    const from = m.from === 'you' ? 'Added by you' : m.fromTitle ? `Learned in “${m.fromTitle}”` : 'Learned in a mission';
-    row.innerHTML = `<span class="mem-kind k-${esc(m.kind)}">${esc(KIND_LABEL[m.kind] || 'Facts')}</span><div class="grow"><b>${esc(m.text)}</b><small>${esc(from)} · ${new Date(m.at).toLocaleDateString('en', { day: 'numeric', month: 'short' })}</small></div><button type="button" aria-label="Forget this">−</button>`;
+    const from = m.from === 'you' ? t('Added by you') : m.fromTitle ? t('Learned in “{title}”', { title: m.fromTitle }) : t('Learned in a mission');
+    row.innerHTML = `<span class="mem-kind k-${esc(m.kind)}">${esc(t(KIND_LABEL[m.kind] || 'Facts'))}</span><div class="grow"><b>${esc(m.text)}</b><small>${esc(from)} · ${dayMonth(new Date(m.at))}</small></div><button type="button" aria-label="${esc(t('Forget this'))}">−</button>`;
     row.querySelector('button').addEventListener('click', async () => {
       row.classList.add('leaving');
-      state.me = (await fetch('/api/me/memory/' + m.id, { method: 'DELETE', headers: { 'X-TZ': TZ } }).then((r) => r.json())).user;
+      state.me = (await fetch('/api/me/memory/' + m.id, { method: 'DELETE', headers: HEADERS }).then((r) => r.json())).user;
       renderMemory(state.me.memory || []);
     });
     box.append(row);
@@ -1328,10 +1344,10 @@ $('#memAdd').addEventListener('submit', async (e) => {
 function renderPeople(people) {
   const g = $('#people');
   g.innerHTML = '';
-  if (!people.length) g.innerHTML = '<div class="person"><span style="color:var(--ink-3);font-size:15px">Nobody yet</span></div>';
+  if (!people.length) g.innerHTML = `<div class="person"><span style="color:var(--ink-3);font-size:15px">${t('Nobody yet')}</span></div>`;
   people.forEach((p, i) => {
     const row = el('div', 'person');
-    row.innerHTML = `<input value="${esc(p.name)}" placeholder="Name" data-k="name"><input value="${esc(p.contact)}" placeholder="Email or phone" data-k="contact"><button aria-label="Remove">−</button>`;
+    row.innerHTML = `<input value="${esc(p.name)}" placeholder="${esc(t('Name'))}" data-k="name"><input value="${esc(p.contact)}" placeholder="${esc(t('Email or phone'))}" data-k="contact"><button aria-label="${esc(t('Remove'))}">−</button>`;
     row.querySelectorAll('input').forEach((inp) => inp.addEventListener('change', () => {
       people[i][inp.dataset.k] = inp.value;
       saveProfile({ people });
@@ -1346,13 +1362,13 @@ function renderPeople(people) {
 }
 $('#addPerson').addEventListener('click', () => {
   const people = state.me.profile.people;
-  people.push({ name: 'New person', contact: '' });
+  people.push({ name: t('New person'), contact: '' });
   renderPeople(people);
   saveProfile({ people });
 });
 async function saveProfile(profile) {
   state.me = (await post('/api/me', { profile })).user;
-  $('#sKnows').textContent = state.me.knows || 'Nothing yet.';
+  $('#sKnows').textContent = state.me.knows || t('Nothing yet.');
 }
 async function saveRules(rules) {
   state.me = (await post('/api/me', { rules })).user;
@@ -1372,7 +1388,7 @@ $('#pHome').addEventListener('change', async () => {
 });
 segmented('#sAutonomy', (v) => {
   sAutonomy = v;
-  $('#sAutonomyHelp').textContent = state.me.autonomyLevels[v].help;
+  $('#sAutonomyHelp').textContent = t(state.me.autonomyLevels[v].help);
   $('#sApproveRow').hidden = v !== 'balanced';
   saveRules({ autonomy: v });
 });
@@ -1420,16 +1436,16 @@ async function renderPush() {
   $('#sPush').checked = on;
   $('#sPush').disabled = why !== 'ok';
   $('#sPushTestRow').hidden = !on;
-  $('#sPushInfo').textContent = why === 'install' ? 'On iPhone: Share → Add to Home Screen, then open Mandat from there to turn this on'
-    : why === 'blocked' ? 'Blocked for this site — allow notifications in your browser settings'
+  $('#sPushInfo').textContent = t(why === 'install' ? 'On iPhone: Share → Add to Home Screen, then open Mandat from there to turn this on'
+    : why === 'blocked' ? 'Blocked for this site. Allow notifications in your browser settings'
     : why === 'none' ? 'This browser cannot receive notifications'
-    : on ? 'On for this device — only when something needs you' : 'When a payment needs you, a merchant answers or a friend pays';
+    : on ? 'On for this device, only when something needs you' : 'When a payment needs you, a merchant answers or a friend pays');
 }
 $('#sPush').addEventListener('change', () => ($('#sPush').checked ? enablePush() : disablePush()).catch(() => renderPush()));
 $('#sPushTest').addEventListener('click', async () => {
   await post('/api/me/push/test', {});
-  $('#sPushTest').textContent = 'Sent';
-  setTimeout(() => ($('#sPushTest').textContent = 'Send a test'), 2000);
+  $('#sPushTest').textContent = t('Sent');
+  setTimeout(() => ($('#sPushTest').textContent = t('Send a test')), 2000);
 });
 $('#pushOn').addEventListener('click', () => enablePush().catch(() => {}));
 $('#pushLater').addEventListener('click', () => {
@@ -1446,19 +1462,21 @@ $('#sVoice').addEventListener('change', async () => {
   state.me = (await post('/api/me', { voice: { on: $('#sVoice').checked } })).user;
 });
 $('#sForget').addEventListener('click', async () => {
-  if (!confirm('Forget everything Mandat knows about you? Your PayPal connection and missions stay.')) return;
+  if (!confirm(t('Forget everything Mandat knows about you? Your PayPal connection and missions stay.'))) return;
   state.me = (await post('/api/me/forget', {})).user;
   renderSettings();
 });
 $('#sRevoke').addEventListener('click', async () => {
-  if (!confirm('Revoke the PayPal mandate? Your agent will not be able to hold any deposit.')) return;
+  if (!confirm(t('Revoke the PayPal mandate? Your agent will not be able to hold any deposit.'))) return;
   state.me = (await post('/api/me/mandate/revoke', {})).user;
   mandateView();
 });
 $('#sLocBtn').addEventListener('click', async () => {
   const l = await locate();
-  $('#sLoc').textContent = l ? 'Allowed — used to search around you' : 'Not allowed — your usual address is used';
+  $('#sLoc').textContent = l ? t('Allowed, used to search around you') : t('Not allowed, your usual address is used');
 });
+// Interface language: Auto follows the phone; changing it reloads the app.
+segmented('#sLang', (v) => { if (v !== chosenLang()) setLang(v); });
 
 // ---------- photos ----------
 function pickPhoto(onReady) {
@@ -1492,10 +1510,10 @@ function shrink(file) {
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
 function listen(onText, button) {
-  if (!SR) return alert('Voice input is not supported in this browser — type instead.');
+  if (!SR) return alert(t('Voice input is not supported in this browser. Type instead.'));
   stopSpeaking();
   rec = new SR();
-  rec.lang = navigator.language || 'en-US';
+  rec.lang = lang === (navigator.language || '').slice(0, 2) ? navigator.language : lang === 'fr' ? 'fr-FR' : 'en-US';
   rec.interimResults = true;
   let finalText = '';
   rec.onresult = (e) => {
@@ -1531,15 +1549,15 @@ function syncComposer() {
   ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
   $('#tray').style.bottom = `calc(${$('#composer').offsetHeight + 22}px + env(safe-area-inset-bottom))`;
   $('#composer').classList.toggle('has-text', has);
-  $('#orb').setAttribute('aria-label', has ? 'Send' : 'Talk to Mandat');
+  $('#orb').setAttribute('aria-label', has ? t('Send') : t('Talk to Mandat'));
 }
 $('#sayText').addEventListener('input', syncComposer);
 function speak(text, { force = false, onend } = {}) {
   if (!window.speechSynthesis || (!force && !state.me?.voice?.on)) return;
   const u = new SpeechSynthesisUtterance(text);
   const voices = speechSynthesis.getVoices();
-  const lang = (navigator.language || 'en').slice(0, 2);
-  u.voice = voices.find((v) => v.lang.startsWith(lang) && /premium|enhanced|siri/i.test(v.name)) || voices.find((v) => v.lang.startsWith(lang)) || null;
+  const vl = lang; // replies follow the app language
+  u.voice = voices.find((v) => v.lang.startsWith(vl) && /premium|enhanced|siri/i.test(v.name)) || voices.find((v) => v.lang.startsWith(vl)) || null;
   u.rate = 1.02;
   u.onstart = () => { state.speaking = true; orbState('speaking'); };
   u.onend = u.onerror = () => { state.speaking = false; orbState('idle'); onend?.(); };
@@ -1585,7 +1603,7 @@ for (const b of $$('.stepper button')) {
   });
 }
 function fmtC(v, cur = 'EUR') {
-  return new Intl.NumberFormat('en-IE', { style: 'currency', currency: cur, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
+  return new Intl.NumberFormat(locale(), { style: 'currency', currency: cur, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
 }
 // Follow new content only if you are already at the bottom; otherwise offer a "New message" pill.
 const nearBottom = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 160;
@@ -1622,13 +1640,13 @@ function step(text) { return el('li', 'step', text); }
 
 // "…" bubble while the agent works; it always stays last in the feed.
 function typing(on) {
-  const t = $('#feed > li.typing');
-  if (on && !t) {
+  const cur = $('#feed > li.typing');
+  if (on && !cur) {
     const li = el('li', 'typing');
-    li.setAttribute('aria-label', 'Mandat is working');
+    li.setAttribute('aria-label', t('Mandat is working'));
     li.innerHTML = '<i></i><i></i><i></i>';
     $('#feed').append(li);
-  } else if (!on && t) t.remove();
+  } else if (!on && cur) cur.remove();
 }
 
 // Light, safe formatting for replies: paragraphs, "- " lists, numbered lists, **bold**, *italic*, links.
@@ -1694,10 +1712,10 @@ function sayBubble(text) {
     b.innerHTML = svg('check');
     setTimeout(() => (b.innerHTML = svg(name)), 1400);
   };
-  btn('copy', 'Copy', async (b) => {
+  btn('copy', t('Copy'), async (b) => {
     try { await navigator.clipboard.writeText(plain(text)); flash(b, 'copy'); } catch {}
   });
-  btn('listen', 'Listen', (b) => {
+  btn('listen', t('Listen'), (b) => {
     if (b.classList.contains('on')) return stopSpeaking();
     stopSpeaking();
     $$('.msg-actions .on').forEach((x) => { x.classList.remove('on'); x.innerHTML = svg('listen'); });
@@ -1705,7 +1723,7 @@ function sayBubble(text) {
     b.innerHTML = svg('stop');
     speak(plain(text), { force: true, onend: () => { b.classList.remove('on'); b.innerHTML = svg('listen'); } });
   });
-  btn('share', 'Share', async (b) => {
+  btn('share', t('Share'), async (b) => {
     if (navigator.share) return navigator.share({ title: 'Mandat', text: plain(text) }).catch(() => {});
     try { await navigator.clipboard.writeText(plain(text)); flash(b, 'share'); } catch {}
   });
@@ -1715,9 +1733,9 @@ function sayBubble(text) {
 
 // A failed turn: plain words and one way out.
 function errorStep(message) {
-  const li = el('li', 'step error', /too long/i.test(message) ? 'The AI is slow right now and did not answer.' : "Mandat couldn't finish that step.");
+  const li = el('li', 'step error', /too long/i.test(message) ? t('The AI is slow right now and did not answer.') : t('Mandat couldn’t finish that step.'));
   if (state.last && state.live) {
-    const b = el('button', 'retry', 'Try again');
+    const b = el('button', 'retry', t('Try again'));
     b.type = 'button';
     b.addEventListener('click', () => { li.remove(); send(state.last.text, state.last.images); });
     li.append(b);
@@ -1732,16 +1750,17 @@ function el(tag, cls, text) {
 }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
 const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const HEADERS = { 'X-TZ': TZ, 'X-Lang': lang }; // the server writes notifications and messages in the app language
 async function get(url) {
-  const r = await fetch(url, { headers: { 'X-TZ': TZ } });
+  const r = await fetch(url, { headers: HEADERS });
   const j = await r.json();
-  if (!r.ok) throw new Error(j.error || 'Request failed');
+  if (!r.ok) throw new Error(j.error || t('Request failed'));
   return j;
 }
 async function post(url, body) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-TZ': TZ }, body: JSON.stringify(body) });
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...HEADERS }, body: JSON.stringify(body) });
   const j = await r.json();
-  if (!r.ok) throw new Error(j.error || 'Request failed');
+  if (!r.ok) throw new Error(j.error || t('Request failed'));
   return j;
 }
 
@@ -1778,9 +1797,9 @@ $('#lbCopy').addEventListener('click', async () => {
     const blob = await lbBlob();
     const png = blob.type === 'image/png' ? blob : await new Promise((ok) => { const c = document.createElement('canvas'); const i = $('#lbImg'); c.width = i.naturalWidth; c.height = i.naturalHeight; c.getContext('2d').drawImage(i, 0, 0); c.toBlob(ok, 'image/png'); });
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
-    $('#lbCopy').textContent = 'Copied';
-  } catch { $('#lbCopy').textContent = 'Not supported'; }
-  setTimeout(() => ($('#lbCopy').textContent = 'Copy'), 1400);
+    $('#lbCopy').textContent = t('Copied');
+  } catch { $('#lbCopy').textContent = t('Not supported'); }
+  setTimeout(() => ($('#lbCopy').textContent = t('Copy')), 1400);
 });
 $('#lbShare').addEventListener('click', async () => {
   try {
