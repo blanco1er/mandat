@@ -564,6 +564,7 @@ function handle({ type, data }) {
     case 'busy': state.busy = data.on; if (!data.on) closeSteps(); typing(data.on); return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
     case 'tool': typing(state.busy); return toolStep(data);
     case 'places': return placesCard(data);
+    case 'preview': return previewCard(data);
     case 'verified': return verifiedMark(data);
     case 'negotiation': return negotiation(data);
     case 'request': return requestCard(data);
@@ -584,6 +585,7 @@ function handle({ type, data }) {
 }
 
 const TOOL_LABEL = {
+  show_place_preview: (a) => `Looking up ${a.name}`,
   find_real_places: (a) => `Looking for real ${many(a.category)} nearby`,
   find_network_merchants: (a) => `Checking ${many(a.category)} I can book and pay`,
   cancel_hold: () => 'Releasing a hold',
@@ -716,6 +718,21 @@ function placesCard({ category, center, places }) {
     li.querySelectorAll('.place-list button').forEach((b) => b.addEventListener('click', () => select(+b.dataset.i)));
   };
   mapWatcher.observe(box);
+}
+// A real place, at a glance: photos (open sources), details, and one tap to Google Maps for everyone's photos.
+function previewCard(v) {
+  const li = el('li', 'card preview');
+  const photos = v.photos || [];
+  const meta = [v.cuisine || v.category, v.distance != null ? `${v.distance} m` : '', v.openingHours ? v.openingHours.slice(0, 40) : ''].filter(Boolean).map(esc).join(' · ');
+  li.innerHTML = `${photos.length
+    ? `<div class="pv-photos">${photos.map((p) => `<img class="zoomable" src="${esc(p.url)}" alt="${esc(v.name)}" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>`
+    : `<div class="pv-none"><span>📍</span><small>No public photo yet — open Google Maps for people's photos</small></div>`}
+    <div class="pv-body"><b>${esc(v.name)}</b><small>${meta}</small>${v.address ? `<small>${esc(v.address)}</small>` : ''}
+      <div class="pv-actions"><a class="pill-btn" href="${esc(v.googleMaps)}" target="_blank" rel="noopener">Photos on Google Maps</a>${v.directions ? `<a href="${esc(v.directions)}" target="_blank" rel="noopener">Directions</a>` : ''}${v.website ? `<a href="${esc(/^https?:/.test(v.website) ? v.website : 'https://' + v.website)}" target="_blank" rel="noopener">Website</a>` : ''}</div>
+      ${photos.length ? `<p class="pv-src">Photos: ${esc([...new Set(photos.map((p) => p.source))].join(', '))}</p>` : ''}</div>`;
+  // A photo that cannot load disappears instead of leaving a broken frame.
+  li.querySelectorAll('.pv-photos img').forEach((im) => im.addEventListener('error', () => { im.remove(); if (!li.querySelector('.pv-photos img')) li.querySelector('.pv-photos')?.remove(); }));
+  add(li);
 }
 function verifiedMark({ merchant_id, name, ok }) {
   state.verified[merchant_id] = ok;

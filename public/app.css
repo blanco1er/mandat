@@ -812,3 +812,20 @@ body.no-scroll { overflow: hidden; }
 .say.user { min-width: 0; }
 .feed > li { max-width: 100%; min-width: 0; }
 #live, .feed { overflow-x: clip; }
+
+/* Place preview */
+.card.preview { padding: 0; overflow: hidden; }
+.pv-photos { display: flex; gap: 3px; height: 190px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.pv-photos::-webkit-scrollbar { display: none; }
+.pv-photos img { height: 100%; width: auto; min-width: 70%; max-width: 100%; object-fit: cover; scroll-snap-align: start; cursor: zoom-in; flex: 1 0 auto; }
+.pv-photos img:only-child { width: 100%; }
+.pv-none { height: 96px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(135deg, rgba(10, 132, 255, 0.12), rgba(123, 97, 255, 0.12)); }
+.pv-none span { font-size: 22px; }
+.pv-none small { font-size: 12px; color: var(--ink-2); }
+.pv-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 1px; }
+.pv-body b { font-size: 15px; }
+.pv-body small { font-size: 12px; color: var(--ink-3); }
+.pv-actions { display: flex; gap: 8px; margin-top: 9px; flex-wrap: wrap; align-items: center; }
+.pv-actions a { font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
+.pv-actions a.pill-btn { color: #fff; display: inline-flex; align-items: center; height: 30px; padding: 0 12px; font-size: 13px; }
+.pv-src { margin: 8px 0 0; font-size: 11px; color: var(--ink-3); }
