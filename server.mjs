@@ -312,7 +312,7 @@ app.post('/api/missions', api(async (req, res) => {
   const u = me(req, res);
   if (!u.paypal.mandate) throw new Error('Sign the PayPal mandate first.');
   if (u.frozen) throw new Error('Mandat is stopped. Resume it in Settings.');
-  const { intent = '', budget, emoji = '✦', location = null, image = null } = req.body || {};
+  const { intent = '', budget, emoji = '✦', location = null } = req.body || {};
   if (!(budget > 0 && budget <= 5000)) throw new Error('Budget must be between 1 and 5000.');
   allowance(u, 'missions');
   allowance(u, 'turns');
@@ -327,8 +327,9 @@ app.post('/api/missions', api(async (req, res) => {
   const b = { s, clients: new Set(), busy: Promise.resolve(), log: s.feed };
   live.set(s.id, b);
   b.s._user = u;
-  emitter(b)('user', { text: intent, image: !!image });
-  run(b, (emit) => userTurn(b.s, intent, emit, { image }));
+  const imgs = saveImages(u, req.body?.images || (req.body?.image ? [req.body.image] : []));
+  emitter(b)('user', { text: intent, images: imgs.map((i) => i.url) });
+  run(b, (emit) => userTurn(b.s, intent, emit, { images: imgs.map((i) => i.data) }));
   titleFor(intent).then((t) => {
     if (!t || t === b.s.title) return;
     b.s.title = t;
@@ -364,12 +365,12 @@ app.get('/api/missions/:id', api(async (req, res) => {
 app.post('/api/missions/:id/messages', api(async (req, res) => {
   const u = me(req, res);
   const b = box(req.params.id, u);
-  const text = String(req.body?.text || '').trim().slice(0, 1200);
-  const image = typeof req.body?.image === 'string' && req.body.image.startsWith('data:image/') ? req.body.image : null;
-  if (!text && !image) throw new Error('Empty message');
+  const text = String(req.body?.text || '').trim().slice(0, 2000);
+  const imgs = saveImages(u, req.body?.images || (req.body?.image ? [req.body.image] : []));
+  if (!text && !imgs.length) throw new Error('Empty message');
   allowance(u);
-  emitter(b)('user', { text, image: !!image });
-  run(b, (emit) => userTurn(b.s, text, emit, { image }));
+  emitter(b)('user', { text, images: imgs.map((i) => i.url) });
+  run(b, (emit) => userTurn(b.s, text, emit, { images: imgs.map((i) => i.data) }));
   return { queued: true };
 }));
 
@@ -387,6 +388,29 @@ app.get('/api/missions/:id/shares', api(async (req, res) => {
   if (changed) saveMission(b.s);
   return { shares: b.s.shares.filter((sh) => sh.invoiceId).map(({ qr, ...sh }) => sh) };
 }));
+
+// ---------- images people send: stored as files, visible only to their owner ----------
+const MEDIA = path.resolve(process.env.MANDAT_DATA || 'data', 'media');
+function saveImages(u, list) {
+  const out = [];
+  for (const d of (Array.isArray(list) ? list : []).slice(0, 4)) {
+    const m = typeof d === 'string' && d.match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+    if (!m) continue;
+    const buf = Buffer.from(m[2], 'base64');
+    if (buf.length > 2.5e6) throw new Error('An image is too large (2.5 MB max).');
+    const name = crypto.randomBytes(9).toString('hex') + '.' + (m[1] === 'jpeg' ? 'jpg' : m[1]);
+    fs.mkdirSync(path.join(MEDIA, u.id), { recursive: true });
+    fs.writeFileSync(path.join(MEDIA, u.id, name), buf);
+    out.push({ url: `/api/media/${u.id}/${name}`, data: d });
+  }
+  return out;
+}
+app.get('/api/media/:uid/:file', (req, res) => {
+  const u = me(req, res);
+  if (u.id !== req.params.uid || !/^[0-9a-f]{18}\.(jpg|png|webp)$/.test(req.params.file)) return res.status(404).end();
+  res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+  res.sendFile(path.join(MEDIA, u.id, req.params.file), (e) => e && res.status(404).end());
+});
 
 // Devices that receive notifications (one per browser / installed app).
 app.get('/api/health', (req, res) => res.json({ ok: true, paypal: PayPal.MODE }));

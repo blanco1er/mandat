@@ -13,6 +13,7 @@ function show(view) {
   $('#tabbar').hidden = !['home', 'activity', 'settings'].includes(view);
   $('#composer').hidden = view !== 'live';
   $('#bottomFade').hidden = view !== 'live';
+  $('#tray').hidden = view !== 'live' || !state.attach?.length;
   $('#back').hidden = view !== 'live';
   $('#topBudget').hidden = view !== 'live';
   $('#topbar').classList.toggle('has-budget', view === 'live');
@@ -22,9 +23,10 @@ function show(view) {
   $('#newMission').hidden = view !== 'home';
   $('.brand-mark').hidden = view === 'live';
   if (view !== 'live') $('#topTitle').textContent = 'Mandat';
-  $$('#tabbar button').forEach((b) => b.toggleAttribute('aria-current', b.dataset.tab === view));
+  $$('#tabbar button').forEach((b) => (b.dataset.tab === view ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   window.scrollTo({ top: 0 });
   if (view === 'home') requestAnimationFrame(placePill);
+  requestAnimationFrame(() => placeLens());
 }
 
 history.scrollRestoration = 'manual'; // every screen opens at its top
@@ -362,7 +364,41 @@ async function refreshHome() {
   renderHome(r.missions);
 }
 const TABS = { home: () => refreshHome(), activity: () => openActivity(), settings: () => renderSettings() };
-$$('#tabbar button').forEach((b) => b.addEventListener('click', () => { TABS[b.dataset.tab](); show(b.dataset.tab); }));
+// The glass lens sits under the current tab; drag along the bar and it follows, then settles on the nearest tab.
+function placeLens(x) {
+  const bar = $('#tabbar'), lens = $('#tabLens');
+  if (bar.hidden) return;
+  const btn = $('#tabbar button[aria-current]') || $('#tabbar button');
+  const left = x === undefined ? btn.offsetLeft : Math.max(4, Math.min(x - btn.offsetWidth / 2, bar.clientWidth - btn.offsetWidth - 4));
+  lens.style.width = btn.offsetWidth + 'px';
+  lens.style.transform = `translateX(${left}px)`;
+}
+addEventListener('resize', () => placeLens(), { passive: true });
+(() => {
+  const bar = $('#tabbar');
+  let x0 = null, moved = false;
+  bar.addEventListener('pointerdown', (e) => { x0 = e.clientX; moved = false; bar.classList.add('pressing'); bar.setPointerCapture(e.pointerId); });
+  bar.addEventListener('pointermove', (e) => {
+    if (x0 === null) return;
+    if (!moved && Math.abs(e.clientX - x0) < 6) return;
+    moved = true;
+    bar.classList.add('dragging');
+    placeLens(e.clientX - bar.getBoundingClientRect().left);
+  });
+  const end = (e) => {
+    if (x0 === null) return;
+    bar.classList.remove('dragging', 'pressing');
+    const x = e.clientX - bar.getBoundingClientRect().left;
+    x0 = null;
+    // Settle on the tab under the finger (a plain tap is handled the same way).
+    const target = [...bar.querySelectorAll('button')].find((b) => x >= b.offsetLeft && x <= b.offsetLeft + b.offsetWidth) || null;
+    if (target && target.getAttribute('aria-current') == null) { TABS[target.dataset.tab](); show(target.dataset.tab); }
+    else placeLens();
+  };
+  bar.addEventListener('pointerup', end);
+  bar.addEventListener('pointercancel', end);
+})();
+$$('#tabbar button').forEach((b) => b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); TABS[b.dataset.tab](); show(b.dataset.tab); } }));
 $('#resumeAll').addEventListener('click', async () => {
   state.me = (await post('/api/me/stop', { stopped: false })).user;
   refreshHome();
@@ -409,27 +445,88 @@ $('#stopMission').addEventListener('click', async () => {
 $('#say').addEventListener('submit', (e) => {
   e.preventDefault();
   const t = $('#sayText').value.trim();
-  if (!t) return;
+  const images = state.attach.slice();
+  if (!t && !images.length) return;
   state.voiceTurn = false; // typed: the reply stays silent
   $('#sayText').value = '';
+  state.attach = [];
+  renderTray();
   syncComposer();
-  send(t);
+  send(t, images);
 });
-$('#photoBtn').addEventListener('click', () => pickPhoto((url) => {
-  state.voiceTurn = false;
-  send($('#sayText').value.trim(), url).then(() => ($('#sayText').value = ''));
-}));
-function send(text, image) {
+// Enter sends, Shift+Enter starts a new line; the field grows with the message.
+$('#sayText').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); $('#say').requestSubmit(); }
+});
+// Paste images straight into the message.
+$('#sayText').addEventListener('paste', (e) => {
+  const files = [...(e.clipboardData?.items || [])].filter((i) => i.type.startsWith('image/')).map((i) => i.getAsFile()).filter(Boolean);
+  if (files.length) { e.preventDefault(); addImages(files); }
+});
+// Drop images anywhere on the conversation (desktop).
+addEventListener('dragover', (e) => { if (!$('#live').hidden && [...(e.dataTransfer?.items || [])].some((i) => i.type.startsWith('image/'))) { e.preventDefault(); document.body.classList.add('dropping'); } });
+addEventListener('dragleave', (e) => { if (!e.relatedTarget) document.body.classList.remove('dropping'); });
+addEventListener('drop', (e) => {
+  document.body.classList.remove('dropping');
+  if ($('#live').hidden) return;
+  const files = [...(e.dataTransfer?.files || [])].filter((f) => f.type.startsWith('image/'));
+  if (files.length) { e.preventDefault(); addImages(files); }
+});
+// Up to 4 images, resized on the phone before sending; shown above the bar until sent.
+state.attach = [];
+async function addImages(files) {
+  for (const f of files) {
+    if (state.attach.length >= 4) break;
+    state.attach.push(await shrink(f));
+  }
+  renderTray();
+  syncComposer();
+  $('#sayText').focus();
+}
+function renderTray() {
+  const tray = $('#tray');
+  tray.innerHTML = '';
+  tray.hidden = !state.attach.length || $('#live').hidden;
+  state.attach.forEach((src, i) => {
+    const t = el('div', 'tray-item');
+    t.innerHTML = `<img src="${src}" alt="Photo ${i + 1} to send"><button type="button" aria-label="Remove photo ${i + 1}">✕</button>`;
+    t.querySelector('img').addEventListener('click', () => openLightbox(src));
+    t.querySelector('button').addEventListener('click', () => { state.attach.splice(i, 1); renderTray(); syncComposer(); });
+    tray.append(t);
+  });
+  if (state.attach.length && state.attach.length < 4) {
+    const more = el('button', 'tray-add', '+');
+    more.type = 'button';
+    more.setAttribute('aria-label', 'Add another photo');
+    more.addEventListener('click', () => pickPhotos(addImages));
+    tray.append(more);
+  }
+}
+$('#photoBtn').addEventListener('click', () => pickPhotos(addImages));
+function send(text, images = []) {
   stopSpeaking();
-  state.last = { text, image };
-  return post(`/api/missions/${state.mission}/messages`, { text, image }).catch((e) => add(el('li', 'step error', e.message)));
+  state.last = { text, images };
+  return post(`/api/missions/${state.mission}/messages`, { text, images }).catch((e) => add(el('li', 'step error', e.message)));
 }
 
 function handle({ type, data }) {
   switch (type) {
     case 'user': {
-      const li = el('li', 'say user' + (data.image ? ' photo-bubble' : ''), data.text || '');
-      if (data.image) li.prepend(el('span', '', '📷 Photo '));
+      // Your message: the photos first (as real thumbnails), then the words.
+      const imgs = data.images || [];
+      const li = el('li', 'say user' + (imgs.length ? ' with-images' : '') + (!data.text ? ' images-only' : ''));
+      if (imgs.length) {
+        const g = el('div', 'u-imgs n' + Math.min(imgs.length, 4));
+        for (const src of imgs) {
+          const im = el('img', 'zoomable');
+          im.src = src;
+          im.alt = 'Photo you sent';
+          im.loading = 'lazy';
+          g.append(im);
+        }
+        li.append(g);
+      } else if (data.image) li.append(el('span', 'u-legacy', '📷 Photo'));
+      if (data.text) li.append(el('div', 'u-text', data.text));
       return add(li, { stick: true }); // your own message always brings you to the bottom
     }
     case 'photo_read': return add(el('li', 'seen', data.summary));
@@ -439,7 +536,7 @@ function handle({ type, data }) {
       if (state.streamLi) { done.classList.add('settled'); state.streamLi.replaceWith(done); state.streamLi = null; keepBottom(); }
       else add(done);
       typing(state.busy);
-      return state.live && state.voiceTurn && speak(data.text);
+      return state.live && state.voiceTurn && speak(plain(data.text));
     }
     case 'say_delta': return streamText(data.t);
     case 'say_reset': state.streamLi?.remove(); state.streamLi = null; return typing(state.busy);
@@ -1098,12 +1195,13 @@ $('#sLocBtn').addEventListener('click', async () => {
 
 // ---------- photos ----------
 function pickPhoto(onReady) {
+  pickPhotos(async (files) => onReady(await shrink(files[0])), false);
+}
+function pickPhotos(onFiles, multiple = true) {
   const input = $('#photoInput');
   input.value = '';
-  input.onchange = async () => {
-    const f = input.files?.[0];
-    if (f) onReady(await shrink(f));
-  };
+  input.multiple = multiple;
+  input.onchange = () => input.files?.length && onFiles([...input.files]);
   input.click();
 }
 // Downscale to 1280 px JPEG: plenty for reading a menu or a poster, small enough to send.
@@ -1150,7 +1248,7 @@ function listen(onText, button) {
 }
 // One button: send when there is text, otherwise talk.
 $('#orb').addEventListener('click', () => {
-  if ($('#sayText').value.trim()) return $('#say').requestSubmit();
+  if ($('#sayText').value.trim() || state.attach.length) return $('#say').requestSubmit();
   if (state.listening) return rec?.stop();
   listen((t) => {
     state.voiceTurn = true;
@@ -1160,7 +1258,11 @@ $('#orb').addEventListener('click', () => {
   });
 });
 function syncComposer() {
-  const has = !!$('#sayText').value.trim() && !state.listening;
+  const has = (!!$('#sayText').value.trim() || state.attach.length > 0) && !state.listening;
+  const ta = $('#sayText');
+  ta.style.height = 'auto';
+  ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
+  $('#tray').style.bottom = `calc(${$('#composer').offsetHeight + 22}px + env(safe-area-inset-bottom))`;
   $('#composer').classList.toggle('has-text', has);
   $('#orb').setAttribute('aria-label', has ? 'Send' : 'Talk to Mandat');
 }
@@ -1262,6 +1364,33 @@ function typing(on) {
   } else if (!on && t) t.remove();
 }
 
+// Light, safe formatting for replies: paragraphs, "- " lists, numbered lists, **bold**, *italic*, links.
+function md(text) {
+  const inline = (t) => esc(t)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[\s(])\*(?!\s)(.+?)\*(?=[\s).,!?]|$)/g, '$1<i>$2</i>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)])/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
+  const out = [];
+  let list = null;
+  for (const raw of String(text).split('\n')) {
+    const line = raw.trimEnd();
+    const bullet = line.match(/^\s*[-•*]\s+(.*)$/);
+    const num = line.match(/^\s*\d+[.)]\s+(.*)$/);
+    if (bullet || num) {
+      const tag = bullet ? 'ul' : 'ol';
+      if (!list || list.tag !== tag) { if (list) out.push(`</${list.tag}>`); list = { tag }; out.push(`<${tag}>`); }
+      out.push(`<li>${inline((bullet || num)[1])}</li>`);
+      continue;
+    }
+    if (list) { out.push(`</${list.tag}>`); list = null; }
+    if (line.trim()) out.push(`<p>${inline(line)}</p>`);
+  }
+  if (list) out.push(`</${list.tag}>`);
+  return out.join('');
+}
+// Words to read aloud or copy: no formatting marks.
+const plain = (t) => String(t).replace(/\*\*|__|`/g, '').replace(/^\s*[-•*]\s+/gm, '').replace(/(^|\s)\*(\S.*?)\*/g, '$1$2');
 // An assistant reply, with Copy / Listen / Share under it.
 const ICON = {
   copy: '<path d="M8 8V5.5A1.5 1.5 0 0 1 9.5 4h9A1.5 1.5 0 0 1 20 5.5v9a1.5 1.5 0 0 1-1.5 1.5H16"/><rect x="4" y="8" width="12" height="12" rx="1.5"/>',
@@ -1274,7 +1403,9 @@ const ICON = {
 const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`;
 function sayBubble(text) {
   const li = el('li', 'say');
-  li.append(el('p', 'say-text', text));
+  const body = el('div', 'say-text md');
+  body.innerHTML = md(text);
+  li.append(body);
   const bar = el('div', 'msg-actions');
   const btn = (name, label, fn) => {
     const b = el('button');
@@ -1291,7 +1422,7 @@ function sayBubble(text) {
     setTimeout(() => (b.innerHTML = svg(name)), 1400);
   };
   btn('copy', 'Copy', async (b) => {
-    try { await navigator.clipboard.writeText(text); flash(b, 'copy'); } catch {}
+    try { await navigator.clipboard.writeText(plain(text)); flash(b, 'copy'); } catch {}
   });
   btn('listen', 'Listen', (b) => {
     if (b.classList.contains('on')) return stopSpeaking();
@@ -1299,11 +1430,11 @@ function sayBubble(text) {
     $$('.msg-actions .on').forEach((x) => { x.classList.remove('on'); x.innerHTML = svg('listen'); });
     b.classList.add('on');
     b.innerHTML = svg('stop');
-    speak(text, { force: true, onend: () => { b.classList.remove('on'); b.innerHTML = svg('listen'); } });
+    speak(plain(text), { force: true, onend: () => { b.classList.remove('on'); b.innerHTML = svg('listen'); } });
   });
   btn('share', 'Share', async (b) => {
-    if (navigator.share) return navigator.share({ title: 'Mandat', text }).catch(() => {});
-    try { await navigator.clipboard.writeText(text); flash(b, 'share'); } catch {}
+    if (navigator.share) return navigator.share({ title: 'Mandat', text: plain(text) }).catch(() => {});
+    try { await navigator.clipboard.writeText(plain(text)); flash(b, 'share'); } catch {}
   });
   li.append(bar);
   return li;
@@ -1315,7 +1446,7 @@ function errorStep(message) {
   if (state.last && state.live) {
     const b = el('button', 'retry', 'Try again');
     b.type = 'button';
-    b.addEventListener('click', () => { li.remove(); send(state.last.text, state.last.image); });
+    b.addEventListener('click', () => { li.remove(); send(state.last.text, state.last.images); });
     li.append(b);
   }
   return li;
@@ -1341,3 +1472,47 @@ async function post(url, body) {
 }
 
 boot();
+
+// ---------- image viewer: open, zoom, save, copy, share ----------
+function openLightbox(src) {
+  $('#lbImg').src = src;
+  $('#lbSave').href = src;
+  $('#lbStage').classList.remove('zoomed');
+  $('#lightbox').hidden = false;
+  document.body.classList.add('no-scroll');
+}
+function closeLightbox() {
+  $('#lightbox').hidden = true;
+  document.body.classList.remove('no-scroll');
+}
+document.addEventListener('click', (e) => {
+  const img = e.target.closest('img.zoomable, .qr-box img');
+  if (img) { e.preventDefault(); openLightbox(img.currentSrc || img.src); }
+});
+$('#lbClose').addEventListener('click', closeLightbox);
+$('#lbStage').addEventListener('click', (e) => {
+  if (e.target === $('#lbStage')) return closeLightbox();
+  $('#lbStage').classList.toggle('zoomed'); // tap / click the image to zoom in and out
+});
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#lightbox').hidden) closeLightbox(); });
+async function lbBlob() {
+  const r = await fetch($('#lbImg').src);
+  return r.blob();
+}
+$('#lbCopy').addEventListener('click', async () => {
+  try {
+    const blob = await lbBlob();
+    const png = blob.type === 'image/png' ? blob : await new Promise((ok) => { const c = document.createElement('canvas'); const i = $('#lbImg'); c.width = i.naturalWidth; c.height = i.naturalHeight; c.getContext('2d').drawImage(i, 0, 0); c.toBlob(ok, 'image/png'); });
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    $('#lbCopy').textContent = 'Copied';
+  } catch { $('#lbCopy').textContent = 'Not supported'; }
+  setTimeout(() => ($('#lbCopy').textContent = 'Copy'), 1400);
+});
+$('#lbShare').addEventListener('click', async () => {
+  try {
+    const blob = await lbBlob();
+    const file = new File([blob], 'mandat-image.' + (blob.type.split('/')[1] || 'jpg'), { type: blob.type });
+    if (navigator.canShare?.({ files: [file] })) return navigator.share({ files: [file] });
+  } catch {}
+  $('#lbSave').click();
+});
