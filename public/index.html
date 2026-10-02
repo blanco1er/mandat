@@ -271,6 +271,14 @@
   <button class="new-pill glass" id="newPill" type="button" hidden>↓ New message</button>
   <div class="bottom-fade" id="bottomFade" aria-hidden="true" hidden></div>
   <div class="attach-tray" id="tray" hidden aria-label="Images to send"></div>
+  <div class="voicebar" id="call" hidden data-phase="listening" role="region" aria-label="Voice conversation">
+    <div class="smoke" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="vb-row">
+      <span class="vb-state" id="callState" aria-live="polite">Listening…</span>
+      <button type="button" class="vb-orb" id="callOrb" aria-label="Talk or interrupt"><span class="call-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></button>
+      <button type="button" class="vb-end" id="callEnd">End</button>
+    </div>
+  </div>
   <footer class="composer glass" id="composer" hidden>
     <button class="icon-round" id="photoBtn" aria-label="Add photos"><svg viewBox="0 0 24 24"><path d="M9 4 7.2 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.2L15 4H9Zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></svg></button>
     <form id="say" autocomplete="off">

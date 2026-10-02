@@ -377,13 +377,15 @@ $('#cGo').addEventListener('click', (e) => {
   if ($('#compose').classList.contains('has-text')) return; // the form submits
   e.preventDefault();
   if (state.listening) return rec?.stop();
-  // Speak your mission: what you say becomes the request and starts right away.
+  // Speak your mission: it is written in the box as you talk, starts when you stop, and the conversation goes on by voice.
+  unlockSpeech();
+  unlockAudio();
   listen((t) => {
     $('#cText').value = t;
     compose.voice = true;
     onCompose();
     $('#compose').requestSubmit();
-  }, $('#cGo'));
+  }, $('#cGo'), (live) => { $('#cText').value = live; onCompose(); });
 });
 // Photos for a new mission: several, pasted or picked, shown as small thumbnails in the box.
 async function addComposePhotos(files) {
@@ -420,10 +422,12 @@ $('#compose').addEventListener('submit', async (e) => {
     const location = await locate();
     const emoji = compose.emoji || EMOJI.find(([re]) => re.test(intent))?.[1] || '';
     const budgetSource = compose.touched ? 'pill' : compose.auto ? 'words' : compose.budget ? 'suggested' : 'none';
-    const r = await post('/api/missions', { intent, budget: compose.budget, budgetSource, emoji, location, images: compose.photos });
-    state.voiceTurn = compose.voice;
+    const voice = compose.voice;
+    const r = await post('/api/missions', { intent, budget: compose.budget, budgetSource, emoji, location, images: compose.photos, voice });
+    state.voiceTurn = false;
     resetCompose();
-    openMission(r.id);
+    await openMission(r.id);
+    if (voice) vmOpen({ listen: false }); // it answers out loud, then listens again
   } catch (err) {
     if (err.code === 'mandate_required') {
       // No signed mandate (new account, or the demo server was reset): go straight to signing, keep what was written.
@@ -678,6 +682,7 @@ $('#back').addEventListener('click', () => {
   if (state.es) state.es.close();
   stopWatchingShares();
   state.mission = null;
+  if (vm.on) vmClose();
   stopSpeaking();
   refreshHome();
   show('home');
@@ -749,15 +754,16 @@ function renderTray() {
   }
 }
 $('#photoBtn').addEventListener('click', () => pickPhotos(addImages));
-function send(text, images = []) {
-  stopSpeaking();
+function send(text, images = [], { voice = false } = {}) {
+  if (!voice) stopSpeaking();
   state.last = { text, images };
-  return post(`/api/missions/${state.mission}/messages`, { text, images }).catch((e) => add(el('li', 'step error', e.message)));
+  return post(`/api/missions/${state.mission}/messages`, { text, images, voice }).catch((e) => add(el('li', 'step error', e.message)));
 }
 
 function handle({ type, data }) {
   switch (type) {
     case 'user': {
+      vmLiveDrop();
       // Your message: the photos first (as real thumbnails), then the words.
       const imgs = data.images || [];
       const li = el('li', 'say user' + (imgs.length ? ' with-images' : '') + (!data.text ? ' images-only' : ''));
@@ -782,10 +788,11 @@ function handle({ type, data }) {
       if (state.streamLi) { done.classList.add('settled'); state.streamLi.replaceWith(done); state.streamLi = null; keepBottom(); }
       else add(done);
       typing(state.busy);
+      if (vm.on) return state.live && vmFinal(data.text);
       return state.live && state.voiceTurn && speak(plain(data.text));
     }
-    case 'say_delta': return streamText(data.t);
-    case 'say_reset': state.streamLi?.remove(); state.streamLi = null; return typing(state.busy);
+    case 'say_delta': if (vm.on && state.live) vmFeed(data.t); return streamText(data.t);
+    case 'say_reset': if (vm.on) vmReset(); state.streamLi?.remove(); state.streamLi = null; return typing(state.busy);
     case 'ready':
       state.live = true;
       closeSteps();
@@ -795,7 +802,7 @@ function handle({ type, data }) {
     case 'memory': return memoryStep(data);
     case 'budget_changed': return addStep(t('Budget changed · {from} → {to}', { from: fmtC(data.from, data.currency), to: fmtC(data.to, data.currency) }));
     case 'clash': return clashCard(data);
-    case 'busy': state.busy = data.on; if (!data.on) closeSteps(); typing(data.on); return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
+    case 'busy': state.busy = data.on; if (!data.on) closeSteps(); typing(data.on); if (vm.on && !data.on && state.live) { vm.mute = false; vmAfterTurn(); } return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
     case 'tool': typing(state.busy); return toolStep(data);
     case 'places': return placesCard(data);
     case 'preview': return previewCard(data);
@@ -1792,7 +1799,7 @@ function shrink(file) {
 // ---------- voice ----------
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
-function listen(onText, button) {
+function listen(onText, button, onLive) {
   if (!SR) return alert(t('Voice input is not supported in this browser. Type instead.'));
   stopSpeaking();
   rec = new SR();
@@ -1801,7 +1808,8 @@ function listen(onText, button) {
   let finalText = '';
   rec.onresult = (e) => {
     finalText = Array.from(e.results).map((r) => r[0].transcript).join(' ');
-    if (!button) $('#sayText').value = finalText;
+    if (onLive) onLive(finalText);
+    else if (!button) $('#sayText').value = finalText;
   };
   rec.onend = () => {
     state.listening = false;
@@ -1817,14 +1825,217 @@ function listen(onText, button) {
 // One button: send when there is text, otherwise talk.
 $('#orb').addEventListener('click', () => {
   if ($('#sayText').value.trim() || state.attach.length) return $('#say').requestSubmit();
-  if (state.listening) return rec?.stop();
-  listen((t) => {
-    state.voiceTurn = true;
-    $('#sayText').value = '';
-    syncComposer();
-    send(t);
-  });
+  vmOpen();
 });
+// ---------- voice conversation: you talk, it answers, it listens again; tap the circle to cut in ----------
+const vm = { on: false, phase: 'idle', rec: null, queue: [], buf: '', used: 0, quiet: 0, mute: false, liveLi: null, noMeter: false };
+const VM_STATE = { listening: 'Listening…', thinking: 'Thinking…', speaking: 'Speaking. Tap to interrupt.', paused: 'Tap the circle to talk.' };
+function vmSet(phase, text) {
+  vm.phase = phase;
+  $('#call').dataset.phase = phase;
+  $('#callState').textContent = t(VM_STATE[phase]);
+  if (text) $('#callState').textContent = text;
+  orbState(phase === 'paused' ? 'idle' : phase);
+}
+// The light follows the voice: your microphone level while you talk, the agent's words while it speaks.
+const lvl = { v: 0, target: 0, raf: 0, stream: null, ctx: null, an: null, data: null };
+async function meterOn() {
+  cancelAnimationFrame(lvl.raf);
+  lvl.raf = requestAnimationFrame(meterLoop);
+  if (vm.noMeter || lvl.stream || !navigator.mediaDevices?.getUserMedia) return;
+  try {
+    lvl.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    lvl.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    lvl.an = lvl.ctx.createAnalyser();
+    lvl.an.fftSize = 512;
+    lvl.data = new Uint8Array(lvl.an.fftSize);
+    lvl.ctx.createMediaStreamSource(lvl.stream).connect(lvl.an);
+  } catch { meterOff(true); }
+}
+function meterOff(keepLoop = false) {
+  lvl.stream?.getTracks().forEach((tr) => tr.stop());
+  try { lvl.ctx?.close(); } catch {}
+  Object.assign(lvl, { stream: null, ctx: null, an: null });
+  if (!keepLoop) { cancelAnimationFrame(lvl.raf); lvl.v = lvl.target = 0; $('#call').style.setProperty('--lvl', '0'); }
+}
+function meterLoop() {
+  if (lvl.an && vm.phase === 'listening') {
+    lvl.an.getByteTimeDomainData(lvl.data);
+    let sum = 0;
+    for (const x of lvl.data) sum += (x - 128) * (x - 128);
+    lvl.target = Math.min(1, Math.sqrt(sum / lvl.data.length) / 28);
+  } else if (vm.phase === 'speaking' && out.an && out.playing && !out.audio.paused) {
+    out.an.getByteTimeDomainData(out.data);
+    let sum = 0;
+    for (const x of out.data) sum += (x - 128) * (x - 128);
+    lvl.target = Math.min(1, Math.sqrt(sum / out.data.length) / 22);
+  } else if (vm.phase === 'thinking') lvl.target = 0.15;
+  lvl.v += (lvl.target - lvl.v) * 0.2;
+  if (vm.phase === 'speaking' && !(out.playing && out.an)) lvl.target *= 0.93; // phone voice: each word lifts it, then it settles
+  $('#call').style.setProperty('--lvl', lvl.v.toFixed(3));
+  lvl.raf = requestAnimationFrame(meterLoop);
+}
+// What you are saying is written live in the conversation, as your own bubble.
+function vmLive(text) {
+  if (!vm.liveLi) {
+    vm.liveLi = el('li', 'say user live');
+    vm.liveLi.append(el('div', 'u-text', ''));
+    add(vm.liveLi, { stick: true });
+  }
+  vm.liveLi.querySelector('.u-text').textContent = text;
+  keepBottom();
+}
+function vmLiveDrop() { vm.liveLi?.remove(); vm.liveLi = null; }
+// iOS lets a page talk only after a tap: an empty utterance during the tap unlocks speech for the conversation.
+function unlockSpeech() {
+  try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch {}
+}
+function vmOpen({ listen = true } = {}) {
+  if (!SR) return alert(t('Voice input is not supported in this browser. Type instead.'));
+  unlockSpeech();
+  unlockAudio();
+  meterOn();
+  vm.on = true;
+  vm.mute = false;
+  state.voiceTurn = false;
+  $('#composer').hidden = true;
+  $('#call').hidden = false;
+  $('#tray').hidden = true;
+  document.body.classList.add('voice-on');
+  if (listen) vmListen(); else vmSet('thinking');
+}
+function vmClose() {
+  vm.on = false;
+  const r = vm.rec;
+  vm.rec = null;
+  try { r?.abort(); } catch {}
+  vm.queue = [];
+  stopSpeaking();
+  vmLiveDrop();
+  meterOff();
+  document.body.classList.remove('voice-on');
+  $('#call').hidden = true;
+  $('#composer').hidden = !state.mission;
+  orbState('idle');
+}
+function vmListen() {
+  if (!vm.on) return;
+  stopSpeaking();
+  vm.queue = [];
+  const r = new SR();
+  vm.rec = r;
+  r.lang = lang === 'fr' ? 'fr-FR' : 'en-US';
+  r.interimResults = true;
+  r.continuous = false; // one sentence at a time: a short silence sends it
+  let said = '';
+  r.onresult = (e) => { said = Array.from(e.results).map((x) => x[0].transcript).join(' '); vmLive(said); };
+  r.onerror = (e) => {
+    if (e.error === 'audio-capture' && lvl.stream && !vm.noMeter) { vm.noMeter = true; meterOff(); vm.rec = null; return setTimeout(vmListen, 150); }
+    if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) { vm.rec = null; vmSet('paused', t('The microphone is off for Mandat.')); } };
+  r.onend = () => {
+    if (!vm.on || vm.rec !== r) return;
+    vm.rec = null;
+    if (said.trim()) { vm.quiet = 0; vmSend(said.trim()); }
+    else { vmLiveDrop(); if (++vm.quiet < 3) vmListen(); else vmSet('paused'); } // a pause is not the end of the conversation
+  };
+  vmSet('listening');
+  try { r.start(); } catch { vm.rec = null; vmSet('paused'); }
+}
+function vmSend(text) {
+  vmSet('thinking');
+  vm.buf = '';
+  vm.used = 0;
+  send(text, [], { voice: true });
+}
+// The reply is spoken as it arrives: each finished sentence goes to the voice right away.
+function vmFeed(chunk) {
+  if (vm.mute) return;
+  vm.buf += chunk;
+  const m = vm.buf.slice(vm.used).match(/^[\s\S]*?[.!?…:](?=\s)|^[\s\S]*?\n/);
+  if (!m) return;
+  vm.used += m[0].length;
+  vmSay(m[0]);
+  vmFeed('');
+}
+function vmFinal(text) {
+  if (!vm.mute) {
+    const rest = vm.buf && text.startsWith(vm.buf.slice(0, vm.used)) ? text.slice(vm.used) : vm.used ? '' : text;
+    if (rest.trim()) vmSay(rest);
+  }
+  vm.buf = '';
+  vm.used = 0;
+}
+function vmReset() { vm.buf = ''; vm.used = 0; }
+// The voice: a human-sounding neural voice from the server, sentence by sentence (the next one is fetched
+// while the current one plays). If it is unavailable, the phone's own voice takes over: never silence.
+const out = { audio: new Audio(), playing: false, url: '', an: null, data: null, routed: false, neural: true };
+out.audio.preload = 'auto';
+async function fetchVoice(text) {
+  if (!out.neural) return { text };
+  try {
+    const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json', ...HEADERS }, body: JSON.stringify({ text }) });
+    if (r.status === 503) out.neural = false; // not set up, or Google paused: phone voice for this session
+    if (!r.ok) return { text };
+    return { url: URL.createObjectURL(await r.blob()), text };
+  } catch { return { text }; }
+}
+// The first tap of the conversation unlocks sound on iPhone, and routes the voice through an analyser for the light.
+function unlockAudio() {
+  try {
+    out.audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+    out.audio.play().catch(() => {});
+    if (!out.routed) {
+      const ctx = (out.ctx ||= new (window.AudioContext || window.webkitAudioContext)());
+      ctx.resume?.();
+      const src = ctx.createMediaElementSource(out.audio);
+      out.an = ctx.createAnalyser();
+      out.an.fftSize = 512;
+      out.data = new Uint8Array(out.an.fftSize);
+      src.connect(out.an);
+      out.an.connect(ctx.destination);
+      out.routed = true;
+    } else out.ctx?.resume?.();
+  } catch {}
+}
+function vmSay(text) {
+  const s = plain(text).replace(/https?:\/\/\S+/g, '').replace(/[*_#>`]/g, '').trim();
+  if (!s) return;
+  vm.queue.push(fetchVoice(s)); // starts fetching now
+  if (!out.playing) vmNext();
+}
+async function vmNext() {
+  if (!vm.on) return;
+  const next = vm.queue.shift();
+  if (!next) { out.playing = false; return vmAfterTurn(); }
+  out.playing = true;
+  vmSet('speaking');
+  const v = await next;
+  if (!vm.on || vm.mute) { out.playing = false; return; }
+  const done = () => { if (v.url) URL.revokeObjectURL(v.url); out.playing = false; if (vm.on && !vm.mute) vmNext(); };
+  if (v.url) {
+    out.audio.onended = done;
+    out.audio.onerror = () => { speak(v.text, { force: true, onend: done }); };
+    out.audio.src = v.url;
+    out.audio.play().catch(() => speak(v.text, { force: true, onend: done }));
+  } else speak(v.text, { force: true, onend: done, onword: () => { lvl.target = 0.55 + Math.random() * 0.45; } });
+}
+// The agent has finished and nothing is left to say: listen again.
+function vmAfterTurn() {
+  if (!vm.on || state.busy || vm.queue.length || out.playing || speechSynthesis.speaking || vm.rec) return;
+  if (vm.phase === 'speaking' || vm.phase === 'thinking') vmListen();
+}
+$('#callOrb').addEventListener('click', () => {
+  if (vm.phase === 'listening') { try { vm.rec?.stop(); } catch {} return; } // done talking: send now
+  // Cut in: silence the voice, and the rest of this reply if it is still being written; then listen.
+  vm.mute = !!state.busy;
+  vm.queue = [];
+  stopSpeaking();
+  unlockSpeech();
+  unlockAudio();
+  vmListen();
+});
+$('#callEnd').addEventListener('click', vmClose);
+
 function syncComposer() {
   const has = (!!$('#sayText').value.trim() || state.attach.length > 0) && !state.listening;
   const ta = $('#sayText');
@@ -1835,19 +2046,22 @@ function syncComposer() {
   $('#orb').setAttribute('aria-label', has ? t('Send') : t('Talk to Mandat'));
 }
 $('#sayText').addEventListener('input', syncComposer);
-function speak(text, { force = false, onend } = {}) {
+function speak(text, { force = false, onend, onword } = {}) {
   if (!window.speechSynthesis || (!force && !state.me?.voice?.on)) return;
   const u = new SpeechSynthesisUtterance(text);
   const voices = speechSynthesis.getVoices();
   const vl = lang; // replies follow the app language
   u.voice = voices.find((v) => v.lang.startsWith(vl) && /premium|enhanced|siri/i.test(v.name)) || voices.find((v) => v.lang.startsWith(vl)) || null;
-  u.rate = 1.02;
+  u.rate = lang === 'fr' ? 1.05 : 1.02;
   u.onstart = () => { state.speaking = true; orbState('speaking'); };
+  if (onword) u.onboundary = onword;
   u.onend = u.onerror = () => { state.speaking = false; orbState('idle'); onend?.(); };
   speechSynthesis.speak(u);
 }
 function stopSpeaking() {
   if (window.speechSynthesis) speechSynthesis.cancel();
+  try { out.audio.pause(); out.audio.onended = null; } catch {}
+  out.playing = false;
   $$('.msg-actions .on').forEach((x) => { x.classList.remove('on'); x.innerHTML = svg('listen'); });
   state.speaking = false;
 }

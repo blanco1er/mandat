@@ -12,6 +12,7 @@ import { invoiceStatus } from './lib/invoices.mjs';
 import { ics, planEvents, validTz, localToUtc } from './lib/calendar.mjs';
 import { KINDS } from './lib/memory.mjs';
 import { persist } from './lib/store.mjs';
+import { synthesize, ttsEnabled } from './lib/tts.mjs';
 import { emojiFor, isEmoji } from './lib/emoji.mjs';
 import { budgetFromText } from './lib/budget.mjs';
 import * as Push from './lib/push.mjs';
@@ -413,6 +414,7 @@ app.post('/api/missions', api(async (req, res) => {
   allowance(u, 'turns');
   const s = createSession({ budget: total, approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.get('X-Lang') || req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });
   s.envelope.source = source;
+  s._voice = req.body?.voice === true;
   s.title = plainTitle(intent); // instant; the AI title replaces it in the background
   u.missions.unshift(s.id);
   saveUser(u);
@@ -468,6 +470,7 @@ app.post('/api/missions/:id/messages', api(async (req, res) => {
   if (!text && !imgs.length) throw new Error('Empty message');
   allowance(u);
   emitter(b)('user', { text, images: imgs.map((i) => i.url) });
+  b.s._voice = req.body?.voice === true; // a live voice conversation: short spoken replies
   run(b, (emit) => userTurn(b.s, text, emit, { images: imgs.map((i) => i.data) }));
   return { queued: true };
 }));
@@ -644,6 +647,17 @@ app.get('/api/missions/:id/events', (req, res) => {
 // The person's country from their time zone, to suggest their own street first.
 const ZONE_CC = { 'Europe/Paris': 'fr', 'Europe/Brussels': 'be', 'Europe/Luxembourg': 'lu', 'Europe/Monaco': 'mc', 'Europe/Zurich': 'ch', 'Europe/London': 'gb', 'Europe/Dublin': 'ie', 'Europe/Madrid': 'es', 'Europe/Lisbon': 'pt', 'Europe/Rome': 'it', 'Europe/Berlin': 'de', 'Europe/Amsterdam': 'nl', 'Africa/Dakar': 'sn', 'Africa/Abidjan': 'ci', 'Africa/Casablanca': 'ma', 'Africa/Algiers': 'dz', 'Africa/Tunis': 'tn', 'Africa/Douala': 'cm', 'America/Montreal': 'ca', 'America/Toronto': 'ca' };
 const countryOfZone = (tz) => ZONE_CC[tz] || (tz.startsWith('America/') && !/Montreal|Toronto|Vancouver|Mexico|Sao_Paulo|Buenos_Aires/.test(tz) ? 'us' : '');
+// A human-sounding voice for the voice conversation (one sentence per call). 503 means: use the phone's voice.
+app.get('/api/tts/status', (req, res) => res.json({ on: ttsEnabled() }));
+app.post('/api/tts', async (req, res) => {
+  try {
+    const u = me(req, res);
+    const mp3 = await synthesize(req.body?.text, reqLang(req) === 'fr' ? 'fr' : 'en', u.id);
+    res.set({ 'Content-Type': 'audio/mpeg', 'Cache-Control': 'private, max-age=3600' }).send(mp3);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
 // Usual address: suggestions while typing, and "use my current location" turned into an address.
 app.get('/api/geo/search', api(async (req) => {
   const q = String(req.query.q || '').trim().slice(0, 120);
