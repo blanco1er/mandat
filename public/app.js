@@ -1460,6 +1460,7 @@ function renderSettings() {
   $('#pEmail').value = u.profile.email;
   $('#pPhone').value = u.profile.phone;
   renderPrefs(u.profile);
+  locState().then(locRender);
   $('#sVoice').checked = u.voice.on;
   $('#sInit').textContent = (u.profile.name || u.paypal.payerName || t('You')).split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   renderPush();
@@ -1487,20 +1488,71 @@ function renderMemory(list) {
     box.append(row);
   }
 }
-$('#memAdd').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const text = $('#memText').value.trim();
-  if (text.length < 3) return;
+// Getting to know you: Mandat asks one short question at a time, offers ready answers, and remembers.
+const iv = { history: [], busy: false };
+function ivBubble(cls, text) {
+  const li = el('li', 'iv-' + cls, text);
+  $('#ivFeed').append(li);
+  li.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return li;
+}
+async function ivAsk(answer) {
+  if (iv.busy) return;
+  iv.busy = true;
+  if (answer) { iv.history.push({ role: 'you', text: answer }); ivBubble('you', answer); }
+  $('#ivChoices').innerHTML = '';
+  const wait = ivBubble('mandat typing', '');
+  wait.innerHTML = '<span class="dots"><i></i><i></i><i></i></span>';
   try {
-    state.me = (await post('/api/me/memory', { text })).user;
-    $('#memText').value = '';
-    renderMemory(state.me.memory || []);
+    const r = await post('/api/me/interview', { history: iv.history });
+    wait.remove();
+    for (const f of r.saved || []) ivBubble('noted', t('Noted · {x}', { x: f }));
+    iv.history.push({ role: 'mandat', text: r.say });
+    ivBubble('mandat', r.say);
+    state.me = r.user;
+    for (const c of r.done ? [] : r.choices || []) {
+      const b = el('button', 'ob-chip', c);
+      b.type = 'button';
+      b.addEventListener('click', () => ivAsk(c));
+      $('#ivChoices').append(b);
+    }
+    $('#ivSay').hidden = !!r.done;
+    if (r.done) {
+      const b = el('button', 'iv-done', t('Done'));
+      b.type = 'button';
+      b.addEventListener('click', ivClose);
+      $('#ivChoices').append(b);
+    }
   } catch (err) {
-    const inp = $('#memText');
-    inp.setCustomValidity(err.message);
-    inp.reportValidity();
-    setTimeout(() => inp.setCustomValidity(''), 3000);
+    wait.remove();
+    ivBubble('mandat', err.message);
+  } finally {
+    iv.busy = false;
+    if (!$('#ivSay').hidden) $('#ivText').focus({ preventScroll: true });
   }
+}
+function ivOpen() {
+  iv.history = [];
+  $('#ivFeed').innerHTML = '';
+  $('#ivChoices').innerHTML = '';
+  $('#ivSay').hidden = false;
+  $('#interview').hidden = false;
+  document.body.classList.add('iv-open');
+  ivAsk();
+}
+function ivClose() {
+  $('#interview').hidden = true;
+  document.body.classList.remove('iv-open');
+  renderMemory(state.me.memory || []);
+}
+$('#memTalk').addEventListener('click', ivOpen);
+$('#ivClose').addEventListener('click', ivClose);
+$('#ivSay').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const a = $('#ivText').value.trim();
+  if (!a) return;
+  $('#ivText').value = '';
+  ivAsk(a);
 });
 // Your people: the agent reads this list, so "split it with Sam" reaches Sam's PayPal inbox without asking again.
 function renderPeople(people) {
@@ -1523,6 +1575,11 @@ $('#addPerson').addEventListener('click', () => {
   $('#personAdd').hidden = false;
   $('#addPerson').hidden = true;
   $('#paName').focus();
+});
+$('#paCancel').addEventListener('click', () => {
+  $('#personAdd').reset();
+  $('#personAdd').hidden = true;
+  $('#addPerson').hidden = false;
 });
 $('#personAdd').addEventListener('submit', (e) => {
   e.preventDefault();
@@ -1757,9 +1814,24 @@ $('#sRevoke').addEventListener('click', async () => {
   state.me = (await post('/api/me/mandate/revoke', {})).user;
   mandateView();
 });
+// Location: show the real state (on, asked when needed, blocked) and what the button does.
+async function locState() {
+  try { return (await navigator.permissions.query({ name: 'geolocation' })).state; } catch { return 'prompt'; }
+}
+function locRender(st) {
+  const on = st === 'granted';
+  $('#sLocOk').hidden = !on;
+  $('#sLocBtn').hidden = on || st === 'denied';
+  $('#sLocBtn').textContent = t('Allow');
+  $('#sLoc').textContent = on ? t('On, used to search around you') : st === 'denied' ? t('Blocked. Turn it back on in your iPhone Settings › Privacy › Location Services, for Safari or Mandat.') : t('Asked when a mission needs it');
+}
 $('#sLocBtn').addEventListener('click', async () => {
+  $('#sLocBtn').textContent = t('Locating…');
   const l = await locate();
-  $('#sLoc').textContent = l ? t('Allowed, used to search around you') : t('Not allowed, your usual address is used');
+  if (l) return locRender('granted');
+  const st = await locState();
+  if (st === 'prompt') { locRender('prompt'); $('#sLoc').textContent = t('No answer from the phone. Try again.'); }
+  else locRender(st);
 });
 // Interface language: Auto follows the phone; changing it reloads the app.
 // Changing the language reloads the app; it comes back to Settings, at the same place.

@@ -10,7 +10,7 @@ import { geocode, searchAddress, reverseAddress } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
 import { ics, planEvents, validTz, localToUtc } from './lib/calendar.mjs';
-import { KINDS } from './lib/memory.mjs';
+import { KINDS, remember, memoryBrief } from './lib/memory.mjs';
 import { persist } from './lib/store.mjs';
 import { synthesize, ttsEnabled } from './lib/tts.mjs';
 import { emojiFor, isEmoji } from './lib/emoji.mjs';
@@ -248,6 +248,41 @@ app.post('/api/me', api(async (req, res) => {
   if (req.body?.onboarded === true) u.onboarded = true;
   saveUser(u);
   return { user: publicUser(u) };
+}));
+
+// Getting to know you: one short question at a time; every lasting answer goes into memory.
+app.post('/api/me/interview', api(async (req, res) => {
+  const u = me(req, res);
+  allowance(u);
+  const L = reqLang(req);
+  const hist = (Array.isArray(req.body?.history) ? req.body.history : []).slice(-16)
+    .map((m) => ({ role: m.role === 'you' ? 'user' : 'assistant', content: String(m.text || '').slice(0, 500) }));
+  const known = [agentBrief(u), memoryBrief(u)].filter(Boolean).join('\n') || 'Nothing yet.';
+  const asked = hist.filter((m) => m.role === 'assistant').length;
+  const sys = `You are Mandat, a personal agent that books and pays errands (restaurants, trips, gifts, repairs, bills shared with friends). You are getting to know the user in a short, warm interview so future missions need fewer questions. Write in ${L === 'fr' ? 'French, using "vous"' : 'English'}.
+What you already know (never ask it again):
+${known}
+Rules: ask ONE short, concrete question at a time (20 words at most) about what helps with errands: the people they often plan with (name, relation, email for PayPal requests), their diets and allergies, favourite or avoided places and cuisines, usual budgets, how they like to travel, timing habits, important dates (birthdays, anniversaries), accessibility needs. Offer 2 to 4 short ready answers in "choices" when it helps. From the user's last answer, put each lasting fact in "save" as one self-contained sentence. Questions asked so far: ${asked}. After about 6 questions, or if the user wants to stop, ask if there is anything else Mandat should know; when they say no, thank them in one warm sentence and set "done" to true. Never ask for payment details, passwords or ID numbers. No dashes as punctuation.
+When the user gives someone's email, also put that person in "people" (name and email) so their PayPal requests can be sent.
+Reply with JSON only: {"save":[{"fact":"...","kind":"preference|person|place|habit|constraint|fact"}],"people":[{"name":"...","email":"..."}],"say":"...","choices":["..."],"done":false}`;
+  const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, json: true, temperature: 0.5, maxTokens: 1500, messages: [{ role: 'system', content: sys }, ...(hist.length ? hist : [{ role: 'user', content: L === 'fr' ? 'Commençons.' : "Let's start." }])] });
+  let out = {};
+  try { out = JSON.parse(message.content || '{}'); } catch { out = { say: message.content || '' }; }
+  const s = { id: 'interview', title: tr(L, 'Get to know me'), userId: u.id };
+  const saved = [];
+  for (const f of (Array.isArray(out.save) ? out.save : []).slice(0, 6)) {
+    const r = remember(s, { fact: f?.fact, kind: f?.kind, scope: 'global' });
+    if (!r.error) saved.push(r.item.text);
+  }
+  // People with an email go to "Your people" too: "split it with Ana" then needs nothing more.
+  const fresh = getUser(u.id);
+  for (const p of (Array.isArray(out.people) ? out.people : []).slice(0, 5)) {
+    const name = String(p?.name || '').trim().slice(0, 60), email = String(p?.email || '').trim().slice(0, 120);
+    if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+    fresh.profile.people = (fresh.profile.people || []).filter((x) => x.name.toLowerCase() !== name.toLowerCase()).concat({ name, email });
+  }
+  if (out.people?.length) saveUser(fresh);
+  return { say: String(out.say || '').slice(0, 400), choices: (Array.isArray(out.choices) ? out.choices : []).slice(0, 4).map((c) => String(c).slice(0, 60)), saved, done: out.done === true, user: publicUser(getUser(u.id)) };
 }));
 
 // Memory: the user sees everything Mandat remembers, can teach it something, and can delete any line.

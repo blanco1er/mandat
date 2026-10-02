@@ -521,4 +521,10 @@ export default {
   "Talk or interrupt": "Parler ou interrompre",
   "Voice conversation": "Conversation vocale",
   "Mandat's voice": "Voix de Mandat",
+  "Get to know me": "Faire connaissance",
+  "A few quick questions, so missions need fewer.": "Quelques questions rapides, pour moins de questions pendant vos missions.",
+  "Your answer…": "Votre réponse…",
+  "Noted · {x}": "Noté · {x}",
+  "Blocked. Turn it back on in your iPhone Settings › Privacy › Location Services, for Safari or Mandat.": "Bloquée. Réactivez-la dans Réglages de l’iPhone › Confidentialité › Service de localisation, pour Safari ou Mandat.",
+  "No answer from the phone. Try again.": "Pas de réponse du téléphone. Réessayez.",
 };
