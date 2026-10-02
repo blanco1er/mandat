@@ -578,4 +578,10 @@ export default {
   "decorators": "décorateurs",
   "taxis and private drivers": "taxis et VTC",
   "Open in Uber": "Ouvrir dans Uber",
+  "Pause this mission": "Mettre la mission en pause",
+  "Resume this mission": "Reprendre la mission",
+  "Paused": "En pause",
+  "Live": "En direct",
+  "Paused. Mandat does nothing and pays nothing until you resume.": "En pause. Mandat ne fait rien et ne paie rien jusqu’à ce que vous repreniez.",
+  "Resumed. Mandat picks up where it left off.": "Repris. Mandat continue là où il s’était arrêté.",
 };

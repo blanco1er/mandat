@@ -707,7 +707,7 @@ async function openMission(id) {
   const r = await get(`/api/missions/${id}`);
   $('#topTitle').textContent = cleanTitle(r.summary.title);
   setTopEmoji(r.summary.emoji);
-  $('#stopMission').classList.toggle('on', r.summary.status === 'stopped');
+  paintStop(r.summary.status);
   envelope(r.envelope);
   show('live');
   state.es = new EventSource(`/api/missions/${id}/events`);
@@ -729,10 +729,24 @@ $('#back').addEventListener('click', () => {
   refreshHome();
   show('home');
 });
+// The mission's state at a glance: live (a pulsing dot, tap to pause) or paused (tap to resume).
+// A finished mission has nothing to pause: the control goes away.
+function paintStop(status) {
+  const b = $('#stopMission');
+  const paused = status === 'stopped';
+  b.dataset.status = status || '';
+  b.classList.toggle('paused', paused);
+  b.classList.toggle('gone', status === 'done');
+  b.setAttribute('aria-label', paused ? t('Resume this mission') : t('Pause this mission'));
+  b.innerHTML = paused
+    ? `<svg class="i fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg><span>${t('Paused')}</span>`
+    : `<i class="live-dot" aria-hidden="true"></i><span>${t('Live')}</span><svg class="i fill" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="6" width="3.6" height="12" rx="1.2"/><rect x="13.4" y="6" width="3.6" height="12" rx="1.2"/></svg>`;
+}
 $('#stopMission').addEventListener('click', async () => {
-  const on = !$('#stopMission').classList.contains('on');
-  await post(`/api/missions/${state.mission}/stop`, { stopped: on });
-  $('#stopMission').classList.toggle('on', on);
+  const pause = !$('#stopMission').classList.contains('paused');
+  paintStop(pause ? 'stopped' : 'working');
+  try { await post(`/api/missions/${state.mission}/stop`, { stopped: pause }); }
+  catch (err) { paintStop(pause ? 'working' : 'stopped'); add(errorStep(err.message)); }
 });
 
 $('#say').addEventListener('submit', (e) => {
@@ -882,7 +896,8 @@ function handle({ type, data }) {
       if (row) shareChip(row.querySelector('.chip'), 'PAID');
       return add(step(t('{friend} paid their share: {amount}', { friend: data.friend, amount: fmt(data.amount) })));
     }
-    case 'stopped': return add(step(data.stopped ? t('Stopped. No payment will be made until you resume.') : t('Resumed.')));
+    case 'stopped': if (state.live) paintStop(data.stopped ? 'stopped' : 'working'); return add(step(data.stopped ? t('Paused. Mandat does nothing and pays nothing until you resume.') : t('Resumed. Mandat picks up where it left off.')));
+    case 'summary': if (data?.status) paintStop(data.status); return;
     case 'error': return add(errorStep(data.message));
   }
 }

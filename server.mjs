@@ -777,10 +777,13 @@ app.post('/api/missions/:id/location', api(async (req, res) => {
 
 app.post('/api/missions/:id/stop', api(async (req, res) => {
   const b = box(req.params.id, me(req, res));
+  const was = !!b.s.frozen;
   b.s.frozen = !!req.body?.stopped;
   emitter(b)('stopped', { stopped: b.s.frozen, scope: 'mission' });
   emitter(b)('summary', missionSummary(b.s));
   saveMission(b.s);
+  // Resumed: Mandat really picks up where it stopped (unless everything was already settled).
+  if (was && !b.s.frozen && missionSummary(b.s).status !== 'done') run(b, (emit) => userTurn(b.s, '[system] The user resumed the mission. Continue exactly where you stopped; if nothing is left to do, say so in one short sentence.', emit));
   return { ok: true };
 }));
 
