@@ -422,8 +422,8 @@ function handle({ type, data }) {
     case 'verified': return verifiedMark(data);
     case 'negotiation': return negotiation(data);
     case 'request': return requestCard(data);
-    case 'approval': return openSheet(data);
-    case 'approval_resolved': return closeSheet();
+    case 'approval': approvalCard(data); return state.live && openSheet(data); // history replay: show the card, don't pop the sheet
+    case 'approval_resolved': approvalCard({ id: data.id, status: data.approved ? 'approved' : 'declined' }); return pending?.id === data.id && closeSheet();
     case 'payment': return paymentCard(data);
     case 'envelope': return envelope(data);
     case 'plan': return planCard(data);
@@ -565,6 +565,8 @@ function requestCard(r) {
     ${r.inbox && (r.status === 'pending' || r.status === 'accepted') ? `<a class="inbox-link" href="${esc(r.inbox)}" target="_blank" rel="noopener">See it from ${esc(r.merchant)}'s side (demo inbox) ↗</a>` : ''}`;
 }
 // Money moments: held (reserved, not charged), paid (merchant confirmed), refunded.
+// "Tren Azul — 6 rail legs" shown under "Tren Azul" reads as "6 rail legs".
+const shortLabel = (merchant, label) => String(label || '').replace(new RegExp('^' + String(merchant).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[—–:-]\\s*'), '');
 // One card per payment, updated in place: held → paid (→ refunded).
 function paymentCard({ kind, entry, mode, why, reason }) {
   let li = state.cards['p:' + entry.id];
@@ -574,8 +576,7 @@ function paymentCard({ kind, entry, mode, why, reason }) {
   const [icon, title, sub] = kind === 'hold' ? ['🔒', 'Held with PayPal', 'Not charged until the merchant confirms']
     : kind === 'capture' ? ['✓', 'Paid with PayPal', why ? why + ' · deposit captured' : 'Merchant confirmed · deposit captured']
     : ['↩︎', 'Refunded with PayPal', reason || 'Back to your PayPal'];
-  const what = String(entry.label || '').replace(new RegExp('^' + entry.merchant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[—–:-]\\s*'), '');
-  li.innerHTML = `<span class="lock">${icon}</span><div><b>${title}</b><small>${esc(entry.merchant)} · ${esc(what)}</small><small class="why">${esc(sub)}</small><span class="mode">${mode === 'sandbox' ? 'PayPal sandbox' : 'demo'}</span></div><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span>`;
+  li.innerHTML = `<span class="lock">${icon}</span><div class="pay-main"><div class="pay-top"><b>${title}</b><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span></div><small class="pay-what">${esc(entry.merchant)} · ${esc(shortLabel(entry.merchant, entry.label))}</small><small class="why">${esc(sub)}${mode === 'sandbox' ? ' · <i>sandbox</i>' : mode ? ' · <i>demo</i>' : ''}</small></div>`;
   if (isNew) add(li);
 }
 // The plan as a day-by-day timeline, with the running total against the mission budget.
@@ -727,6 +728,24 @@ function closeSheet() {
   $('#sheet').hidden = true;
   pending = null;
 }
+// A payment waiting for you stays in the conversation until you decide; tap to review.
+function approvalCard(a) {
+  let card = state.cards['a:' + a.id];
+  if (!card) {
+    if (!a.merchant) return;
+    card = state.cards['a:' + a.id] = el('li', 'card approve');
+    card.data = a;
+    add(card);
+  }
+  const d = { ...card.data, ...a };
+  card.data = d;
+  const open = d.status === 'pending' || !d.status;
+  card.className = 'card approve ' + (open ? 'open' : d.status);
+  card.innerHTML = `<span class="pp-mini">PayPal</span><div class="ap-main"><b>${open ? 'Approve' : d.status === 'approved' ? 'Approved' : 'Declined'} ${fmt(d.amount)}</b><small>${esc(d.merchant)} · ${esc(shortLabel(d.merchant, d.label))}</small></div>${open ? '<button type="button" class="pill-btn">Review</button>' : `<span class="chip ${d.status === 'approved' ? 'paid' : 'off'}">${d.status === 'approved' ? 'Approved' : 'Declined'}</span>`}`;
+  if (open) card.querySelector('button').addEventListener('click', () => openSheet(d));
+}
+$('#scrim').addEventListener('click', closeSheet);
+$('#sheetLater').addEventListener('click', closeSheet);
 (() => {
   const btn = $('#sheetApprove');
   let timer = null;

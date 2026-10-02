@@ -227,22 +227,9 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
 .req .dots i { width: 6px; height: 6px; border-radius: 3px; background: var(--ink-3); animation: blink 1.2s infinite; }
 .req .dots i:nth-child(2) { animation-delay: 0.2s; } .req .dots i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes blink { 50% { opacity: 0.2; } }
-.req.accepted .dots { display: none; }
-.req .state { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ok); }
 .req p { margin: 10px 0 0; font-size: 14px; color: var(--ink-2); }
 
-.pay { display: flex; align-items: center; gap: 12px; }
-.pay .lock { width: 38px; height: 38px; border-radius: 12px; background: rgba(242, 163, 58, 0.14); display: grid; place-items: center; font-size: 18px; }
-.pay.captured .lock { background: rgba(10, 108, 255, 0.12); }
-.pay .amt { margin-left: auto; font: 600 20px/24px inherit; font-variant-numeric: tabular-nums; }
-.pay small { color: var(--ink-3); font-size: 12px; display: block; }
-.mode { font-size: 11px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--ink-3); }
 
-.plan ol { list-style: none; padding: 0; margin: 10px 0 0; }
-.plan li { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; border-top: 0.5px solid var(--card-line); font-size: 15px; }
-.plan li em { font-style: normal; margin-left: auto; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 8px; background: var(--card-line); white-space: nowrap; }
-.plan li em.held, .plan li em.confirmed { background: rgba(25, 164, 99, 0.12); color: var(--ok); }
-.plan li em.awaiting_approval { background: rgba(242, 163, 58, 0.16); color: #b36b00; }
 
 .place-map { height: 210px; margin: 12px -4px 4px; border-radius: 14px; overflow: hidden; background: var(--card-line); }
 .place-list { list-style: none; padding: 0; margin: 6px -8px 0; display: flex; flex-direction: column; }
@@ -561,7 +548,6 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 .req-reply { margin: 6px 0 0; font-size: 14px; color: var(--ink-2); font-style: italic; }
 .inbox-link { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
 
-.card.pay .why { display: block; color: var(--ink-3); font-size: 12px; }
 .card.pay.refund .amt { color: var(--ok); }
 
 /* Plan timeline */
@@ -582,3 +568,30 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 .tl-bar { height: 4px; border-radius: 2px; background: var(--card-line); margin-top: 8px; overflow: hidden; }
 .tl-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.6s var(--smooth); }
 @media (max-width: 480px) { .tl-amt { display: none; } }
+
+/* Payment waiting for approval, in the conversation */
+.card.approve { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.card.approve.open { border-color: rgba(242, 163, 58, 0.45); }
+.pp-mini { font: italic 800 13px/1 -apple-system, system-ui, sans-serif; color: #003087; background: #ffc439; padding: 7px 8px; border-radius: 9px; flex: none; }
+.ap-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ap-main b { font-size: 15px; font-variant-numeric: tabular-nums; }
+.ap-main small { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-later { display: block; width: 100%; margin-top: 10px; padding: 8px; font-size: 14px; color: var(--ink-3); background: none; }
+/* Small screens: titles may take two lines instead of being cut */
+.mission .t-row b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tl-main b { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.large-title { text-wrap: balance; }
+
+/* Payment card, compact */
+.card.pay { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; }
+.card.pay .lock { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; flex: none; font-size: 14px; background: var(--card-line); }
+.card.pay.capture .lock { background: rgba(25, 164, 99, 0.16); color: var(--ok); }
+.card.pay.hold .lock { background: rgba(242, 163, 58, 0.16); }
+.card.pay.refund .lock { background: rgba(10, 132, 255, 0.14); color: var(--accent); }
+.pay-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pay-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.pay-top b { font-size: 15px; }
+.pay-top .amt { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pay-what { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card.pay .why { font-size: 12px; color: var(--ink-3); }
+.card.pay .why i { font-style: normal; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; font-weight: 700; }

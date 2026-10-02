@@ -492,7 +492,7 @@ app.post('/api/merchants/:mid/requests/:rid/collect', api(async (req) => {
   if (!entry || entry.state !== 'held') throw Object.assign(new Error('No deposit is waiting to be collected.'), { status: 409 });
   // Collect now (the merchant sees it at once), then let the customer's agent tell them.
   const emit = emitter(b);
-  await captureEntry(b.s, entry.id, emit, `${m.name} confirmed the booking`);
+  await captureEntry(b.s, entry.id, emit, "Confirmed from their inbox");
   b.s.requests[r.id].status = 'confirmed';
   emit('request', b.s.requests[r.id]);
   emit('envelope', envelopeView(b.s));
