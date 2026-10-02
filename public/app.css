@@ -1141,3 +1141,8 @@ body.voice-on #feed { padding-bottom: 120px; }
 .smoke i { scale: calc(1 + var(--lvl) * 0.55); opacity: calc(0.4 + var(--lvl) * 0.55); transition: scale 0.12s linear, opacity 0.12s linear, background 0.8s; transform-origin: 50% 100%; }
 .voicebar[data-phase="speaking"] .smoke { animation: none; filter: brightness(calc(1 + var(--lvl) * 0.35)) saturate(calc(1 + var(--lvl) * 0.3)); }
 .vb-orb { box-shadow: 0 10px 30px rgba(10, 132, 255, calc(0.25 + var(--lvl) * 0.5)), 0 0 0 calc(var(--lvl) * 10px) rgba(10, 132, 255, 0.18); }
+/* Real smoke (WebGL): fills the bottom, fades out upwards; the CSS glow is only the fallback. */
+.smoke-gl { position: absolute; inset: 0; width: 100%; height: 100%; display: none; -webkit-mask-image: linear-gradient(to top, #000 55%, transparent 100%); mask-image: linear-gradient(to top, #000 55%, transparent 100%); }
+body.smoke-gl-on .smoke-gl { display: block; }
+body.smoke-gl-on .smoke { display: none; }
+.voicebar { height: calc(240px + env(safe-area-inset-bottom)); }

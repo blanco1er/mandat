@@ -1,6 +1,7 @@
 // Mandat — client. Welcome (PayPal login) → mandate → missions → a mission live; settings.
 import { t, tn, lang, locale, applyI18n, setLang, chosenLang } from '/i18n.js';
-import { budgetFromText } from '/budget.mjs'; // same reader as the server: "700 €", "40 € each for 4", "budget 250"…
+import { budgetFromText } from '/budget.mjs';
+import { createSmoke } from '/smoke.js'; // same reader as the server: "700 €", "40 € each for 4", "budget 250"…
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const state = { me: null, mission: null, es: null, currency: 'EUR', speaking: false, listening: false, cards: {}, verified: {}, photo: null, voiceTurn: false, live: false };
@@ -1895,6 +1896,10 @@ function vmOpen({ listen = true } = {}) {
   unlockSpeech();
   unlockAudio();
   meterOn();
+  // Real smoke on the GPU when the phone can; the soft glow otherwise.
+  vm.smoke ||= createSmoke($('#smokeCanvas'), () => ({ lvl: lvl.v, phase: vm.phase, dark: matchMedia('(prefers-color-scheme: dark)').matches }));
+  document.body.classList.toggle('smoke-gl-on', !!vm.smoke);
+  vm.smoke?.start();
   vm.on = true;
   vm.mute = false;
   state.voiceTurn = false;
@@ -1913,6 +1918,7 @@ function vmClose() {
   stopSpeaking();
   vmLiveDrop();
   meterOff();
+  vm.smoke?.stop();
   document.body.classList.remove('voice-on');
   $('#call').hidden = true;
   $('#composer').hidden = !state.mission;
