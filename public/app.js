@@ -2312,8 +2312,12 @@ addEventListener('pageshow', (e) => { if (e.persisted) checkBuild(); });
 let vmIdle = 0;
 setInterval(() => {
   if (!vm.on || vm.phase === 'paused') { vmIdle = 0; return; }
+  // No sound at all from the microphone a few seconds after opening: never pretend to listen.
+  if (vm.mode === 'rec' && vm.phase === 'listening' && !mic.starting && !mic.sending && !mic.lastFrame && Date.now() - (mic.openedAt || Date.now()) > 3000) {
+    vmSet('paused', t('Tap the circle to turn the microphone on.'));
+  }
   // The microphone went quiet on your turn (iPhone suspended the sound engine): wake it, then reopen it.
-  if (vm.mode === 'rec' && vm.phase === 'listening' && mic.stream && !mic.sending) {
+  if (vm.mode === 'rec' && vm.phase === 'listening' && mic.stream && mic.lastFrame && !mic.sending) {
     const gap = Date.now() - (mic.lastFrame || Date.now());
     if (gap > 2000) mic.ctx?.resume?.().catch(() => {});
     if (gap > 5000 && !mic.restarting) {
@@ -2346,7 +2350,8 @@ function vmOpen({ listen = true } = {}) {
   $('#tray').hidden = true;
   document.body.classList.add('voice-on');
   vm.mode = state.sttOn && navigator.mediaDevices?.getUserMedia ? 'rec' : 'sr';
-  if (vm.mode === 'rec') { vm.noMeter = true; micPrepare(); micStart(); }
+  // a fresh sound engine only when this opening is your tap (after a dictation, the one from that tap is kept)
+  if (vm.mode === 'rec') { vm.noMeter = true; micPrepare(listen); mic.lastFrame = 0; micStart(); }
   else vmRecStart(); // during the tap: the one listening session of this conversation
   if (listen) vmListen(); else vmSet('thinking');
 }
@@ -2436,12 +2441,20 @@ function vmListen() {
 // recording happens only on your turn.
 const mic = { ctx: null, stream: null, src: null, node: null, chunks: [], pre: [], talking: false, start: 0, last: 0, floor: 0.008, sending: false };
 fetch('/api/stt').then((r) => r.json()).then((j) => { state.sttOn = !!j.on; }).catch(() => {});
-function micPrepare() { // during the tap: iPhone only lets a page start sound processing from a tap
-  try { mic.ctx ||= new (window.AudioContext || window.webkitAudioContext)(); mic.ctx.resume?.(); } catch {}
+function micPrepare(fresh = false) { // during the tap: iPhone only lets a page start sound processing from a tap
+  try {
+    // a new conversation gets a new sound engine: the last one may have been put to sleep by iPhone
+    if (fresh && mic.ctx) { try { mic.ctx.close(); } catch {} mic.ctx = null; }
+    mic.ctx ||= new (window.AudioContext || window.webkitAudioContext)();
+    mic.ctx.resume?.();
+  } catch {}
 }
 async function micStart() {
+  mic.starting = true;
+  mic.openedAt = Date.now();
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    const ask = () => navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    const stream = await ask().catch(() => new Promise((ok) => setTimeout(ok, 350)).then(ask)); // iPhone sometimes refuses right after a close: once more
     if (!vm.on || vm.mode !== 'rec') { stream.getTracks().forEach((x) => x.stop()); return; }
     mic.stream = stream;
     await mic.ctx.resume?.().catch(() => {});
@@ -2453,6 +2466,8 @@ async function micStart() {
   } catch {
     vm.mode = 'sr'; // no microphone this way: the phone's own recognition
     vmRecStart();
+  } finally {
+    mic.starting = false;
   }
 }
 function micStop() {
@@ -2759,7 +2774,11 @@ function vmAfterTurn() {
   if (vm.phase === 'speaking' || vm.phase === 'thinking') vmListen();
 }
 $('#callOrb').addEventListener('click', () => {
-  if (vm.mode === 'rec') { micPrepare(); if (!mic.stream) micStart(); } // a tap always wakes the sound engine
+  if (vm.mode === 'rec') { // a tap always wakes the sound engine, or rebuilds it if it sent nothing
+    const dead = !mic.lastFrame || Date.now() - mic.lastFrame > 2000;
+    micPrepare(dead && !mic.sending);
+    if (dead && !mic.sending) { micStop(); mic.lastFrame = 0; micStart(); }
+  }
   if (vm.phase === 'listening') { if (vm.mode === 'rec') { if (mic.talking) micEnd(); return; } if (!vm.rec) vmRecStart(); return vmCommit(); } // done talking: send now
   // Cut in: silence the voice, and the rest of this reply if it is still being written; then listen.
   vm.mute = !!state.busy;
