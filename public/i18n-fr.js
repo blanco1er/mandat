@@ -507,4 +507,5 @@ export default {
   "Walking distance": "À distance de marche",
   "Treat myself": "Me faire plaisir",
   "Free cancellation": "Annulation gratuite",
+  "Not allowed: type your usual address below": "Refusée : saisissez votre adresse habituelle ci-dessous",
 };

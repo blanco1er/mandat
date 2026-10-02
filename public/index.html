@@ -55,12 +55,13 @@
 
   <!-- 1b. First run, after the mandate: a few things that make every mission better. Each step can wait. -->
   <main id="onboard" class="view" hidden>
-    <div class="ob-top"><div class="ob-progress" aria-hidden="true"><i></i><i></i><i></i><i></i></div><button type="button" class="ob-skip" id="obSkip">Later</button></div>
+    <div class="ob-top"><button type="button" class="ob-back" id="obBack" aria-label="Back"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg></button><div class="ob-progress" aria-hidden="true"><i></i><i></i><i></i><i></i></div><button type="button" class="ob-skip" id="obSkip">Later</button></div>
     <section class="ob-step" data-step="0">
       <h1 class="ob-title">Where are you usually?</h1>
       <p class="ob-lede">Mandat searches around you. You can change this anytime in Settings.</p>
       <button type="button" class="ob-option" id="obLocate"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg><span><b>Use my location</b><small id="obLocState">Only when a mission needs it</small></span></button>
-      <label class="ob-field"><span>Usual address</span><input id="obHome" autocomplete="street-address" placeholder="12 rue Oberkampf, Paris"></label>
+      <label class="ob-field"><span>Usual address</span><input id="obHome" autocomplete="off" placeholder="12 rue Oberkampf, Paris" enterkeyhint="done"></label>
+      <ul class="addr-list ob-addr" id="obHomeList"></ul>
     </section>
     <section class="ob-step" data-step="1" hidden>
       <h1 class="ob-title">Anything to avoid?</h1>

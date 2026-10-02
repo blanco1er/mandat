@@ -130,6 +130,7 @@ const TASTES = [
 const OB_DIET = DIET.slice(0, 10);
 const OB_LIKES = ['Quiet places', 'Terraces', 'Local spots', 'Fine dining', 'Good value', 'Italian', 'Japanese', 'Trains over planes', 'Central hotels', 'Early dinners'];
 let obStep = 0;
+let obHomeSel = null; // the address picked from the suggestions or from the location
 function obChips(box, labels, saved) {
   box.innerHTML = '';
   for (const l of labels) {
@@ -144,6 +145,7 @@ const obPicked = (box, more) => [...$$(box + ' .ob-chip.on')].map((b) => b.textC
 function onboardView() {
   const p = state.me.profile;
   $('#obHome').value = p.home?.label || '';
+  obHomeSel = p.home || null;
   obChips($('#obDiet'), OB_DIET, p.diet || '');
   obChips($('#obLikes'), OB_LIKES, p.preferences || '');
   obGo(0);
@@ -153,6 +155,7 @@ function obGo(i) {
   obStep = i;
   $$('.ob-step').forEach((s) => (s.hidden = Number(s.dataset.step) !== i));
   $$('.ob-progress i').forEach((d, k) => d.classList.toggle('on', k <= i));
+  $('#obBack').classList.toggle('off', i === 0);
   $('#obNext').textContent = i === 3 ? t('Start') : t('Continue');
   if (i === 3) obPushState();
   window.scrollTo({ top: 0 });
@@ -166,7 +169,8 @@ function obPushState() {
 }
 async function obSave(i) {
   const profile = {};
-  if (i === 0 && $('#obHome').value.trim()) profile.home = { label: $('#obHome').value.trim() };
+  const typed = $('#obHome').value.trim();
+  if (i === 0 && typed) profile.home = obHomeSel?.label === typed ? obHomeSel : { label: typed };
   if (i === 1) profile.diet = obPicked('#obDiet', '#obDietMore');
   if (i === 2) profile.preferences = obPicked('#obLikes', '#obLikesMore');
   if (Object.keys(profile).length) state.me = (await post('/api/me', { profile })).user;
@@ -181,12 +185,22 @@ $('#obNext').addEventListener('click', async () => {
   try { await obSave(obStep); } catch {}
   if (obStep < 3) obGo(obStep + 1); else obFinish();
 });
+$('#obBack').addEventListener('click', () => { if (obStep > 0) obGo(obStep - 1); });
 $('#obSkip').addEventListener('click', () => (obStep < 3 ? obGo(obStep + 1) : obFinish()));
 $('#obLocate').addEventListener('click', async () => {
+  $('#obLocState').textContent = t('Locating…');
   const l = await locate();
   $('#obLocate').classList.toggle('on', !!l);
-  $('#obLocState').textContent = l ? t('On, used to search around you') : t('Not allowed: Mandat will use your usual address');
+  if (!l) { $('#obLocState').textContent = t('Not allowed: type your usual address below'); return; }
+  $('#obLocState').textContent = t('On, used to search around you');
+  try {
+    const a = await get(`/api/geo/reverse?lat=${l.lat}&lon=${l.lon}`);
+    obHomeSel = { label: a.label, lat: l.lat, lon: l.lon };
+    $('#obHome').value = a.label;
+  } catch {}
 });
+$('#obHome').addEventListener('input', () => { obHomeSel = null; });
+addressSuggest('#obHome', '#obHomeList', (h) => { obHomeSel = h; $('#obHome').value = h.label; });
 $('#obPush').addEventListener('click', async () => {
   try { await enablePush(); } catch {}
   obPushState();
@@ -1554,29 +1568,33 @@ $('#pLocate').addEventListener('click', async () => {
   await setHome({ label, lat: l.lat, lon: l.lon });
   b.textContent = t('Use my current location');
 });
-let addrTimer;
-$('#pHome').addEventListener('input', (e) => {
-  clearTimeout(addrTimer);
-  const q = e.target.value.trim();
-  if (q.length < 3) { $('#pHomeList').innerHTML = ''; return; }
-  addrTimer = setTimeout(async () => {
-    let hits = [];
-    try { hits = await get('/api/geo/search?q=' + encodeURIComponent(q)); } catch {}
-    if ($('#pHome').value.trim() !== q) return;
-    const list = $('#pHomeList');
-    list.innerHTML = '';
-    for (const h of hits) {
-      const li = el('li');
-      li.innerHTML = `${svg('pin')}<span><b>${esc(h.title)}</b><small>${esc(h.sub)}</small></span>`;
-      li.addEventListener('click', () => setHome({ label: h.label, lat: h.lat, lon: h.lon }));
-      list.append(li);
-    }
-    if (!hits.length) list.append(el('li', 'none', t('No address found. Press Enter to keep what you typed.')));
-  }, 450);
-});
-$('#pHome').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.target.value.trim()) { e.preventDefault(); setHome({ label: e.target.value.trim() }); }
-});
+// Address suggestions while typing (first run and Settings): tap one, or press Enter to keep what you typed.
+function addressSuggest(input, listSel, onPick) {
+  let timer;
+  $(input).addEventListener('input', (e) => {
+    clearTimeout(timer);
+    const q = e.target.value.trim();
+    if (q.length < 3) { $(listSel).innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      let hits = [];
+      try { hits = await get('/api/geo/search?q=' + encodeURIComponent(q) + '&tz=' + encodeURIComponent(TZ)); } catch {}
+      if ($(input).value.trim() !== q) return;
+      const list = $(listSel);
+      list.innerHTML = '';
+      for (const h of hits) {
+        const li = el('li');
+        li.innerHTML = `${svg('pin')}<span><b>${esc(h.title)}</b><small>${esc(h.sub)}</small></span>`;
+        li.addEventListener('click', () => { list.innerHTML = ''; onPick({ label: h.label, lat: h.lat, lon: h.lon }); });
+        list.append(li);
+      }
+      if (!hits.length) list.append(el('li', 'none', t('No address found. Press Enter to keep what you typed.')));
+    }, 400);
+  });
+  $(input).addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.value.trim()) { e.preventDefault(); $(listSel).innerHTML = ''; onPick({ label: e.target.value.trim() }); }
+  });
+}
+addressSuggest('#pHome', '#pHomeList', setHome);
 async function saveProfile(profile) {
   state.me = (await post('/api/me', { profile })).user;
   $('#sKnows').textContent = state.me.knows || t('Nothing yet.');

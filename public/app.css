@@ -1078,3 +1078,10 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
 .person-add { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-bottom: 0.5px solid var(--card-line); }
 .person-add input { height: 40px; border: 0; outline: 0; border-radius: 12px; background: var(--card-line); padding: 0 12px; font-size: 15px; color: var(--ink); }
 .person-add button { height: 40px; border-radius: 20px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; }
+
+.ob-addr { margin-top: 6px; padding: 0 4px; }
+.ob-addr li { padding: 10px 4px; }
+
+.ob-back { width: 32px; height: 32px; margin-left: -8px; display: grid; place-items: center; color: var(--ink); border-radius: 16px; transition: opacity 0.2s; }
+.ob-back .i { width: 22px; height: 22px; stroke-width: 2.2; }
+.ob-back.off { opacity: 0; pointer-events: none; }

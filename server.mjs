@@ -629,11 +629,14 @@ app.get('/api/missions/:id/events', (req, res) => {
   });
 });
 
+// The person's country from their time zone, to suggest their own street first.
+const ZONE_CC = { 'Europe/Paris': 'fr', 'Europe/Brussels': 'be', 'Europe/Luxembourg': 'lu', 'Europe/Monaco': 'mc', 'Europe/Zurich': 'ch', 'Europe/London': 'gb', 'Europe/Dublin': 'ie', 'Europe/Madrid': 'es', 'Europe/Lisbon': 'pt', 'Europe/Rome': 'it', 'Europe/Berlin': 'de', 'Europe/Amsterdam': 'nl', 'Africa/Dakar': 'sn', 'Africa/Abidjan': 'ci', 'Africa/Casablanca': 'ma', 'Africa/Algiers': 'dz', 'Africa/Tunis': 'tn', 'Africa/Douala': 'cm', 'America/Montreal': 'ca', 'America/Toronto': 'ca' };
+const countryOfZone = (tz) => ZONE_CC[tz] || (tz.startsWith('America/') && !/Montreal|Toronto|Vancouver|Mexico|Sao_Paulo|Buenos_Aires/.test(tz) ? 'us' : '');
 // Usual address: suggestions while typing, and "use my current location" turned into an address.
 app.get('/api/geo/search', api(async (req) => {
   const q = String(req.query.q || '').trim().slice(0, 120);
   if (q.length < 3) return [];
-  return await searchAddress(q, req.get('X-Lang') === 'fr' ? 'fr' : 'en');
+  return await searchAddress(q, req.get('X-Lang') === 'fr' ? 'fr' : 'en', countryOfZone(String(req.query.tz || '')));
 }));
 app.get('/api/geo/reverse', api(async (req) => {
   const lat = Number(req.query.lat), lon = Number(req.query.lon);
