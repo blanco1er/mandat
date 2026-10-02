@@ -2262,15 +2262,19 @@ const editing = () => { const e = document.activeElement; return !!e && (e.tagNa
 const fitKeyboard = () => {
   const vv = window.visualViewport;
   const open = editing() && matchMedia('(pointer: coarse)').matches; // a phone with its keyboard up
-  // how far the bottom of what you see is above the bottom of the page (0 when iPhone already scrolled it)
-  const lift = open && vv ? Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)) : 0;
-  document.documentElement.style.setProperty('--kb', lift + 'px');
-  document.body.classList.toggle('kb-open', open);
+  // Placed from what you actually see: the bottom of the visible area is the top of the keyboard, whatever
+  // iPhone does with the page underneath (it scrolls it, or not, depending on the version).
+  if (open && vv) {
+    const h = $('#composer').offsetHeight || 64;
+    document.documentElement.style.setProperty('--kb-top', Math.round(vv.offsetTop + vv.height - h - 6) + 'px');
+  }
+  document.body.classList.toggle('kb-open', open && !!vv);
 };
 window.visualViewport?.addEventListener('resize', fitKeyboard);
 window.visualViewport?.addEventListener('scroll', fitKeyboard);
 document.addEventListener('focusin', () => requestAnimationFrame(fitKeyboard));
 document.addEventListener('focusout', () => setTimeout(fitKeyboard, 60));
+$('#sayText').addEventListener('input', () => requestAnimationFrame(fitKeyboard)); // a longer message grows upwards, still on the keyboard
 // A newer version is live (an app on the home screen is resumed, never reloaded, by iPhone): reload when the
 // app comes back to the screen, never in the middle of a voice conversation.
 let buildSeen = '';

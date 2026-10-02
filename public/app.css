@@ -1342,7 +1342,6 @@ body.on-welcome .top-fade { display: none; }
 .tp-info small { font-size: 12.5px; color: var(--ink-3); }
 
 /* Keyboard open: the message bar sits right on top of it and follows it, never behind it */
-.composer { transform: translate(-50%, calc(-1 * var(--kb, 0px))); }
-body.kb-open .composer { bottom: 6px; transition: none; } /* no home-bar margin above the keyboard */
+body.kb-open .composer { top: var(--kb-top, auto); bottom: auto; transition: none; }
 body.kb-open .tabbar { display: none; }
 body.kb-open .bottom-fade { display: none; }
