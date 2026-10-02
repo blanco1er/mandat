@@ -900,8 +900,12 @@ app.post('/api/merchants/:mid/requests/:rid/collect', api(async (req) => {
   const s = missionsOnDisk().find((x) => x.requests?.[req.params.rid]?.merchant_id === m.id);
   const r = s?.requests[req.params.rid];
   if (!r) throw Object.assign(new Error('Unknown request'), { status: 404 });
+  return collectRequest(m, s, r);
+}));
+async function collectRequest(m, s, r) {
   const b = box(s.id);
   if (b.s.userId) b.s._user = getUser(b.s.userId);
+  r = b.s.requests[r.id];
   const entry = b.s.envelope.entries.find((e) => e.id === r.paymentId);
   if (!entry || entry.state !== 'held') throw Object.assign(new Error('No deposit is waiting to be collected.'), { status: 409 });
   // Collect now (the merchant sees it at once), then let the customer's agent tell them.
@@ -914,7 +918,47 @@ app.post('/api/merchants/:mid/requests/:rid/collect', api(async (req) => {
   pushFor(b, { type: 'collected', data: { merchant: m.name, amount: entry.amount } });
   run(b, (e2) => userTurn(b.s, `[system] ${m.name} confirmed the booking and collected the ${entry.amount} deposit (paid with PayPal). Mark it confirmed in the plan. The card already shows the payment, so do not repeat it: say nothing unless this was the last open booking (then set the reminders and wrap up) or there is something new the user must know.`, e2));
   return { ok: true, collected: entry.amount };
-}));
+}
+
+// ---------- demo merchants answer by themselves ----------
+// Merchants without an AI agent answer from an inbox. In the sandbox nobody sits behind it, so each one
+// answers like a small business would, 20 to 50 seconds later: it reads its own rules and the customer's
+// note, then accepts (most of the time), proposes another time, or declines, with a short message; once the
+// deposit is held it confirms the booking. Nothing waits for the user to play the merchant.
+const handled = new Set();
+const delayFor = (id, min, span) => min + (parseInt(crypto.createHash('md5').update(id).digest('hex').slice(0, 6), 16) % span);
+async function demoMerchants() {
+  if (process.env.MANDAT_MERCHANTS_AUTO === '0') return;
+  const now = Date.now();
+  for (const s0 of missionsOnDisk()) {
+    for (const r of Object.values(s0.requests || {})) {
+      let m;
+      try { m = merchant(r.merchant_id); } catch { continue; }
+      const key = r.id + ':' + r.status;
+      if (handled.has(key)) continue;
+      if (r.status === 'pending' && now - Date.parse(r.createdAt) > delayFor(r.id, 20000, 30000)) {
+        handled.add(key);
+        let act = { action: 'accept', message: '' };
+        try {
+          const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, json: true, temperature: 0.4, maxTokens: 1500, timeoutMs: 30000, messages: [{ role: 'system', content: `You are ${m.name} (${m.category}, ${m.city}), a small business answering a booking request from your inbox. Your house rules: ${m.rules}. Accept unless your rules make it impossible. If the customer asks a question in their note, answer it briefly. JSON only: {"action":"accept|counter|decline","slot":"only for counter: the time you can do","message":"one or two friendly sentences, in the language of the note"}` }, { role: 'user', content: `Request: ${r.items.map((i) => i.qty + ' x ' + i.label).join(', ')}; when: ${r.slot || 'not given'}; total ${r.total}. Note: ${r.note || '(none)'}` }] });
+          const o = JSON.parse(message.content || '{}');
+          if (['accept', 'counter', 'decline'].includes(o.action) && (o.action !== 'counter' || o.slot)) act = { action: o.action, slot: o.slot, message: String(o.message || '').slice(0, 300) };
+        } catch {}
+        const b = box(s0.id);
+        if (b.deleted || b.s.requests?.[r.id]?.status !== 'pending') continue;
+        if (b.s.userId) b.s._user = getUser(b.s.userId);
+        run(b, (emit) => resolveRequest(b.s, r.id, act, emit).catch(() => {}));
+      } else if (r.status === 'accepted' && r.paymentId) {
+        const e = (s0.envelope.entries || []).find((x) => x.id === r.paymentId);
+        if (e?.state === 'held' && now - Date.parse(e.at || r.createdAt) > delayFor(r.id + 'c', 15000, 20000)) {
+          handled.add(key);
+          await collectRequest(m, s0, r).catch(() => {});
+        }
+      }
+    }
+  }
+}
+setInterval(() => demoMerchants().catch((e) => console.error('[merchants]', e.message)), 10000).unref?.();
 
 // Friends pay their invoices while the app is closed: check open invoices every 2 minutes (PayPal API, free).
 async function watchInvoices() {

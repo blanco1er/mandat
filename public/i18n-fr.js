@@ -602,4 +602,7 @@ export default {
   "Monthly limit: {cap}": "Plafond mensuel : {cap}",
   "{used} already planned this month · this plan needs {need}": "{used} déjà prévus ce mois-ci · ce projet demande {need}",
   "Change the limit": "Modifier le plafond",
+  "Looking at {name}: photos and reviews": "Je regarde {name} : photos et avis",
+  "Checking the numbers": "Je vérifie les calculs",
+  "Request sent · they usually answer within a minute": "Demande envoyée · réponse en général en moins d’une minute",
 };

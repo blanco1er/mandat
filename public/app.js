@@ -6,7 +6,7 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const state = { me: null, mission: null, es: null, currency: 'EUR', speaking: false, listening: false, cards: {}, places: {}, verified: {}, photo: null, voiceTurn: false, live: false };
 const fmt = (v) => new Intl.NumberFormat(locale(), { style: 'currency', currency: state.currency, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
-const PLURAL = { bakery: 'bakeries', florist: 'florists', restaurant: 'restaurants', hotel: 'hotels', bar: 'bars', cafe: 'cafés', hairdresser: 'hair salons', cinema: 'cinemas', train: 'trains', activity: 'activities', repair: 'repair shops', venue: 'venues', catering: 'caterers', entertainment: 'DJs and photographers', decoration: 'decorators', ride: 'taxis and private drivers' };
+const PLURAL = { bakery: 'bakeries', florist: 'florists', restaurant: 'restaurants', hotel: 'hotels', bar: 'bars', cafe: 'cafés', hairdresser: 'hair salons', cinema: 'cinemas', train: 'trains', activity: 'activities', repair: 'repair shops', venue: 'venues', catering: 'caterers', entertainment: 'DJs and photographers', decoration: 'decorators', ride: 'taxis and private drivers', venue: 'venues' };
 const many = (c) => t(PLURAL[c] || c + 's');
 
 // ---------- routing ----------
@@ -911,6 +911,8 @@ const TOOL_LABEL = {
   show_place_preview: (a) => t('Looking up {name}', { name: a.name }),
   check_schedule: () => t('Checking your schedule'),
   estimate_trip: (a) => t('Checking how to get to {place}', { place: a.to }),
+  inspect_place: (a) => t('Looking at {name}: photos and reviews', { name: a.name }),
+  calculate: () => t('Checking the numbers'),
   find_top_places: (a) => t('Comparing the best {places} in {city}', { places: many(a.category), city: a.city }),
   find_real_places: (a) => t('Looking for real {places} nearby', { places: many(a.category) }),
   find_network_merchants: (a) => t('Checking {places} I can book and pay', { places: many(a.category) }),
@@ -1251,7 +1253,7 @@ function requestCard(r) {
   }
   card.classList.toggle('accepted', r.status !== 'pending');
   const [label, cls] = { accepted: ['Accepted', 'wait'], confirmed: ['Confirmed', 'paid'], declined: ['Declined', 'off'], countered: ['Other time', 'part'] }[r.status] || ['Waiting', 'wait'];
-  const sub = r.status === 'pending' ? t('No AI agent · request sent to their inbox') : r.status === 'countered' ? t('Proposes {slot} instead', { slot: r.counterSlot }) : r.status === 'accepted' ? t('Accepted · confirms when the deposit is held') : r.status === 'confirmed' ? t('Confirmed · deposit paid with PayPal') : t('Declined');
+  const sub = r.status === 'pending' ? t('Request sent · they usually answer within a minute') : r.status === 'countered' ? t('Proposes {slot} instead', { slot: r.counterSlot }) : r.status === 'accepted' ? t('Accepted · confirms when the deposit is held') : r.status === 'confirmed' ? t('Confirmed · deposit paid with PayPal') : t('Declined');
   card.innerHTML = `<header><span class="avatar m">${esc(r.merchant[0])}</span><div><b>${esc(r.merchant)}</b><small>${esc(sub)}</small></div><span class="chip ${cls}">${t(label)}</span></header>
     <p>${r.items.map((i) => `${esc(i.qty)}× ${esc(i.label)}`).join(', ')}${r.slot ? ' · ' + esc(r.slot) : ''} · ${esc(t('{total}, deposit {deposit}', { total: fmt(r.total), deposit: fmt(r.deposit) }))}</p>${r.reply ? `<p class="req-reply">${esc(t('“{text}”', { text: r.reply }))}</p>` : ''}
     ${r.inbox && (r.status === 'pending' || r.status === 'accepted') ? `<a class="inbox-link" href="${esc(r.inbox)}" target="_blank" rel="noopener">${esc(t('See it from {merchant}’s side (demo inbox)', { merchant: r.merchant }))} ↗</a>` : ''}`;
