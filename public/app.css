@@ -803,3 +803,12 @@ body.no-scroll { overflow: hidden; }
 .ledger { margin-top: 10px; }
 .ledger-count { margin: 8px 4px 110px; font-size: 12px; color: var(--ink-3); }
 .ledger-count small { font-size: 12px; }
+
+.c-thumbs { display: flex; gap: 8px; padding: 8px 2px 2px; overflow-x: auto; }
+.c-thumbs .tray-item img { width: 56px; height: 56px; }
+
+/* Long unbroken strings (emails, links, references) wrap instead of leaving the screen */
+.say, .say-text, .u-text, .feed .card, .feed .card *, .steps-list li, .step, .m-line, .receipts small, .pay-detail p { overflow-wrap: anywhere; word-break: break-word; }
+.say.user { min-width: 0; }
+.feed > li { max-width: 100%; min-width: 0; }
+#live, .feed { overflow-x: clip; }

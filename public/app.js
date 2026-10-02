@@ -76,7 +76,7 @@ const IDEAS = [
   { e: '🇪🇸', t: 'Two weeks in Spain', d: 'Trains, stays, budget kept', b: 700, q: 'Two weeks in Spain in October, I leave from Paris. 700 euros all in.' },
 ];
 const EMOJI = [[/spain|españa|espagne|lisbon|travel|trip|voyage|vacation|weekend/i, '🧳'], [/birthday|anniversaire/i, '🎂'], [/split|share|bill|addition/i, '🧾'], [/dinner|restaurant|dîner|table/i, '🍽️'], [/repair|fix|tyre|tire|répar/i, '🔧'], [/hair|coiff/i, '💇'], [/concert|ticket|billet/i, '🎟️'], [/flower|fleur/i, '💐'], [/hotel|hôtel/i, '🛎️']];
-const compose = { budget: 400, auto: false, touched: false, emoji: null, photo: null, voice: false };
+const compose = { budget: 400, auto: false, touched: false, emoji: null, photos: [], voice: false };
 
 // Ideas: tapping one fills the box — it never starts anything by itself.
 for (const i of IDEAS) {
@@ -132,7 +132,7 @@ function onCompose() {
   const found = budgetFromText(t);
   if (found && !compose.touched) setBudget(found, { auto: true, touched: false });
   // One button, as in a mission: the voice orb while empty, the send arrow as soon as there is something.
-  const has = !!t.trim() || !!compose.photo;
+  const has = !!t.trim() || compose.photos.length > 0;
   $('#compose').classList.toggle('has-text', has);
   $('#cGo').setAttribute('aria-label', has ? 'Start mission' : 'Talk to Mandat');
   $('#cText').style.height = 'auto';
@@ -171,26 +171,41 @@ $('#cGo').addEventListener('click', (e) => {
     $('#compose').requestSubmit();
   }, $('#cGo'));
 });
-$('#cPhoto').addEventListener('click', () => pickPhoto((url) => {
-  compose.photo = url;
-  $('#cPreview').src = url;
-  $('#cPhotoWrap').hidden = false;
+// Photos for a new mission: several, pasted or picked, shown as small thumbnails in the box.
+async function addComposePhotos(files) {
+  for (const f of files) {
+    if (compose.photos.length >= 4) break;
+    compose.photos.push(await shrink(f));
+  }
+  drawComposeThumbs();
   onCompose();
-}));
-$('#cPhotoX').addEventListener('click', () => {
-  compose.photo = null;
-  $('#cPhotoWrap').hidden = true;
-  onCompose();
+}
+function drawComposeThumbs() {
+  const box = $('#cThumbs');
+  box.innerHTML = '';
+  box.hidden = !compose.photos.length;
+  compose.photos.forEach((src, i) => {
+    const t = el('div', 'tray-item');
+    t.innerHTML = `<img src="${src}" alt="Photo ${i + 1}"><button type="button" aria-label="Remove photo ${i + 1}">✕</button>`;
+    t.querySelector('img').addEventListener('click', () => openLightbox(src));
+    t.querySelector('button').addEventListener('click', () => { compose.photos.splice(i, 1); drawComposeThumbs(); onCompose(); });
+    box.append(t);
+  });
+}
+$('#cPhoto').addEventListener('click', () => pickPhotos(addComposePhotos));
+$('#cText').addEventListener('paste', (e) => {
+  const files = [...(e.clipboardData?.items || [])].filter((i) => i.type.startsWith('image/')).map((i) => i.getAsFile()).filter(Boolean);
+  if (files.length) { e.preventDefault(); addComposePhotos(files); }
 });
 $('#compose').addEventListener('submit', async (e) => {
   e.preventDefault();
   const intent = $('#cText').value.trim();
-  if (!intent && !compose.photo) return;
+  if (!intent && !compose.photos.length) return;
   $('#compose').classList.add('sending');
   try {
     const location = await locate();
     const emoji = compose.emoji || EMOJI.find(([re]) => re.test(intent))?.[1] || '✦';
-    const r = await post('/api/missions', { intent, budget: compose.budget, emoji, location, image: compose.photo });
+    const r = await post('/api/missions', { intent, budget: compose.budget, emoji, location, images: compose.photos });
     state.voiceTurn = compose.voice;
     resetCompose();
     openMission(r.id);
@@ -204,8 +219,8 @@ $('#compose').addEventListener('submit', async (e) => {
 });
 function resetCompose() {
   $('#cText').value = '';
-  Object.assign(compose, { emoji: null, photo: null, voice: false, auto: false, touched: false });
-  $('#cPhotoWrap').hidden = true;
+  Object.assign(compose, { emoji: null, photos: [], voice: false, auto: false, touched: false });
+  drawComposeThumbs();
   setBudget(400);
   toggleBudget(false);
   onCompose();
