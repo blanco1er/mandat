@@ -585,6 +585,35 @@ function missionRow(m) {
   return li;
 }
 // "•••": archive (keeps everything) or delete (only when no money is held).
+// Rename in place: the title becomes a field; Enter or leaving it saves, Escape cancels.
+function renameRow(m) {
+  const row = $(`#mList .m-row[data-id="${m.id}"]`);
+  const b = row?.querySelector('.m-l1 b');
+  if (!b) return;
+  const input = el('input', 'm-rename');
+  input.value = m.title;
+  input.maxLength = 60;
+  input.setAttribute('aria-label', t('Mission name'));
+  input.addEventListener('click', (e) => e.stopPropagation());
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const title = input.value.trim();
+    if (save && title && title !== m.title) {
+      try { await post(`/api/missions/${m.id}/title`, { title }); } catch (err) { alert(err.message); }
+    }
+    refreshHome();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') finish(false);
+  });
+  input.addEventListener('blur', () => finish(true));
+  b.replaceWith(input);
+  input.focus();
+  input.select();
+}
 function rowMenu(btn, m) {
   const menu = $('#rowMenu');
   menu.innerHTML = '';
@@ -594,6 +623,7 @@ function rowMenu(btn, m) {
     b.addEventListener('click', async () => { closeMenu(); await fn(); });
     menu.append(b);
   };
+  item(t('Rename'), () => renameRow(m));
   item(m.archived ? t('Move back to missions') : t('Archive'), async () => { await post(`/api/missions/${m.id}/archive`, { archived: !m.archived }); refreshHome(); });
   if (!m.held) item(t('Delete…'), async () => {
     if (!confirm(t('Delete “{title}”? Its conversation will be gone.', { title: m.title }))) return;

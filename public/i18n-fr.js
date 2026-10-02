@@ -527,4 +527,6 @@ export default {
   "Noted · {x}": "Noté · {x}",
   "Blocked. Turn it back on in your iPhone Settings › Privacy › Location Services, for Safari or Mandat.": "Bloquée. Réactivez-la dans Réglages de l’iPhone › Confidentialité › Service de localisation, pour Safari ou Mandat.",
   "No answer from the phone. Try again.": "Pas de réponse du téléphone. Réessayez.",
+  "Rename": "Renommer",
+  "Mission name": "Nom de la mission",
 };

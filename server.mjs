@@ -462,7 +462,7 @@ app.post('/api/missions', api(async (req, res) => {
   emitter(b)('user', { text: intent, images: imgs.map((i) => i.url) });
   run(b, (emit) => userTurn(b.s, intent, emit, { images: imgs.map((i) => i.data) }));
   titleFor(intent).then(({ title, emoji: e }) => {
-    if (title === b.s.title && e === b.s.emoji) return;
+    if (b.s.titleByUser || (title === b.s.title && e === b.s.emoji)) return;
     b.s.title = title;
     b.s.emoji = e;
     saveMission(b.s);
@@ -618,6 +618,17 @@ setInterval(() => {
 }, 30000);
 
 // Archive keeps the history; delete only when no money is held for the mission.
+// Rename a mission (the generated title never overwrites a name you chose).
+app.post('/api/missions/:id/title', api(async (req, res) => {
+  const b = box(req.params.id, me(req, res));
+  const title = String(req.body?.title || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (!title) throw new Error('Give the mission a name.');
+  b.s.title = title;
+  b.s.titleByUser = true;
+  saveMission(b.s);
+  emitter(b)('title', { title });
+  return { summary: missionSummary(b.s) };
+}));
 app.post('/api/missions/:id/archive', api(async (req, res) => {
   const b = box(req.params.id, me(req, res));
   b.s.archived = req.body?.archived !== false;
