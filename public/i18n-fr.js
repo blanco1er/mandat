@@ -557,4 +557,5 @@ export default {
   "Talk a little, and every mission will need fewer questions.": "Parlez un peu, et chaque mission demandera moins de questions.",
   "Tell Mandat something new": "Dire quelque chose de nouveau à Mandat",
   "Mandat uses this to choose for you and to spot clashes in your plans. It never shares it.": "Mandat s’en sert pour choisir pour vous et repérer les conflits dans vos plans. Il ne le partage jamais.",
+  "Delete “{title}”? Mandat stops, the money held is released and the conversation will be gone.": "Supprimer « {title} » ? Mandat s’arrête, l’argent bloqué est libéré et la conversation disparaît.",
 };

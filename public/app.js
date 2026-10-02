@@ -430,7 +430,7 @@ $('#compose').addEventListener('submit', async (e) => {
     state.voiceTurn = false;
     resetCompose();
     await openMission(r.id);
-    if (voice) vmOpen({ listen: false }); // it answers out loud, then listens again
+    if (voice) { vmOpen({ listen: false }); vm.awaiting = true; } // it answers out loud, then listens again
   } catch (err) {
     if (err.code === 'mandate_required') {
       // No signed mandate (new account, or the demo server was reset): go straight to signing, keep what was written.
@@ -627,8 +627,8 @@ function rowMenu(btn, m) {
   };
   item(t('Rename'), () => renameRow(m));
   item(m.archived ? t('Move back to missions') : t('Archive'), async () => { await post(`/api/missions/${m.id}/archive`, { archived: !m.archived }); refreshHome(); });
-  if (!m.held) item(t('Delete…'), async () => {
-    if (!confirm(t('Delete “{title}”? Its conversation will be gone.', { title: m.title }))) return;
+  item(t('Delete…'), async () => {
+    if (!confirm(m.held ? t('Delete “{title}”? Mandat stops, the money held is released and the conversation will be gone.', { title: m.title }) : t('Delete “{title}”? Its conversation will be gone.', { title: m.title }))) return;
     const r = await fetch(`/api/missions/${m.id}`, { method: 'DELETE', headers: HEADERS });
     if (!r.ok) return alert((await r.json()).error);
     refreshHome();
@@ -821,7 +821,15 @@ function handle({ type, data }) {
       if (state.streamLi) { done.classList.add('settled'); state.streamLi.replaceWith(done); state.streamLi = null; keepBottom(); }
       else add(done);
       typing(state.busy);
-      if (vm.on) return state.live && !data.step && vmFinal(data.text);
+      // In a voice conversation Mandat speaks only to answer what you just said: first what it is going to
+      // check, then its answer. Anything else (a merchant replying, a step) is written, never read out.
+      if (vm.on) {
+        if (!state.live || !vm.awaiting) return;
+        if (data.plan) return vmFinal(data.text);
+        if (data.step) return;
+        vm.awaiting = false;
+        return vmFinal(data.text);
+      }
       return state.live && state.voiceTurn && speak(plain(data.text));
     }
     case 'say_delta': return streamText(data.t); // written live; in a voice conversation only the final reply is spoken
@@ -2081,7 +2089,7 @@ $('#orb').addEventListener('click', () => {
   vmOpen();
 });
 // ---------- voice conversation: you talk, it answers, it listens again; tap the circle to cut in ----------
-const vm = { on: false, phase: 'idle', rec: null, queue: [], buf: '', used: 0, quiet: 0, mute: false, liveLi: null, noMeter: false, voiceOff: false };
+const vm = { on: false, awaiting: false, phase: 'idle', rec: null, queue: [], buf: '', used: 0, quiet: 0, mute: false, liveLi: null, noMeter: false, voiceOff: false };
 const VM_STATE = { listening: 'Listening…', thinking: 'Thinking…', speaking: 'Speaking. Tap to interrupt.', paused: 'Tap the circle to talk.' };
 function vmSet(phase, text) {
   vm.phase = phase;
@@ -2091,11 +2099,14 @@ function vmSet(phase, text) {
   orbState(phase === 'paused' ? 'idle' : phase);
 }
 // The light follows the voice: your microphone level while you talk, the agent's words while it speaks.
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// Tell the phone what the sound is for: playback through the speaker while Mandat talks, recording while it listens.
+const audioSession = (type) => { try { if (navigator.audioSession) navigator.audioSession.type = type; } catch {} };
 const lvl = { v: 0, target: 0, raf: 0, stream: null, ctx: null, an: null, data: null };
 async function meterOn() {
   cancelAnimationFrame(lvl.raf);
   lvl.raf = requestAnimationFrame(meterLoop);
-  if (vm.noMeter || lvl.stream || !navigator.mediaDevices?.getUserMedia) return;
+  if (IOS || vm.noMeter || lvl.stream || !navigator.mediaDevices?.getUserMedia) return;
   try {
     lvl.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     lvl.ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -2117,14 +2128,12 @@ function meterLoop() {
     let sum = 0;
     for (const x of lvl.data) sum += (x - 128) * (x - 128);
     lvl.target = Math.min(1, Math.sqrt(sum / lvl.data.length) / 28);
-  } else if (vm.phase === 'speaking' && out.an && out.playing && !out.audio.paused) {
-    out.an.getByteTimeDomainData(out.data);
-    let sum = 0;
-    for (const x of out.data) sum += (x - 128) * (x - 128);
-    lvl.target = Math.min(1, Math.sqrt(sum / out.data.length) / 22);
+  } else if (vm.phase === 'speaking' && out.env && out.playing) {
+    lvl.target = out.env[Math.floor(out.audio.currentTime * 30)] || 0; // the real loudness of the words being said
   } else if (vm.phase === 'thinking') lvl.target = 0.15;
+  else if (vm.phase === 'listening' && !lvl.an) lvl.target *= 0.9;
   lvl.v += (lvl.target - lvl.v) * 0.2;
-  if (vm.phase === 'speaking' && !(out.playing && out.an)) lvl.target *= 0.93; // phone voice: each word lifts it, then it settles
+  if (vm.phase === 'speaking' && !(out.playing && out.env)) lvl.target *= 0.93; // phone voice: each word lifts it, then it settles
   $('#call').style.setProperty('--lvl', lvl.v.toFixed(3));
   lvl.raf = requestAnimationFrame(meterLoop);
 }
@@ -2154,6 +2163,7 @@ function vmOpen({ listen = true } = {}) {
   vm.smoke?.start();
   vm.on = true;
   vm.mute = false;
+  vm.awaiting = false;
   vmVoice(state.me?.voice?.on === false);
   state.voiceTurn = false;
   $('#composer').hidden = true;
@@ -2164,6 +2174,7 @@ function vmOpen({ listen = true } = {}) {
 }
 function vmClose() {
   vm.on = false;
+  vm.awaiting = false;
   const r = vm.rec;
   vm.rec = null;
   try { r?.abort(); } catch {}
@@ -2187,7 +2198,7 @@ function vmListen() {
   r.interimResults = true;
   r.continuous = false; // one sentence at a time: a short silence sends it
   let said = '';
-  r.onresult = (e) => { said = Array.from(e.results).map((x) => x[0].transcript).join(' '); vmLive(said); };
+  r.onresult = (e) => { said = Array.from(e.results).map((x) => x[0].transcript).join(' '); vmLive(said); if (!lvl.an) lvl.target = 0.5 + Math.random() * 0.4; };
   r.onerror = (e) => {
     if (e.error === 'audio-capture' && lvl.stream && !vm.noMeter) { vm.noMeter = true; meterOff(); vm.rec = null; return setTimeout(vmListen, 150); }
     if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) { vm.rec = null; vmSet('paused', t('The microphone is off for Mandat.')); } };
@@ -2197,10 +2208,12 @@ function vmListen() {
     if (said.trim()) { vm.quiet = 0; vmSend(said.trim()); }
     else { vmLiveDrop(); if (++vm.quiet < 3) vmListen(); else vmSet('paused'); } // a pause is not the end of the conversation
   };
+  audioSession('play-and-record');
   vmSet('listening');
   try { r.start(); } catch { vm.rec = null; vmSet('paused'); }
 }
 function vmSend(text) {
+  vm.awaiting = true;
   vmSet('thinking');
   vm.buf = '';
   vm.used = 0;
@@ -2232,33 +2245,43 @@ function vmFinal(text) {
 function vmReset() { vm.buf = ''; vm.used = 0; }
 // The voice: a human-sounding neural voice from the server, sentence by sentence (the next one is fetched
 // while the current one plays). If it is unavailable, the phone's own voice takes over: never silence.
-const out = { audio: new Audio(), playing: false, url: '', an: null, data: null, routed: false, neural: true };
+const out = { audio: new Audio(), playing: false, env: null, neural: true };
 out.audio.preload = 'auto';
+out.audio.setAttribute('playsinline', '');
+// The loudness of a reply, 30 times a second, read once from the audio itself: the smoke breathes with the words.
+async function loudness(blob) {
+  try {
+    const C = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const buf = await new C(1, 2, 24000).decodeAudioData(await blob.arrayBuffer());
+    const d = buf.getChannelData(0), step = Math.max(1, Math.floor(buf.sampleRate / 30)), env = [];
+    for (let i = 0; i < d.length; i += step) {
+      let sum = 0, n = 0;
+      for (let k = i; k < Math.min(d.length, i + step); k += 4) { sum += d[k] * d[k]; n++; }
+      env.push(Math.sqrt(sum / Math.max(1, n)));
+    }
+    const max = Math.max(...env, 1e-4);
+    return env.map((x) => Math.min(1, (x / max) * 1.1));
+  } catch { return null; }
+}
 async function fetchVoice(text) {
   if (!out.neural) return { text };
-  try {
-    const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json', ...HEADERS }, body: JSON.stringify({ text }) });
-    if (r.status === 503) out.neural = false; // not set up, or Google paused: phone voice for this session
-    if (!r.ok) return { text };
-    return { url: URL.createObjectURL(await r.blob()), text };
-  } catch { return { text }; }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json', ...HEADERS }, body: JSON.stringify({ text }) });
+      if (r.status === 503) { out.neural = false; return { text }; } // not set up, or the daily allowance is used
+      if (!r.ok) continue;
+      const blob = await r.blob();
+      return { url: URL.createObjectURL(blob), text, env: await loudness(blob) };
+    } catch {}
+  }
+  return { text };
 }
-// The first tap of the conversation unlocks sound on iPhone, and routes the voice through an analyser for the light.
+// iPhone lets a page play sound only after a tap: the tap that opens the conversation plays a silent clip,
+// and the same audio element then carries every reply.
 function unlockAudio() {
   try {
     out.audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
     out.audio.play().catch(() => {});
-    if (!out.routed) {
-      const ctx = (out.ctx ||= new (window.AudioContext || window.webkitAudioContext)());
-      ctx.resume?.();
-      const src = ctx.createMediaElementSource(out.audio);
-      out.an = ctx.createAnalyser();
-      out.an.fftSize = 512;
-      out.data = new Uint8Array(out.an.fftSize);
-      src.connect(out.an);
-      out.an.connect(ctx.destination);
-      out.routed = true;
-    } else out.ctx?.resume?.();
   } catch {}
 }
 function vmSay(text) {
@@ -2270,21 +2293,35 @@ function vmSay(text) {
 async function vmNext() {
   if (!vm.on) return;
   const next = vm.queue.shift();
-  if (!next) { out.playing = false; return vmAfterTurn(); }
+  if (!next) { out.playing = false; out.env = null; if (state.busy && vm.phase === 'speaking') vmSet('thinking'); return vmAfterTurn(); }
   out.playing = true;
-  vmSet('speaking');
   const v = await next;
   if (!vm.on || vm.mute) { out.playing = false; return; }
-  const done = () => { if (v.url) URL.revokeObjectURL(v.url); out.playing = false; if (vm.on && !vm.mute) vmNext(); };
-  if (v.url) {
-    out.audio.onended = done;
-    out.audio.onerror = () => { speak(v.text, { force: true, onend: done }); };
-    out.audio.src = v.url;
-    out.audio.play().catch(() => speak(v.text, { force: true, onend: done }));
-  } else speak(v.text, { force: true, onend: done, onword: () => { lvl.target = 0.55 + Math.random() * 0.45; } });
+  let finished = false;
+  const done = () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(guard);
+    if (v.url) URL.revokeObjectURL(v.url);
+    out.playing = false;
+    if (vm.on && !vm.mute) vmNext();
+  };
+  // The phone's own voice only if the real one cannot play at all.
+  const fallback = () => { if (finished) return; out.audio.onplaying = out.audio.onended = out.audio.onerror = null; vmSet('speaking'); speak(v.text, { force: true, onend: done, onword: () => { lvl.target = 0.55 + Math.random() * 0.45; } }); };
+  let guard = 0;
+  if (!v.url) return fallback();
+  audioSession('playback');
+  out.env = v.env;
+  out.audio.onplaying = () => { clearTimeout(guard); vmSet('speaking'); }; // "speaking" only once sound really comes out
+  out.audio.onended = done;
+  out.audio.onerror = fallback;
+  guard = setTimeout(fallback, 4000);
+  out.audio.src = v.url;
+  out.audio.play().catch(fallback);
 }
 // The agent has finished and nothing is left to say: listen again.
 function vmAfterTurn() {
+  if (!state.busy) vm.awaiting = false;
   if (!vm.on || state.busy || vm.queue.length || out.playing || speechSynthesis.speaking || vm.rec) return;
   if (vm.phase === 'speaking' || vm.phase === 'thinking') vmListen();
 }
@@ -2332,7 +2369,7 @@ function speak(text, { force = false, onend, onword } = {}) {
 }
 function stopSpeaking() {
   if (window.speechSynthesis) speechSynthesis.cancel();
-  try { out.audio.pause(); out.audio.onended = null; } catch {}
+  try { out.audio.pause(); out.audio.onended = out.audio.onplaying = out.audio.onerror = null; } catch {}
   out.playing = false;
   $$('.msg-actions .on').forEach((x) => { x.classList.remove('on'); x.innerHTML = svg('listen'); });
   state.speaking = false;

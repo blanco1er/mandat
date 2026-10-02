@@ -748,9 +748,15 @@ app.post('/api/missions/:id/archive', api(async (req, res) => {
 app.delete('/api/missions/:id', api(async (req, res) => {
   const u = me(req, res);
   const b = box(req.params.id, u);
-  if (b.s.envelope.entries.some((e) => e.state === 'held')) throw Object.assign(new Error('Money is still held for this mission. Release it or archive the mission instead.'), { status: 409 });
-  if (b.running) throw Object.assign(new Error('Mandat is still working on this mission. Try again in a moment.'), { status: 409 });
+  // Deleting stops Mandat at once, even mid-task, and releases any deposit still held: no money is taken.
+  b.s._cancelled = true;
   b.deleted = true;
+  for (const e of b.s.envelope.entries.filter((x) => x.state === 'held' && !x.capturing)) {
+    try {
+      if (e.paypal?.authorizationId) await PayPal.release({ authorizationId: e.paypal.authorizationId });
+      e.state = 'released';
+    } catch (err) { console.error('[delete] release', e.id, err.message); }
+  }
   for (const c of b.clients) c.end();
   live.delete(b.s.id);
   u.missions = u.missions.filter((id) => id !== b.s.id);
