@@ -509,4 +509,6 @@ export default {
   "Free cancellation": "Annulation gratuite",
   "Not allowed: type your usual address below": "Refusée : saisissez votre adresse habituelle ci-dessous",
   "To start a mission, Mandat needs your OK with PayPal once. What you wrote is kept for after.": "Pour lancer une mission, Mandat a besoin de votre accord PayPal, une seule fois. Ce que vous avez écrit est gardé pour après.",
+  "Mandat pays only with your OK. Authorise it once with PayPal to start this mission. What you wrote stays here.": "Mandat ne paie qu’avec votre accord. Autorisez-le une fois avec PayPal pour lancer cette mission. Ce que vous avez écrit reste ici.",
+  "Sign with PayPal": "Signer avec PayPal",
 };

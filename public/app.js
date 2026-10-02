@@ -177,6 +177,15 @@ async function obSave(i) {
   if (i === 2) profile.preferences = obPicked('#obLikes', '#obLikesMore');
   if (Object.keys(profile).length) state.me = (await post('/api/me', { profile })).user;
 }
+// The mandate is missing: say why, right under the box, and let the person choose to sign.
+function showNeedMandate() {
+  $('#needMandate').hidden = false;
+  $('#needMandate').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+$('#needMandateGo').addEventListener('click', () => {
+  try { if ($('#cText').value.trim()) localStorage.setItem('mandat_pending', $('#cText').value.trim()); } catch {}
+  mandateView({ why: true });
+});
 // A mission written before signing the mandate comes back in the box, ready to send.
 function restorePending() {
   let text = '';
@@ -190,7 +199,7 @@ document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible' || !state.me?.paypal?.mandate) return;
   try {
     const r = await get('/api/me');
-    if (!r.user.paypal.mandate) { state.me = r.user; show('welcome'); }
+    if (!r.user.paypal.mandate) { state.me = r.user; showNeedMandate(); }
   } catch {}
 });
 async function obFinish() {
@@ -281,6 +290,7 @@ function setBudget(v, { auto = false, touched = compose.touched } = {}) {
   $('#cBudget').textContent = v ? fmtC(v) : t('Optional');
   $('#cBudgetBtn').classList.toggle('unset', !v);
   $('#cBudgetAuto').hidden = !auto;
+  $('#cBudgetBtn').classList.toggle('auto', !!auto);
   $('#cBudgetIn').value = v || '';
   $$('#cChips button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === v));
   if (state.me && !$('#cRule').classList.contains('error')) $('#cRule').textContent = ruleText();
@@ -395,7 +405,7 @@ $('#compose').addEventListener('submit', async (e) => {
       // No signed mandate (new account, or the demo server was reset): go straight to signing, keep what was written.
       try { localStorage.setItem('mandat_pending', intent); } catch {}
       try { state.me = (await get('/api/me')).user; } catch {}
-      return mandateView({ why: true });
+      return showNeedMandate();
     }
     $('#cRule').textContent = err.message;
     $('#cRule').classList.add('error');
