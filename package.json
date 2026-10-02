@@ -1,7 +1,7 @@
 {
-  "name": "commish",
+  "name": "mandat",
   "version": "0.1.0",
-  "description": "Commish — an AI studio manager that turns a client's brief into a quote, a PayPal deposit and a delivered commission.",
+  "description": "Mandat — an AI agent that searches, negotiates, books and pays with PayPal, inside a budget mandate you sign once.",
   "type": "module",
   "main": "server.mjs",
   "scripts": {

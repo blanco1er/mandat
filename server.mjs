@@ -4,12 +4,13 @@ import express from 'express';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { createSession, userTurn, resolveApproval, resolveRequest, envelopeView, missionSummary } from './lib/agent.mjs';
+import { createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
 import { geocode } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
 import * as Push from './lib/push.mjs';
+import { merchant, checkInbox } from './lib/merchants.mjs';
 import { newUser, getUser, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
 const app = express();
@@ -93,6 +94,8 @@ function pushFor(b, { type, data }) {
   if (type === 'approval' && data.status !== 'approved' && data.status !== 'declined') pushTo(s, { title, body: `Approve ${EUR(data.amount, s)} at ${data.merchant}? Tap to review.`, tag: 'ap-' + data.id });
   else if (type === 'request' && data.status === 'accepted') pushTo(s, { title, body: `${data.merchant} accepted your booking${data.slot ? ' for ' + data.slot : ''}.`, tag: 'rq-' + data.id });
   else if (type === 'request' && data.status === 'declined') pushTo(s, { title, body: `${data.merchant} can't take it. Mandat is looking for another option.`, tag: 'rq-' + data.id });
+  else if (type === 'request' && data.status === 'countered') pushTo(s, { title, body: `${data.merchant} proposes ${data.counterSlot} instead. Does that work?`, tag: 'rq-' + data.id });
+  else if (type === 'collected') pushTo(s, { title, body: `${data.merchant} confirmed your booking — ${EUR(data.amount, s)} deposit paid with PayPal.`, tag: 'cf-' + s.id });
   else if (type === 'share_paid') pushTo(s, { title, body: `${data.friend} paid their share: ${EUR(data.amount, s)}.`, tag: 'sh-' + data.invoiceId });
 }
 // After the agent's turn: a question for the user, or everything booked.
@@ -183,32 +186,6 @@ app.post('/api/me/stop', api(async (req, res) => {
 }));
 
 // ---------- PayPal: log in, then sign the mandate once ----------
-app.get('/auth/paypal', (req, res) => {
-  const u = me(req, res);
-  const state = crypto.randomBytes(8).toString('hex');
-  u._state = state;
-  res.setHeader('Set-Cookie', [`mandat_uid=${u.id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`, `mandat_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`]);
-  res.redirect(PayPal.loginUrl({ redirectUri: `${BASE()}/auth/paypal/callback`, state }));
-});
-
-app.get('/auth/paypal/callback', async (req, res) => {
-  try {
-    const u = me(req, res);
-    if (String(req.query.state) !== cookie(req, 'mandat_state')) throw new Error('State mismatch');
-    const info = await PayPal.loginCallback(String(req.query.code));
-    u.paypal.connected = true;
-    u.paypal.payerName = info.name;
-    u.paypal.payerEmail = info.email;
-    u.paypal.verified = info.verified;
-    if (!u.profile.name && info.name) u.profile.name = info.name;
-    if (!u.profile.email && info.email) u.profile.email = info.email;
-    saveUser(u);
-    res.redirect('/?connected=1');
-  } catch (e) {
-    res.status(400).send('PayPal sign-in failed: ' + e.message);
-  }
-});
-
 app.post('/api/me/mandate', api(async (req, res) => {
   const u = me(req, res);
   const setup = await PayPal.createMandateSetup({
@@ -379,6 +356,7 @@ app.get('/api/missions/:id/shares', api(async (req, res) => {
 }));
 
 // Devices that receive notifications (one per browser / installed app).
+app.get('/api/health', (req, res) => res.json({ ok: true, paypal: PayPal.MODE }));
 app.get('/api/push/key', (req, res) => res.json({ key: Push.publicKey() }));
 app.post('/api/me/push', api(async (req, res) => {
   const u = me(req, res);
@@ -468,21 +446,60 @@ app.get('/api/geocode', api(async (req) => {
 }));
 
 // ---------- merchant inbox (merchants without an AI agent) ----------
+// Requests live in missions on disk; scan them all so nothing is lost after a restart.
+function missionsOnDisk() {
+  const dir = path.resolve(process.env.MANDAT_DATA || 'data', 'missions');
+  return fs.readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => live.get(f.slice(0, -5))?.s || getMission(f.slice(0, -5))).filter(Boolean);
+}
+app.get('/merchant/:mid', (req, res) => res.sendFile(path.resolve('public/merchant.html')));
 app.get('/api/merchants/:mid/requests', api(async (req) => {
+  const m = merchant(req.params.mid);
+  checkInbox(m.id, req.query.k);
   const out = [];
-  for (const b of live.values()) for (const r of Object.values(b.s.requests)) if (r.merchant_id === req.params.mid) out.push(r);
-  return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  for (const s of missionsOnDisk()) for (const r of Object.values(s.requests || {})) {
+    if (r.merchant_id !== m.id) continue;
+    const { sessionId, inbox, ...pub } = r;
+    const pay = r.paymentId ? s.envelope.entries.find((e) => e.id === r.paymentId) : null;
+    out.push({ ...pub, customer: String(r.customer || 'A Mandat customer').split(' ')[0], deposit_state: pay?.state || null, deposit_held: pay?.amount || 0 });
+  }
+  return { merchant: { id: m.id, name: m.name, category: m.category, city: m.city, deposit: m.deposit }, requests: out.sort((a, b) => b.createdAt.localeCompare(a.createdAt)) };
+}));
+app.post('/api/merchants/:mid/requests/:rid', api(async (req) => {
+  const m = merchant(req.params.mid);
+  checkInbox(m.id, req.body?.k);
+  const action = ['accept', 'decline', 'counter'].includes(req.body?.action) ? req.body.action : null;
+  if (!action) throw new Error('Choose accept, decline or counter');
+  if (action === 'counter' && !String(req.body?.slot || '').trim()) throw new Error('Say which time you can do');
+  const s = missionsOnDisk().find((x) => x.requests?.[req.params.rid]?.merchant_id === m.id);
+  if (!s) throw Object.assign(new Error('Unknown request'), { status: 404 });
+  if (s.requests[req.params.rid].status !== 'pending') throw Object.assign(new Error('This request was already answered.'), { status: 409 });
+  const b = box(s.id);
+  if (b.s.userId) b.s._user = getUser(b.s.userId);
+  run(b, (emit) => resolveRequest(b.s, req.params.rid, { action, slot: req.body.slot, message: req.body.message }, emit));
+  return { ok: true, status: action === 'accept' ? 'accepted' : action === 'counter' ? 'countered' : 'declined' };
 }));
 
-app.post('/api/requests/:rid', api(async (req) => {
-  for (const b of live.values()) {
-    if (b.s.requests[req.params.rid]) {
-      if (b.s.userId) b.s._user = getUser(b.s.userId);
-      run(b, (emit) => resolveRequest(b.s, req.params.rid, !!req.body?.accepted, emit));
-      return { queued: true };
-    }
-  }
-  throw Object.assign(new Error('Unknown request'), { status: 404 });
+// The merchant confirms the booking: the held deposit is captured and paid to them.
+app.post('/api/merchants/:mid/requests/:rid/collect', api(async (req) => {
+  const m = merchant(req.params.mid);
+  checkInbox(m.id, req.body?.k);
+  const s = missionsOnDisk().find((x) => x.requests?.[req.params.rid]?.merchant_id === m.id);
+  const r = s?.requests[req.params.rid];
+  if (!r) throw Object.assign(new Error('Unknown request'), { status: 404 });
+  const b = box(s.id);
+  if (b.s.userId) b.s._user = getUser(b.s.userId);
+  const entry = b.s.envelope.entries.find((e) => e.id === r.paymentId);
+  if (!entry || entry.state !== 'held') throw Object.assign(new Error('No deposit is waiting to be collected.'), { status: 409 });
+  // Collect now (the merchant sees it at once), then let the customer's agent tell them.
+  const emit = emitter(b);
+  await captureEntry(b.s, entry.id, emit, `${m.name} confirmed the booking`);
+  b.s.requests[r.id].status = 'confirmed';
+  emit('request', b.s.requests[r.id]);
+  emit('envelope', envelopeView(b.s));
+  saveMission(b.s);
+  pushFor(b, { type: 'collected', data: { merchant: m.name, amount: entry.amount } });
+  run(b, (e2) => userTurn(b.s, `[system] ${m.name} confirmed the booking and collected the ${entry.amount} deposit (paid with PayPal). Mark it confirmed in the plan and tell the user in one short sentence.`, e2));
+  return { ok: true, collected: entry.amount };
 }));
 
 // Friends pay their invoices while the app is closed: check open invoices every 2 minutes (PayPal API, free).

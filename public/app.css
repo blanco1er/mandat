@@ -556,3 +556,10 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 .pill-btn { height: 34px; padding: 0 16px; border-radius: 17px; background: var(--accent); color: #fff; font-weight: 600; font-size: 14px; }
 #tabbar button { position: relative; }
 #tabbar button[data-badge]:not([data-badge=""])::after { content: attr(data-badge); position: absolute; top: 4px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--warn); color: #fff; font: 700 10px/16px -apple-system, system-ui, sans-serif; text-align: center; }
+
+.card.req .chip { margin-left: auto; }
+.req-reply { margin: 6px 0 0; font-size: 14px; color: var(--ink-2); font-style: italic; }
+.inbox-link { display: inline-block; margin-top: 10px; font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
+
+.card.pay .why { display: block; color: var(--ink-3); font-size: 12px; }
+.card.pay.refund .amt { color: var(--ok); }

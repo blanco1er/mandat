@@ -1,0 +1,30 @@
+# Keeps the free Render instance awake for judges (free instances sleep after ~15 min without traffic).
+# Set the repository variable (or secret) MANDAT_URL to the hosted URL, e.g. https://mandat.onrender.com
+# Without it, the job does nothing.
+name: Keep demo awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping the hosted demo
+        env:
+          MANDAT_URL: ${{ vars.MANDAT_URL || secrets.MANDAT_URL }}
+        run: |
+          if [ -z "$MANDAT_URL" ]; then
+            echo "MANDAT_URL is not set; skipping."
+            exit 0
+          fi
+          url="${MANDAT_URL%/}/api/health"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 90 --retry 2 --retry-delay 10 "$url" || echo "000")
+          echo "GET /api/health -> HTTP $code"
+          # A cold start can be slow; never fail the workflow over it.
+          exit 0

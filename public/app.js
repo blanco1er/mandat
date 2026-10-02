@@ -558,13 +558,19 @@ function requestCard(r) {
     add(card);
   }
   card.classList.toggle('accepted', r.status !== 'pending');
-  card.innerHTML = `<header><span class="avatar m">${esc(r.merchant[0])}</span><div><b>${esc(r.merchant)}</b><small>No AI agent · booking request sent</small></div>${
-    r.status === 'pending' ? '<span class="dots"><i></i><i></i><i></i></span>' : `<span class="state">${r.status === 'accepted' ? 'Accepted' : 'Declined'}</span>`
-  }</header><p>${r.items.map((i) => `${i.qty}× ${esc(i.label)}`).join(', ')}${r.slot ? ' · ' + esc(r.slot) : ''} — ${fmt(r.total)}, deposit ${fmt(r.deposit)}</p>`;
+  const [label, cls] = { accepted: ['Accepted', 'wait'], confirmed: ['Confirmed', 'paid'], declined: ['Declined', 'off'], countered: ['Other time', 'part'] }[r.status] || ['Waiting', 'wait'];
+  const sub = r.status === 'pending' ? 'No AI agent · request sent to their inbox' : r.status === 'countered' ? `Proposes ${esc(r.counterSlot)} instead` : r.status === 'accepted' ? 'Accepted · confirms when the deposit is held' : r.status === 'confirmed' ? 'Confirmed · deposit paid with PayPal' : 'Declined';
+  card.innerHTML = `<header><span class="avatar m">${esc(r.merchant[0])}</span><div><b>${esc(r.merchant)}</b><small>${sub}</small></div><span class="chip ${cls}">${label}</span></header>
+    <p>${r.items.map((i) => `${i.qty}× ${esc(i.label)}`).join(', ')}${r.slot ? ' · ' + esc(r.slot) : ''} — ${fmt(r.total)}, deposit ${fmt(r.deposit)}</p>${r.reply ? `<p class="req-reply">“${esc(r.reply)}”</p>` : ''}
+    ${r.inbox && (r.status === 'pending' || r.status === 'accepted') ? `<a class="inbox-link" href="${esc(r.inbox)}" target="_blank" rel="noopener">See it from ${esc(r.merchant)}'s side (demo inbox) ↗</a>` : ''}`;
 }
-function paymentCard({ kind, entry, mode }) {
-  const li = el('li', 'card pay' + (kind === 'capture' ? ' captured' : ''));
-  li.innerHTML = `<span class="lock">${kind === 'hold' ? '🔒' : '✓'}</span><div><b>${kind === 'hold' ? 'Held with PayPal' : 'Paid with PayPal'}</b><small>${esc(entry.merchant)} · ${esc(entry.label)}</small><span class="mode">${mode === 'sandbox' ? 'PayPal sandbox' : 'demo'}</span></div><span class="amt">${fmt(entry.amount)}</span>`;
+// Money moments: held (reserved, not charged), paid (merchant confirmed), refunded.
+function paymentCard({ kind, entry, mode, why, reason }) {
+  const li = el('li', 'card pay ' + kind + (kind === 'capture' ? ' captured' : ''));
+  const [icon, title, sub] = kind === 'hold' ? ['🔒', 'Held with PayPal', 'Not charged until the merchant confirms']
+    : kind === 'capture' ? ['✓', 'Paid with PayPal', why || 'Merchant confirmed']
+    : ['↩︎', 'Refunded with PayPal', reason || 'Back to your PayPal'];
+  li.innerHTML = `<span class="lock">${icon}</span><div><b>${title}</b><small>${esc(entry.merchant)} · ${esc(entry.label)}</small><small class="why">${esc(sub)}</small><span class="mode">${mode === 'sandbox' ? 'PayPal sandbox' : 'demo'}</span></div><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span>`;
   add(li);
 }
 function planCard({ items }) {
@@ -675,7 +681,7 @@ function openSheet(a) {
   $('#sheetMerchant').textContent = `Pay ${a.merchant} (via Mandat)`;
   $('#sheetLines').innerHTML = `<div><span>${esc(a.label)}</span><span>${fmt(a.amount)}</span></div>${a.offer_total ? `<div><span>Booking total</span><span>${fmt(a.offer_total)}</span></div>` : ''}`;
   $('#sheetAmount').textContent = fmt(a.amount);
-  $('#sheetFine').textContent = 'Held with PayPal, not charged until the merchant confirms. Cancel anytime and it returns to your mission budget.';
+  $('#sheetFine').textContent = (a.reason ? a.reason + '. ' : '') + 'Held with PayPal, not charged until the merchant confirms. Cancel anytime and it returns to your mission budget.';
   const btn = $('#sheetApprove');
   btn.className = 'hold-btn';
   btn.querySelector('.label').textContent = 'Hold to approve';

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Merchant inbox · Mandat</title>
+  <meta name="theme-color" content="#f4f1ec">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/app.css">
+  <style>
+    body { padding: calc(env(safe-area-inset-top) + 24px) 0 calc(env(safe-area-inset-bottom) + 40px); }
+    .inbox { max-width: 640px; margin: 0 auto; padding: 0 16px; }
+    .m-head { display: flex; align-items: center; gap: 14px; }
+    .m-logo { width: 52px; height: 52px; border-radius: 16px; display: grid; place-items: center; font: 700 22px/1 -apple-system, system-ui, sans-serif; color: #fff; background: linear-gradient(135deg, #2b2f3a, #555b6b); flex: none; }
+    .m-head h1 { margin: 0; font: 700 26px/31px -apple-system, "SF Pro Display", system-ui, sans-serif; letter-spacing: -0.02em; }
+    .m-head small { color: var(--ink-3); font-size: 14px; }
+    .m-intro { margin: 18px 0 6px; padding: 14px 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--card-line); font-size: 14px; line-height: 20px; color: var(--ink-2); }
+    .m-intro b { color: var(--ink); }
+    .req-card { padding: 16px; border-radius: 20px; background: var(--card); border: 1px solid var(--card-line); box-shadow: var(--shadow); margin-bottom: 12px; animation: rise 0.45s var(--spring) both; }
+    .req-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .req-top b { font-size: 17px; }
+    .req-top time { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+    .req-via { font-size: 13px; color: var(--ink-3); margin-top: 2px; }
+    .req-when { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 6px 12px; border-radius: 12px; background: rgba(10, 132, 255, 0.12); color: var(--accent); font-weight: 600; font-size: 14px; }
+    .req-lines { list-style: none; margin: 12px 0 0; padding: 0; font-size: 15px; font-variant-numeric: tabular-nums; }
+    .req-lines li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--card-line); }
+    .req-lines li.total { border-bottom: 0; font-weight: 700; }
+    .req-note { margin: 10px 0 0; font-size: 14px; color: var(--ink-2); font-style: italic; }
+    .req-deposit { margin: 10px 0 0; font-size: 13px; color: var(--ink-3); line-height: 18px; }
+    .req-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .btn { height: 42px; padding: 0 18px; border-radius: 21px; font-weight: 600; font-size: 15px; }
+    .btn.accept { background: var(--ok); color: #fff; flex: 1; min-width: 140px; }
+    .btn.other { background: var(--card-line); color: var(--ink); }
+    .btn.decline { background: none; color: var(--warn); }
+    .btn:disabled { opacity: 0.5; }
+    .counter { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+    .counter input { flex: 1; min-width: 160px; height: 42px; padding: 0 14px; border-radius: 12px; border: 1px solid var(--card-line); background: var(--bg); font-size: 15px; }
+    .done-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--card-line); margin-bottom: 8px; font-size: 14px; }
+    .done-row .grow { flex: 1; min-width: 0; }
+    .done-row small { display: block; color: var(--ink-3); font-size: 12px; }
+    .empty-box { padding: 28px 16px; text-align: center; color: var(--ink-3); font-size: 15px; border-radius: 20px; border: 1px dashed var(--card-line); }
+    .err { margin-top: 40px; text-align: center; color: var(--ink-2); }
+    .collect { display: block; margin-top: 10px; height: 38px; font-size: 14px; }
+    .wait-dep { display: block; margin-top: 6px; color: var(--held) !important; }
+  </style>
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true"><i></i><i></i><i></i></div>
+  <main class="inbox" id="inbox">
+    <header class="m-head"><span class="m-logo" id="mLogo">·</span><div><h1 id="mName">Inbox</h1><small id="mMeta">Booking requests</small></div></header>
+    <p class="m-intro">Shoppers' <b>Mandat</b> agents send you booking requests here — no app, no AI needed on your side. <b>Accept</b> and the customer's agent holds the deposit with <b>PayPal</b> right away; you can also propose another time or decline.</p>
+    <h2 class="section-title">Waiting for you</h2>
+    <div id="pending"></div>
+    <h2 class="section-title" id="doneTitle" hidden>Answered</h2>
+    <div id="done"></div>
+  </main>
+  <script src="/merchant.js" type="module"></script>
+</body>
+</html>

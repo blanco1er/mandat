@@ -31,7 +31,7 @@ for (let i = 0; i < 12 && queue.length; i++) {
   const [kind, id] = queue.shift();
   console.log(`\n—— ${kind === 'approval' ? 'USER TAPS APPROVE' : 'MERCHANT TAPS ACCEPT'} (${id}) ——`);
   if (kind === 'approval') await resolveApproval(s, id, true, emit);
-  else await resolveRequest(s, id, true, emit);
+  else await resolveRequest(s, id, { action: 'accept' }, emit);
 }
 console.log('\nFINAL', JSON.stringify(envelopeView(s), (k, v) => (k === 'paypal' ? undefined : v)).slice(0, 600));
 console.log('time', Math.round((Date.now() - t0) / 1000) + 's');
