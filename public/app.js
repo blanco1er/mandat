@@ -565,6 +565,12 @@ function handle({ type, data }) {
     case 'tool': typing(state.busy); return toolStep(data);
     case 'places': return placesCard(data);
     case 'preview': return previewCard(data);
+    case 'reminder': return reminderCard(data);
+    case 'reminder_due': {
+      const card = state.cards['rm:' + data.id];
+      if (card) card.classList.add('done');
+      return add(el('li', 'step due', '⏰ ' + data.text));
+    }
     case 'verified': return verifiedMark(data);
     case 'negotiation': return negotiation(data);
     case 'request': return requestCard(data);
@@ -726,13 +732,31 @@ function previewCard(v) {
   const meta = [v.rating ? `★ ${v.rating.toFixed(1)}${v.ratings ? ` (${v.ratings.toLocaleString('en')})` : ''}` : '', v.cuisine || v.category, v.distance != null ? `${v.distance} m` : '', v.openingHours ? v.openingHours.slice(0, 40) : ''].filter(Boolean).map(esc).join(' · ');
   li.innerHTML = `${photos.length
     ? `<div class="pv-photos">${photos.map((p) => `<img class="zoomable" src="${esc(p.url)}" alt="${esc(v.name)}" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>`
-    : `<div class="pv-none"><span>📍</span><small>No public photo yet — open Google Maps for people's photos</small></div>`}
+    : noPhoto(v)}
     <div class="pv-body"><b>${esc(v.name)}</b><small>${meta}</small>${v.address ? `<small>${esc(v.address)}</small>` : ''}
       <div class="pv-actions"><a class="pill-btn" href="${esc(v.googleMaps)}" target="_blank" rel="noopener">Photos on Google Maps</a>${v.directions ? `<a href="${esc(v.directions)}" target="_blank" rel="noopener">Directions</a>` : ''}${v.website ? `<a href="${esc(/^https?:/.test(v.website) ? v.website : 'https://' + v.website)}" target="_blank" rel="noopener">Website</a>` : ''}</div>
       ${photos.length ? `<p class="pv-src">Photos: ${esc([...new Set(photos.map((p) => p.source))].join(', '))}</p>` : ''}</div>`;
   // A photo that cannot load disappears instead of leaving a broken frame.
-  li.querySelectorAll('.pv-photos img').forEach((im) => im.addEventListener('error', () => { im.remove(); if (!li.querySelector('.pv-photos img')) li.querySelector('.pv-photos')?.remove(); }));
+  // A photo that cannot load (or a Google link that expired) gives way to the Google Maps button.
+  li.querySelectorAll('.pv-photos img').forEach((im) => im.addEventListener('error', () => {
+    im.remove();
+    const strip = li.querySelector('.pv-photos');
+    if (strip && !strip.querySelector('img')) strip.outerHTML = noPhoto(v);
+  }));
   add(li);
+}
+// A scheduled reminder: when it will ping the phone, and one tap to put it in the calendar.
+function reminderCard(r) {
+  if (state.cards['rm:' + r.id]) return;
+  const li = el('li', 'card reminder' + (r.sent ? ' done' : ''));
+  const when = new Date(r.at);
+  const label = when.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  li.innerHTML = `<span class="rm-ic">⏰</span><div class="rm-main"><b>${esc(r.text)}</b><small>Notification · ${esc(label)}</small></div><a class="rm-cal" href="/api/missions/${state.mission}/reminders/${r.id}.ics" aria-label="Add to Calendar">${svg('cal')}</a>`;
+  state.cards['rm:' + r.id] = li;
+  add(li);
+}
+function noPhoto(v) {
+  return `<a class="pv-none" href="${esc(v.googleMaps)}" target="_blank" rel="noopener"><span>📍</span><b>See photos on Google Maps</b><small>People's photos and reviews of ${esc(v.name)}</small></a>`;
 }
 function verifiedMark({ merchant_id, name, ok }) {
   state.verified[merchant_id] = ok;
@@ -825,6 +849,7 @@ function planCard({ items }) {
         <div class="tl-main"><b>${esc(it.what)}${it.nights ? ` · ${it.nights} night${it.nights > 1 ? 's' : ''}` : ''}</b><small>${[it.merchant, time].filter(Boolean).map(esc).join(' · ')}</small></div>
         <div class="tl-side">${it.total ? `<span class="tl-amt">${fmt(it.total)}</span>` : ''}<span class="chip ${cls}">${st}</span></div></div>`;
     }).join('')}</section>`).join('')}</div>
+    ${items.some((i) => /^\d{4}-\d{2}-\d{2}/.test(i.when || '') && i.status !== 'cancelled') ? `<a class="tl-cal" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} Add ${multiDay ? 'the whole trip' : 'to Calendar'}</a>` : ''}
     ${planned ? `<div class="tl-total"><span>Planned ${fmt(planned)}${budget ? ` of ${fmt(budget)}` : ''}</span>${budget ? `<span class="${planned > budget ? 'over' : ''}">${planned > budget ? 'Over by ' + fmt(planned - budget) : fmt(budget - planned) + ' left for food & extras'}</span>` : ''}</div>
     <div class="tl-bar"><i style="width:${budget ? Math.min(100, (100 * planned) / budget) : 0}%"></i></div>` : ''}`;
   fold(card);
@@ -1492,6 +1517,7 @@ const ICON = {
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   listen: '<path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
   stop: '<rect x="7" y="7" width="10" height="10" rx="1.5"/>',
+  cal: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4M12 13v5M9.5 15.5h5"/>',
   qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/>',
   share: '<path d="M12 15V4M8 7.5 12 3.5l4 4"/><path d="M7 11H6a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 18 11h-1"/>',
 };
@@ -1553,14 +1579,15 @@ function el(tag, cls, text) {
   return n;
 }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]); }
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
 async function get(url) {
-  const r = await fetch(url);
+  const r = await fetch(url, { headers: { 'X-TZ': TZ } });
   const j = await r.json();
   if (!r.ok) throw new Error(j.error || 'Request failed');
   return j;
 }
 async function post(url, body) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-TZ': TZ }, body: JSON.stringify(body) });
   const j = await r.json();
   if (!r.ok) throw new Error(j.error || 'Request failed');
   return j;

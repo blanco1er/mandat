@@ -9,6 +9,7 @@ import * as PayPal from './lib/paypal.mjs';
 import { geocode } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
+import { ics, planEvents, validTz, localToUtc } from './lib/calendar.mjs';
 import * as Push from './lib/push.mjs';
 import { merchant, checkInbox } from './lib/merchants.mjs';
 import { newUser, getUser, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
@@ -20,6 +21,16 @@ const live = new Map(); // missionId -> { s, clients:Set, busy:Promise, log:[] }
 
 app.set('trust proxy', 1); // behind Render / a tunnel: the client IP is in X-Forwarded-For
 app.use(express.json({ limit: '3mb' })); // photos arrive as data URLs, resized to 1280 px by the app
+
+// The app sends the person's time zone; reminders and "tomorrow at 5" are understood in it.
+app.use('/api', (req, res, next) => {
+  const tz = req.get('X-TZ');
+  if (tz && validTz(tz)) {
+    const u = getUser(cookie(req, 'mandat_uid'));
+    if (u && u.tz !== tz) { u.tz = tz; saveUser(u); }
+  }
+  next();
+});
 
 // ---------- protections for a public demo (keeps the AI bill bounded until judging ends) ----------
 // Short burst limit per IP on every write.
@@ -435,6 +446,50 @@ app.post('/api/me/push/test', api(async (req, res) => {
   if (changed) saveUser(u);
   return { devices: (u.push || []).length };
 }));
+
+// ---------- calendar files and reminders ----------
+function sendIcs(res, name, events, tz) {
+  res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+  res.setHeader('Content-Disposition', `inline; filename="${name.replace(/[^\w .-]+/g, '').trim() || 'mandat'}.ics"`);
+  res.send(ics(name, events, tz));
+}
+app.get('/api/missions/:id/calendar.ics', (req, res) => {
+  try {
+    const u = me(req, res);
+    const b = box(req.params.id, u);
+    const ev = planEvents(b.s);
+    if (!ev.length) return res.status(404).send('Nothing with a date in this plan yet.');
+    sendIcs(res, b.s.title || 'Mandat plan', ev, u.tz || 'UTC');
+  } catch (e) { res.status(e.status || 400).send(e.message); }
+});
+app.get('/api/missions/:id/reminders/:rid.ics', (req, res) => {
+  try {
+    const u = me(req, res);
+    const b = box(req.params.id, u);
+    const r = (b.s.reminders || []).find((x) => x.id === req.params.rid);
+    if (!r) return res.status(404).send('Unknown reminder');
+    // The calendar event is the event itself when known, with an alert at the reminder time.
+    const start = r.eventAt || r.local;
+    const before = Math.max(0, Math.round((localToUtc(start, u.tz || 'UTC') - new Date(r.at)) / 60000));
+    sendIcs(res, r.text.slice(0, 60), [{ uid: r.id, summary: r.text, start, minutes: 60, location: r.place, description: `${b.s.title || 'Mandat'} · reminder from Mandat`, alarms: [before] }], u.tz || 'UTC');
+  } catch (e) { res.status(e.status || 400).send(e.message); }
+});
+// Due reminders become phone notifications (and a line in the mission), checked every 30 seconds.
+setInterval(() => {
+  try {
+    const now = Date.now();
+    for (const s0 of missionsOnDisk()) {
+      if (!s0.reminders?.some((r) => !r.sent && Date.parse(r.at) <= now)) continue;
+      const b = box(s0.id);
+      for (const r of b.s.reminders.filter((x) => !x.sent && Date.parse(x.at) <= now)) {
+        r.sent = true;
+        emitter(b)('reminder_due', { id: r.id, text: r.text });
+        pushTo(b.s, { title: '⏰ ' + (b.s.title || 'Mandat'), body: r.text, tag: 'rm-' + r.id });
+      }
+      saveMission(b.s);
+    }
+  } catch (e) { console.warn('[reminders]', e.message); }
+}, 30000);
 
 // Archive keeps the history; delete only when no money is held for the mission.
 app.post('/api/missions/:id/archive', api(async (req, res) => {

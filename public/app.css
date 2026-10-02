@@ -829,3 +829,19 @@ body.no-scroll { overflow: hidden; }
 .pv-actions a { font-size: 13px; font-weight: 600; color: var(--accent); text-decoration: none; }
 .pv-actions a.pill-btn { color: #fff; display: inline-flex; align-items: center; height: 30px; padding: 0 12px; font-size: 13px; }
 .pv-src { margin: 8px 0 0; font-size: 11px; color: var(--ink-3); }
+
+a.pv-none { text-decoration: none; color: inherit; cursor: pointer; transition: filter 0.2s var(--smooth); }
+a.pv-none:hover { filter: brightness(1.06); }
+.pv-none b { font-size: 14px; color: var(--accent); }
+
+/* Reminders */
+.card.reminder { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.card.reminder.done { opacity: 0.6; }
+.rm-ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; background: rgba(242, 163, 58, 0.16); font-size: 15px; flex: none; }
+.rm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.rm-main b { font-size: 14px; font-weight: 600; }
+.rm-main small { font-size: 12px; color: var(--ink-3); }
+.rm-cal { width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; background: var(--card-line); color: var(--accent); flex: none; }
+.rm-cal svg, .tl-cal svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tl-cal { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; height: 34px; padding: 0 14px; border-radius: 17px; background: var(--card-line); color: var(--accent); font-size: 13px; font-weight: 600; text-decoration: none; }
+.step.due { color: var(--held); font-weight: 600; }
