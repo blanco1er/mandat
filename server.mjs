@@ -19,7 +19,7 @@ import { newUser, getUser, saveUser, getMission, saveMission, deleteMission, app
 
 const app = express();
 const PORT = Number(process.env.PORT || 8790);
-const BASE = () => process.env.PUBLIC_URL || `http://localhost:${PORT}`;
+const BASE = () => process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`; // Render provides RENDER_EXTERNAL_URL
 const live = new Map(); // missionId -> { s, clients:Set, busy:Promise, log:[] }
 
 app.set('trust proxy', 1); // behind Render / a tunnel: the client IP is in X-Forwarded-For
