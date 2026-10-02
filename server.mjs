@@ -44,6 +44,14 @@ function box(id, user) {
     const s = getMission(id);
     if (!s) throw Object.assign(new Error('Unknown mission'), { status: 404 });
     s.feed ||= []; // the event feed is saved with the mission, so it survives a server restart
+    // Missions from before the feed existed: rebuild the conversation from the saved messages.
+    if (!s.feed.length) {
+      const at = Date.parse(s.createdAt) || Date.now();
+      for (const m of s.messages) {
+        if (m.role === 'user') s.feed.push({ type: 'user', data: { text: String(m.content).split('\n[Photo')[0], image: String(m.content).includes('[Photo') }, at });
+        else if (m.role === 'assistant' && m.content?.trim()) s.feed.push({ type: 'say', data: { text: m.content.trim() }, at });
+      }
+    }
     b = { s, clients: new Set(), busy: Promise.resolve(), log: s.feed };
     live.set(id, b);
   }

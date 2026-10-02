@@ -76,7 +76,8 @@ const compose = { budget: 400, auto: false, touched: false, emoji: null, photo: 
 for (const i of IDEAS) {
   const b = el('button', 'idea');
   b.type = 'button';
-  b.innerHTML = `<span class="idea-e">${i.e}</span><b>${esc(i.t)}</b><small>${esc(i.d)}</small>`;
+  b.innerHTML = `<span aria-hidden="true">${i.e}</span>${esc(i.t)}`;
+  b.title = i.d;
   b.addEventListener('click', () => {
     $('#cText').value = i.q;
     compose.emoji = i.e;
@@ -124,7 +125,10 @@ function onCompose() {
   const t = $('#cText').value;
   const found = budgetFromText(t);
   if (found && !compose.touched) setBudget(found, { auto: true, touched: false });
-  $('#cGo').disabled = !t.trim() && !compose.photo;
+  // One button, as in a mission: the voice orb while empty, the send arrow as soon as there is something.
+  const has = !!t.trim() || !!compose.photo;
+  $('#compose').classList.toggle('has-text', has);
+  $('#cGo').setAttribute('aria-label', has ? 'Start mission' : 'Talk to Mandat');
   $('#cText').style.height = 'auto';
   $('#cText').style.height = Math.min($('#cText').scrollHeight, 220) + 'px';
 }
@@ -149,11 +153,18 @@ $('#cBudgetIn').addEventListener('input', () => {
   const v = Math.round(Number($('#cBudgetIn').value.replace(',', '.')));
   if (v > 0) setBudget(v, { touched: true });
 });
-$('#cMic').addEventListener('click', () => listen((t) => {
-  $('#cText').value = ($('#cText').value + ' ' + t).trim();
-  compose.voice = true;
-  onCompose();
-}, $('#cMic')));
+$('#cGo').addEventListener('click', (e) => {
+  if ($('#compose').classList.contains('has-text')) return; // the form submits
+  e.preventDefault();
+  if (state.listening) return rec?.stop();
+  // Speak your mission: what you say becomes the request and starts right away.
+  listen((t) => {
+    $('#cText').value = t;
+    compose.voice = true;
+    onCompose();
+    $('#compose').requestSubmit();
+  }, $('#cGo'));
+});
 $('#cPhoto').addEventListener('click', () => pickPhoto((url) => {
   compose.photo = url;
   $('#cPreview').src = url;
@@ -169,7 +180,6 @@ $('#compose').addEventListener('submit', async (e) => {
   e.preventDefault();
   const intent = $('#cText').value.trim();
   if (!intent && !compose.photo) return;
-  $('#cGo').disabled = true;
   $('#compose').classList.add('sending');
   try {
     const location = await locate();
@@ -273,7 +283,7 @@ function missionRow(m) {
   li.innerHTML = `<span class="emoji">${esc(m.emoji)}</span>
     <div class="info"><div class="t-row"><b>${esc(cleanTitle(m.title))}</b><time>${ago(m.lastAt)}</time></div>
       <p class="m-line ${cls}">${esc(line)}</p>
-      <div class="m-money"><span class="ring" style="--p:${used}"></span>${fmtC(m.remaining, m.currency)} left of ${fmtC(m.total, m.currency)}${m.progress ? ` · ${m.progress.done}/${m.progress.of} booked` : ''}</div></div>
+      <div class="m-money"><span class="m-bar"><i style="width:${used * 100}%"></i></span>${fmtC(m.remaining, m.currency)} left of ${fmtC(m.total, m.currency)}${m.progress ? ` · ${m.progress.done}/${m.progress.of} booked` : ''}</div></div>
     <button type="button" class="m-more" aria-label="More for ${esc(m.title)}" aria-haspopup="menu">•••</button>`;
   li.addEventListener('click', (e) => { if (!e.target.closest('.m-more')) openMission(m.id); });
   li.querySelector('.m-more').addEventListener('click', (e) => rowMenu(e.currentTarget, m));
