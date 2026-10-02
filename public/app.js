@@ -873,6 +873,7 @@ function handle({ type, data }) {
     case 'places': return placesCard(data);
     case 'preview': return previewCard(data);
     case 'option': return optionCard(data);
+    case 'top_places': return topCard(data);
     case 'notify': return addStep(t('Sent to your phone · {text}', { text: data.text }), 'step mem');
     case 'choices': return choicesRow(data);
     case 'reminder': return reminderCard(data);
@@ -1063,34 +1064,59 @@ function optionCard(o) {
   state.places[o.name] = { address: o.address, photo: o.photos?.[0]?.url || '' };
   // One card per business: shown again, it is updated where it is.
   const old = state.cards['o:' + o.merchant_id];
-  const li = el('li', 'card preview option');
+  const li = el('li', 'card option');
   const photos = o.photos || [];
   const maps = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([o.address || o.name, o.city].filter(Boolean).join(', '));
   const stars = o.rating ? `★ ${Number(o.rating).toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}` : '';
-  li.innerHTML = `${photos.length ? `<div class="pv-photos">${photos.map((p) => `<img class="zoomable" src="${esc(p.url)}" alt="${esc(o.name)}" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>` : plainCover(o)}
-    <div class="pv-body">
-      <div class="op-top"><b>${esc(o.name)}</b><span class="op-price">${esc(fmtC(o.price, o.currency))}</span></div>
-      <small>${[stars, o.area].filter(Boolean).map(esc).join(' · ')}</small>
-      ${o.address ? `<small>${esc(o.address)}</small>` : ''}
-      <p class="op-what">${esc(o.what)}</p>
+  const thumb = photos[0] ? `<img class="op-thumb" src="${esc(photos[0].url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="op-thumb op-ico">${COVER[o.category] || '📍'}</span>`;
+  // Folded: one line (photo, name, what, price). Unfolded: photos, place, facts, conditions, actions.
+  li.innerHTML = `<header>${thumb}<div class="op-main"><b>${esc(o.name)}</b><small>${esc(o.what || [stars, o.area].filter(Boolean).join(' · '))}</small></div><span class="op-price">${esc(fmtC(o.price, o.currency))}</span></header>
+    ${photos.length > 1 ? `<div class="pv-photos op-photos">${photos.map((p) => `<img class="zoomable" src="${esc(p.url)}" alt="${esc(o.name)}" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>` : photos.length ? `<img class="op-hero zoomable" src="${esc(photos[0].url)}" alt="${esc(o.name)}" loading="lazy" referrerpolicy="no-referrer">` : ''}
+    <div class="op-body">
+      <p class="op-place">${[stars, o.area].filter(Boolean).map(esc).join(' · ')}${o.address ? `<br><a href="${esc(maps)}" target="_blank" rel="noopener">${esc(o.address)}</a>` : ''}</p>
+      ${o.category === 'ride' && (o.from || o.to) ? `<p class="op-route">${esc([o.from, o.to].filter(Boolean).join(' → '))}${o.when ? ` · ${esc(o.when.slice(11) || o.when)}` : ''}</p>` : ''}
       ${o.highlights?.length ? `<ul class="op-hl">${o.highlights.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
       ${o.conditions || o.deposit ? `<p class="op-cond">${esc([o.deposit ? t('{amount} held now, the rest after', { amount: fmtC(o.deposit, o.currency) }) : '', o.conditions].filter(Boolean).join(' · '))}</p>` : ''}
-      ${o.category === 'ride' && (o.from || o.to) ? `<p class="op-route">${esc([o.from, o.to].filter(Boolean).join(' → '))}${o.when ? ` · ${esc(o.when.slice(11) || o.when)}` : ''}</p>` : ''}
-      <div class="pv-actions op-actions">${o.category === 'ride' && o.to ? `<a class="pill-btn uber" href="${esc(uberLink(o))}" target="_blank" rel="noopener">${t('Open in Uber')}</a>` : `<a class="pill-btn" href="${esc(maps)}" target="_blank" rel="noopener">${t('Map')}</a>`}<button type="button" class="op-no">${t('Change it')}</button></div>
+      <div class="op-actions">${o.category === 'ride' && o.to ? `<a class="pill-btn uber" href="${esc(uberLink(o))}" target="_blank" rel="noopener">${t('Open in Uber')}</a>` : `<a class="pill-btn" href="${esc(maps)}" target="_blank" rel="noopener">${t('Map')}</a>`}<button type="button" class="op-no">${t('Change it')}</button></div>
       ${photos.length ? `<p class="pv-src">${esc(t('Ambience photos · {credit}', { credit: photos[0].credit || 'Openverse' }))}</p>` : ''}
     </div>`;
-  li.querySelectorAll('.pv-photos img').forEach((im) => im.addEventListener('error', () => {
-    im.remove();
-    const strip = li.querySelector('.pv-photos');
-    if (strip && !strip.querySelector('img')) strip.outerHTML = plainCover(o);
-  }));
+  li.querySelectorAll('img').forEach((im) => im.addEventListener('error', () => im.remove()));
   const answer = (text) => { li.classList.add('answered'); if (vm.on) vmAnswer(text); else send(text); };
   li.querySelector('.op-no').addEventListener('click', () => answer(t('I would like another option instead of {name}', { name: o.name })));
+  fold(li);
   state.cards['o:' + o.merchant_id] = li;
   if (old) old.replaceWith(li); else add(li);
 }
+// The best places of a city: one card, a row of tiles; tap one to see it right there.
+const PRICE_SIGN = ['', '€', '€€', '€€€', '€€€€'];
+const TOP_TITLE = { value: 'Best value · {city}', rating: 'Best rated · {city}', luxury: 'Luxury · {city}' };
+function topCard(d) {
+  const li = el('li', 'card top');
+  const places = d.places || [];
+  const fmtR = (r) => Number(r).toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  li.innerHTML = `<div class="tp-head"><b>${esc(t(TOP_TITLE[d.sort] || TOP_TITLE.rating, { city: d.city }))}</b><small>${esc(t('From Google reviews'))}</small></div>
+    <div class="tp-row">${places.map((p, i) => `<button type="button" class="tp-tile" data-i="${i}">${p.photo ? `<img src="${esc(p.photo.url)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="tp-ph">${COVER[d.category] || '📍'}</span>`}<b>${esc(p.name)}</b><small>★ ${esc(fmtR(p.rating))} <i>(${esc(Number(p.ratings).toLocaleString(locale()))})</i>${p.price ? ' · ' + PRICE_SIGN[p.price] : ''}</small></button>`).join('')}</div>
+    <div class="tp-detail" hidden></div>`;
+  const detail = li.querySelector('.tp-detail');
+  li.querySelectorAll('.tp-tile').forEach((b) => b.addEventListener('click', () => {
+    const on = b.classList.contains('on');
+    li.querySelectorAll('.tp-tile').forEach((x) => x.classList.remove('on'));
+    if (on) { detail.hidden = true; return; }
+    b.classList.add('on');
+    const p = places[Number(b.dataset.i)];
+    const q = encodeURIComponent(`${p.name} ${p.address || ''}`);
+    detail.innerHTML = `${p.photo ? `<img class="zoomable" src="${esc(p.photo.url)}" alt="${esc(p.name)}" referrerpolicy="no-referrer">` : ''}
+      <div class="tp-info"><b>${esc(p.name)}</b><small>★ ${esc(fmtR(p.rating))} · ${esc(tn(p.ratings, '{n} review', '{n} reviews'))}${p.price ? ' · ' + PRICE_SIGN[p.price] : ''}</small><small>${esc(p.address || '')}</small>
+      <div class="pv-actions"><a class="pill-btn" href="${esc(p.googleMaps || 'https://www.google.com/maps/search/?api=1&query=' + q)}" target="_blank" rel="noopener">${t('Photos and reviews')}</a>${p.website ? `<a href="${esc(p.website)}" target="_blank" rel="noopener">${t('Website')}</a>` : ''}${p.lat ? `<a href="https://maps.apple.com/?daddr=${p.lat},${p.lon}&q=${q}" target="_blank" rel="noopener">${t('Directions')}</a>` : ''}</div>
+      ${p.photo ? `<p class="pv-src">${esc(t('Photo: {source}', { source: p.photo.source }))}</p>` : ''}</div>`;
+    detail.hidden = false;
+    detail.querySelector('img')?.addEventListener('error', (e) => e.target.remove());
+  }));
+  li.querySelectorAll('.tp-tile img').forEach((im) => im.addEventListener('error', () => im.replaceWith(Object.assign(document.createElement('span'), { className: 'tp-ph', textContent: COVER[d.category] || '📍' }))));
+  add(li);
+}
 // No photo yet: a calm cover with the kind of place, never a dead link.
-const COVER = { hotel: '🛏️', restaurant: '🍽️', venue: '🥂', catering: '🥂', entertainment: '🎶', decoration: '🎈', bakery: '🎂', florist: '💐', ride: '🚕', train: '🚆', activity: '🎟️', repair: '🔧' };
+const COVER = { hotel: '🛏️', restaurant: '🍽️', venue: '🥂', catering: '🥂', entertainment: '🎶', decoration: '🎈', bakery: '🎂', florist: '💐', ride: '🚕', train: '🚆', activity: '🎟️', repair: '🔧', bar: '🍸', cafe: '☕️', museum: '🏛️', attraction: '📸' };
 const plainCover = (o) => `<div class="pv-none op-cover"><span>${COVER[o.category] || '📍'}</span><small>${esc(o.area || o.city || '')}</small></div>`;
 // Uber opens with the route already filled in; the user confirms there.
 function uberLink(o) {

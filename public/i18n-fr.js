@@ -584,4 +584,12 @@ export default {
   "Live": "En direct",
   "Paused. Mandat does nothing and pays nothing until you resume.": "En pause. Mandat ne fait rien et ne paie rien jusqu’à ce que vous repreniez.",
   "Resumed. Mandat picks up where it left off.": "Repris. Mandat continue là où il s’était arrêté.",
+  "Best value · {city}": "Meilleur rapport qualité-prix · {city}",
+  "Best rated · {city}": "Les mieux notés · {city}",
+  "Luxury · {city}": "Luxe · {city}",
+  "From Google reviews": "D’après les avis Google",
+  "Photos and reviews": "Photos et avis",
+  "{n} review": "{n} avis",
+  "{n} reviews": "{n} avis",
+  "Photo: {source}": "Photo : {source}",
 };
