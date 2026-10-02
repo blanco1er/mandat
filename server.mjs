@@ -1,6 +1,7 @@
 // Mandat server: account (PayPal login, profile, rules, mandate), missions (each with its own envelope),
 // live event stream per mission (SSE), approvals, stop switch, merchant inbox.
 import express from 'express';
+import { shopEnabled } from './lib/shop.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -249,7 +250,7 @@ const api = (h) => async (req, res) => {
 
 // The build the server runs: the app compares it with its own and reloads when a newer one is live.
 const BUILD = (process.env.RENDER_GIT_COMMIT || '').slice(0, 12) || String(Date.now());
-app.get('/api/health', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ok: true, paypal: PayPal.MODE, build: BUILD }); });
+app.get('/api/health', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ok: true, paypal: PayPal.MODE, build: BUILD, shop: shopEnabled() }); }); // shop: whether product search is on (never the key)
 
 app.get('/api/me', api(async (req, res) => {
   const u = me(req, res);
