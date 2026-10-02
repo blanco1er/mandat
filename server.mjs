@@ -4,12 +4,14 @@ import express from 'express';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary } from './lib/agent.mjs';
+import { createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary, wrapCard, autoReminders } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
 import { geocode } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
 import { ics, planEvents, validTz, localToUtc } from './lib/calendar.mjs';
+import { KINDS } from './lib/memory.mjs';
+import { emojiFor, isEmoji } from './lib/emoji.mjs';
 import * as Push from './lib/push.mjs';
 import { merchant, checkInbox } from './lib/merchants.mjs';
 import { newUser, getUser, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
@@ -128,7 +130,7 @@ async function pushTo(s, msg) {
   if (changed) saveUser(u);
 }
 function pushFor(b, { type, data }) {
-  if (b.clients.size) return; // they are looking at this mission right now
+  if (b.clients.size && type !== 'wrapup') return; // they are looking at this mission right now (the recap always goes to the phone)
   const s = b.s;
   const title = s.title || 'Mandat';
   if (type === 'approval' && data.status !== 'approved' && data.status !== 'declined') pushTo(s, { title, body: `Approve ${EUR(data.amount, s)} at ${data.merchant}? Tap to review.`, tag: 'ap-' + data.id });
@@ -136,8 +138,22 @@ function pushFor(b, { type, data }) {
   else if (type === 'request' && data.status === 'declined') pushTo(s, { title, body: `${data.merchant} can't take it. Mandat is looking for another option.`, tag: 'rq-' + data.id });
   else if (type === 'request' && data.status === 'countered') pushTo(s, { title, body: `${data.merchant} proposes ${data.counterSlot} instead. Does that work?`, tag: 'rq-' + data.id });
   else if (type === 'collected') pushTo(s, { title, body: `${data.merchant} confirmed your booking — ${EUR(data.amount, s)} deposit paid with PayPal.`, tag: 'cf-' + s.id });
+  else if (type === 'wrapup' && !b.s.closed) {
+    b.s.closed = true;
+    const first = data.lines?.find((l) => l.when);
+    pushTo(s, { title: '✓ ' + data.headline, body: `${first ? `${first.what} · ${String(first.when).replace(/^\d{4}-/, '').replace(' ', ' at ')}. ` : ''}${data.reminders?.length ? `${data.reminders.length} reminder${data.reminders.length > 1 ? 's' : ''} planned. ` : ''}Tell me if you want to change anything.`, tag: 'done-' + s.id });
+  }
   else if (type === 'share_paid') pushTo(s, { title, body: `${data.friend} paid their share: ${EUR(data.amount, s)}.`, tag: 'sh-' + data.invoiceId });
 }
+// When everything is booked: make sure reminders exist and the "All set" recap is on screen and on the phone.
+function closeLoop(b, emit) {
+  if (b.s.closed || missionSummary(b.s).status !== 'done') return;
+  const tz = getUser(b.s.userId)?.tz || 'UTC';
+  for (const r of autoReminders(b.s, tz)) emit('reminder', r);
+  b.s.wrapped = wrapCard(b.s);
+  emit('wrapup', b.s.wrapped); // the recap card, and the phone notification (pushFor)
+}
+
 // After the agent's turn: a question for the user, or everything booked.
 function pushAfterRun(b) {
   if (b.clients.size) return;
@@ -145,9 +161,6 @@ function pushAfterRun(b) {
   if (m.status === 'needs_you' && m.needs.startsWith('Answer') && b.s.lastAsked !== m.last) {
     b.s.lastAsked = m.last;
     pushTo(b.s, { title: b.s.title || 'Mandat', body: m.needs.replace(/^Answer: /, ''), tag: 'q-' + b.s.id });
-  } else if (m.status === 'done' && !b.s.doneNotified) {
-    b.s.doneNotified = true;
-    pushTo(b.s, { title: b.s.title || 'Mandat', body: `All booked${m.held ? ` · ${EUR(m.held, b.s)} held until each place confirms` : ''}.`, tag: 'done-' + b.s.id });
   }
 }
 function run(b, fn) {
@@ -165,6 +178,7 @@ function run(b, fn) {
       emit('busy', { on: false });
       emit('envelope', envelopeView(b.s));
       emit('summary', missionSummary(b.s));
+      closeLoop(b, emit);
       pushAfterRun(b);
       saveMission(b.s);
     }
@@ -205,10 +219,30 @@ app.post('/api/me', api(async (req, res) => {
   return { user: publicUser(u) };
 }));
 
-// Forget everything the agent knows about me (profile), keep PayPal connection and missions.
+// Memory: the user sees everything Mandat remembers, can teach it something, and can delete any line.
+app.post('/api/me/memory', api(async (req, res) => {
+  const u = me(req, res);
+  const text = String(req.body?.text || '').trim().replace(/\s+/g, ' ').slice(0, 220);
+  if (text.length < 3) throw Object.assign(new Error('Write a short sentence.'), { status: 400 });
+  if (/\b(?:\d[ -]?){13,19}\b|password|cvv|iban/i.test(text)) throw Object.assign(new Error('Payment details and passwords never go into memory.'), { status: 400 });
+  u.memory ||= [];
+  u.memory.push({ id: 'mem_' + crypto.randomBytes(4).toString('hex'), text, kind: KINDS.includes(req.body?.kind) ? req.body.kind : 'fact', at: new Date().toISOString(), from: 'you', fromTitle: 'You' });
+  if (u.memory.length > 80) u.memory.shift();
+  saveUser(u);
+  return { user: publicUser(u) };
+}));
+app.delete('/api/me/memory/:id', api(async (req, res) => {
+  const u = me(req, res);
+  u.memory = (u.memory || []).filter((m) => m.id !== req.params.id);
+  saveUser(u);
+  return { user: publicUser(u) };
+}));
+
+// Forget everything the agent knows about me (profile and memory), keep PayPal connection and missions.
 app.post('/api/me/forget', api(async (req, res) => {
   const u = me(req, res);
   u.profile = newUser().profile;
+  u.memory = [];
   saveUser(u);
   return { user: publicUser(u) };
 }));
@@ -323,7 +357,8 @@ app.post('/api/missions', api(async (req, res) => {
   const u = me(req, res);
   if (!u.paypal.mandate) throw new Error('Sign the PayPal mandate first.');
   if (u.frozen) throw new Error('Mandat is stopped. Resume it in Settings.');
-  const { intent = '', budget, emoji = '✦', location = null } = req.body || {};
+  const { intent = '', budget, location = null } = req.body || {};
+  const emoji = isEmoji(req.body?.emoji) ? req.body.emoji.trim() : emojiFor(intent);
   if (!(budget > 0 && budget <= 5000)) throw new Error('Budget must be between 1 and 5000.');
   allowance(u, 'missions');
   allowance(u, 'turns');
@@ -341,11 +376,12 @@ app.post('/api/missions', api(async (req, res) => {
   const imgs = saveImages(u, req.body?.images || (req.body?.image ? [req.body.image] : []));
   emitter(b)('user', { text: intent, images: imgs.map((i) => i.url) });
   run(b, (emit) => userTurn(b.s, intent, emit, { images: imgs.map((i) => i.data) }));
-  titleFor(intent).then((t) => {
-    if (!t || t === b.s.title) return;
-    b.s.title = t;
+  titleFor(intent).then(({ title, emoji: e }) => {
+    if (title === b.s.title && e === b.s.emoji) return;
+    b.s.title = title;
+    b.s.emoji = e;
     saveMission(b.s);
-    emitter(b)('title', { title: t });
+    emitter(b)('title', { title, emoji: e });
   });
   return { id: s.id, summary: missionSummary(s) };
 }));
@@ -355,13 +391,16 @@ function plainTitle(intent) {
   if (!intent.trim()) return 'Photo mission';
   return intent.replace(/\s+/g, ' ').trim().split(/[,.;:!?]/)[0].slice(0, 40).trim().replace(/[\s,;:.\-–]+$/, '') || 'New mission';
 }
+// Title and emoji in one cheap call: "Dinner for Léa's birthday" · 🎂
 async function titleFor(intent) {
-  const fallback = plainTitle(intent);
+  const fallback = { title: plainTitle(intent), emoji: emojiFor(intent) };
   if (!intent.trim()) return fallback;
   try {
-    const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, maxTokens: 1500, temperature: 0.3, messages: [{ role: 'user', content: `Give a 2-5 word title, in the same language, for this errand: "${intent.slice(0, 300)}". No quotes, no emoji, no final period.` }] });
-    const t = (message.content || '').trim().replace(/^["'«]|["'»]$/g, '').slice(0, 42);
-    return t || fallback;
+    const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, maxTokens: 1500, temperature: 0.3, messages: [{ role: 'user', content: `For this errand: "${intent.slice(0, 300)}"\nReply with exactly one line: a single emoji that best shows what it is about (e.g. 🍽️ dinner, 💍 wedding, 🚆 train trip, 🎂 birthday, 🔧 repair), one space, then a 2-5 word title in the same language as the errand. No quotes, no final period.` }] });
+    const line = (message.content || '').trim().split('\n')[0];
+    const m = line.match(/^(\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier}|\u200D\p{Extended_Pictographic}\uFE0F?)*)\s*(.*)$/u);
+    const title = (m ? m[2] : line).trim().replace(/^["'«]|["'»]$/g, '').slice(0, 42);
+    return { title: title || fallback.title, emoji: m && isEmoji(m[1]) ? m[1] : fallback.emoji };
   } catch {
     return fallback;
   }

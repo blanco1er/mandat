@@ -21,7 +21,7 @@
   <header class="topbar glass" id="topbar">
     <div class="top-row">
       <button class="back" id="back" hidden aria-label="Missions"><svg viewBox="0 0 24 24"><path d="M15.4 4.6 8 12l7.4 7.4-1.4 1.4L5.2 12 14 3.2z"/></svg></button>
-      <div class="brand" id="brand"><span class="brand-mark" aria-hidden="true"></span><span class="titles"><span id="topTitle">Mandat</span><small id="topSub" hidden></small></span></div>
+      <div class="brand" id="brand"><span class="brand-mark" aria-hidden="true"></span><span class="top-emoji" id="topEmoji" aria-hidden="true" hidden></span><span class="titles"><span id="topTitle">Mandat</span><small id="topSub" hidden></small></span></div>
       <div class="top-actions">
         <button class="icon-btn stop" id="stopMission" hidden aria-label="Stop this mission">■</button>
         <button class="icon-btn plus" id="newMission" hidden aria-label="New mission">＋</button>
@@ -88,13 +88,10 @@
       <div class="c-bar">
         <button type="button" class="c-tool" id="cPhoto" aria-label="Add a photo"><svg viewBox="0 0 24 24"><path d="M9 4 7.2 6H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3.2L15 4H9Zm3 4.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></svg></button>
         <span class="grow"></span>
-        <button type="button" class="budget-pill" id="cBudgetBtn" aria-expanded="false" aria-controls="cBudgetEdit"><small>Budget</small><b id="cBudget">€400</b><i id="cBudgetAuto" hidden>· from your words</i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5z"/></svg></button>
+        <div class="budget-pill" id="cBudgetBtn" role="button" tabindex="0" aria-expanded="false" aria-controls="cBudgetEdit" aria-label="Change the budget"><small>Budget</small><b id="cBudget">€400</b><span class="b-inline"><span class="b-cur">€</span><input id="cBudgetIn" inputmode="decimal" enterkeyhint="done" autocomplete="off" aria-label="Budget in euros"></span><i id="cBudgetAuto" hidden>· from your words</i><svg class="b-pen" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m13.5 6.5 4 4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>
         <button type="submit" class="orb c-orb" id="cGo" aria-label="Talk to Mandat"><span class="orb-core"></span><span class="orb-ring"></span><span class="orb-wave" aria-hidden="true"><i></i><i></i><i></i><i></i></span><svg class="orb-send" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4.5 5.5 11l1.4 1.4L11 8.3V20h2V8.3l4.1 4.1 1.4-1.4z"/></svg></button>
       </div>
-      <div class="budget-edit" id="cBudgetEdit" hidden>
-        <div class="b-chips" id="cChips"></div>
-        <label class="b-own">Other<input id="cBudgetIn" inputmode="decimal" aria-label="Budget amount"><span>€</span></label>
-      </div>
+      <div class="budget-edit" id="cBudgetEdit" hidden><div class="b-chips" id="cChips"></div></div>
       <p class="c-rule" id="cRule"></p>
     </form>
 
@@ -192,6 +189,13 @@
 
     <h2 class="group-title">People you share costs with</h2>
     <div class="group"><div id="people"></div><button type="button" class="row-btn" id="addPerson">Add someone</button></div>
+
+    <h2 class="group-title">Memory <span class="mem-count" id="memCount"></span></h2>
+    <div class="group mem-group">
+      <div id="memList"></div>
+      <form class="mem-add" id="memAdd" autocomplete="off"><input id="memText" maxlength="220" placeholder="Teach Mandat something…" enterkeyhint="done"><button type="submit" aria-label="Remember this">+</button></form>
+    </div>
+    <p class="fine settings-fine">Mandat remembers what matters across missions and checks your plans for clashes. Remove anything, anytime.</p>
 
     <h2 class="group-title">App</h2>
     <div class="group">

@@ -845,3 +845,70 @@ a.pv-none:hover { filter: brightness(1.06); }
 .rm-cal svg, .tl-cal svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .tl-cal { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; height: 34px; padding: 0 14px; border-radius: 17px; background: var(--card-line); color: var(--accent); font-size: 13px; font-weight: 600; text-decoration: none; }
 .step.due { color: var(--held); font-weight: 600; }
+
+/* "All set" recap */
+.card.wrapup { padding: 14px; border-color: rgba(25, 164, 99, 0.35); }
+.wu-head { display: flex; gap: 10px; align-items: center; }
+.wu-check { width: 32px; height: 32px; border-radius: 16px; display: grid; place-items: center; background: var(--ok); color: #fff; font-weight: 700; flex: none; }
+.wu-head b { font-size: 16px; display: block; }
+.wu-head small { font-size: 12px; color: var(--ink-3); }
+.wu-lines { list-style: none; margin: 12px 0 0; padding: 0; }
+.wu-lines li { display: flex; gap: 10px; padding: 7px 0; border-top: 1px solid var(--card-line); font-size: 14px; }
+.wu-when { flex: none; width: 112px; color: var(--ink-3); font-size: 12px; font-weight: 600; padding-top: 1px; font-variant-numeric: tabular-nums; }
+.wu-what { flex: 1; min-width: 0; }
+.wu-what i { font-style: normal; color: var(--ink-3); }
+.wu-note, .wu-rem { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); }
+.wu-actions { display: flex; gap: 10px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.wu-actions .pill-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; text-decoration: none; }
+.wu-actions .pill-btn svg { width: 16px; height: 16px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.wu-change { font-size: 14px; font-weight: 600; color: var(--accent); background: none; }
+
+/* Mission emoji in the top bar */
+.top-emoji { font-size: 20px; line-height: 1; width: 28px; height: 28px; display: grid; place-items: center; flex: none; }
+.brand.has-emoji .brand-mark { display: none; }
+.m-ic, .top-emoji, .led-emoji { font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif; }
+
+/* Memory (Settings) */
+.mem-count { font-weight: 500; color: var(--ink-3); margin-left: 4px; }
+.mem-group { padding-top: 2px; }
+.mem-empty { margin: 0; padding: 12px 0; font-size: 13.5px; color: var(--ink-3); line-height: 1.4; }
+.mem-row { display: flex; gap: 10px; align-items: center; min-height: 50px; padding: 7px 0; border-bottom: 0.5px solid var(--card-line); transition: opacity 0.2s, transform 0.2s; }
+.mem-row.leaving { opacity: 0; transform: translateX(-8px); }
+.mem-row .grow { min-width: 0; display: flex; flex-direction: column; }
+.mem-row b { font-size: 14.5px; font-weight: 500; overflow-wrap: anywhere; }
+.mem-row small { font-size: 11.5px; color: var(--ink-3); }
+.mem-row button { color: var(--warn); font-size: 20px; width: 32px; flex: none; }
+.mem-kind { flex: none; width: 58px; text-align: center; font-size: 10.5px; font-weight: 700; letter-spacing: 0.02em; text-transform: uppercase; padding: 4px 0; border-radius: 7px; background: var(--card-line); color: var(--ink-2); }
+.mem-kind.k-preference { background: rgba(10, 132, 255, 0.13); color: var(--accent); }
+.mem-kind.k-person { background: rgba(175, 82, 222, 0.14); color: #a14fd0; }
+.mem-kind.k-place { background: rgba(25, 164, 99, 0.14); color: var(--ok); }
+.mem-kind.k-constraint { background: rgba(242, 163, 58, 0.16); color: #c47a12; }
+.mem-add { display: flex; gap: 8px; align-items: center; min-height: 48px; }
+.mem-add input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-size: 15px; color: var(--ink); }
+.mem-add button { width: 30px; height: 30px; border-radius: 15px; background: var(--accent); color: #fff; font-size: 19px; line-height: 1; flex: none; }
+.step.mem::before { content: "◆ "; color: var(--accent); font-size: 9px; vertical-align: 2px; }
+
+/* Clash with something already planned */
+.card.clash { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-color: rgba(242, 163, 58, 0.45); }
+.cl-ic { width: 28px; height: 28px; border-radius: 14px; display: grid; place-items: center; background: #f2a33a; color: #fff; font-weight: 800; flex: none; }
+.cl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cl-main b { font-size: 14px; }
+.cl-main small { font-size: 12.5px; color: var(--ink-2); line-height: 1.35; overflow-wrap: anywhere; }
+.cl-open { flex: none; font-size: 13px; font-weight: 600; color: var(--accent); background: var(--card-line); height: 30px; padding: 0 12px; border-radius: 15px; }
+
+/* Budget: edited in place, inside the pill; quick amounts in one thin row underneath */
+.budget-pill { cursor: pointer; transition: box-shadow 0.2s, background 0.2s; }
+.budget-pill .b-pen { width: 13px; height: 13px; opacity: 0.6; }
+.budget-pill .b-inline { display: none; align-items: baseline; gap: 1px; }
+.budget-pill.editing { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.budget-pill.editing #cBudget, .budget-pill.editing .b-pen, .budget-pill.editing #cBudgetAuto { display: none; }
+.budget-pill.editing .b-inline { display: inline-flex; }
+.b-inline .b-cur { font-weight: 600; }
+.b-inline input { width: 4ch; padding: 0; border: 0; outline: 0; background: none; font: inherit; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; caret-color: var(--accent); }
+.budget-edit { display: flex; justify-content: flex-end; margin: 8px 0 0; padding: 0; background: none; animation: rise 0.25s var(--spring) both; }
+.budget-edit .b-chips { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.budget-edit .b-chips::-webkit-scrollbar { display: none; }
+.budget-edit .b-chips button { height: 28px; padding: 0 10px; border-radius: 14px; font-size: 12.5px; font-weight: 600; background: var(--card-line); flex: none; }
+.budget-edit .b-chips button.on { background: var(--accent); color: #fff; }
+.budget-pill[aria-expanded="true"] .b-pen { transform: none; }
+.b-inline, .b-inline input { font-size: 15px; }

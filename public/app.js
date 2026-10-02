@@ -22,7 +22,7 @@ function show(view) {
   $('#stopMission').hidden = view !== 'live';
   $('#newMission').hidden = view !== 'home';
   $('.brand-mark').hidden = view === 'live';
-  if (view !== 'live') $('#topTitle').textContent = 'Mandat';
+  if (view !== 'live') { $('#topTitle').textContent = 'Mandat'; setTopEmoji(''); }
   $$('#tabbar button').forEach((b) => (b.dataset.tab === view ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   window.scrollTo({ top: 0 });
   if (view === 'home') requestAnimationFrame(placePill);
@@ -75,7 +75,7 @@ const IDEAS = [
   { e: '💐', t: 'Send flowers', d: 'Delivered with a note', b: 70, q: 'Flowers delivered to my mum on Sunday morning, something cheerful, with a short note from me.' },
   { e: '🇪🇸', t: 'Two weeks in Spain', d: 'Trains, stays, budget kept', b: 700, q: 'Two weeks in Spain in October, I leave from Paris. 700 euros all in.' },
 ];
-const EMOJI = [[/spain|españa|espagne|lisbon|travel|trip|voyage|vacation|weekend/i, '🧳'], [/birthday|anniversaire/i, '🎂'], [/split|share|bill|addition/i, '🧾'], [/dinner|restaurant|dîner|table/i, '🍽️'], [/repair|fix|tyre|tire|répar/i, '🔧'], [/hair|coiff/i, '💇'], [/concert|ticket|billet/i, '🎟️'], [/flower|fleur/i, '💐'], [/hotel|hôtel/i, '🛎️']];
+const EMOJI = [[/wedding|mariage|boda/i, '💍'], [/birthday|anniversaire/i, '🎂'], [/flight|plane|avion/i, '✈️'], [/train|tren/i, '🚆'], [/spain|españa|espagne|lisbon|travel|trip|voyage|vacation|weekend/i, '🧳'], [/hotel|hôtel/i, '🛎️'], [/sushi/i, '🍣'], [/pizza/i, '🍕'], [/coffee|café|brunch/i, '☕'], [/cake|gâteau|bakery|boulanger/i, '🥐'], [/dinner|lunch|restaurant|dîner|table/i, '🍽️'], [/split|share|bill|addition/i, '🧾'], [/flower|fleur/i, '💐'], [/gift|cadeau/i, '🎁'], [/party|fête/i, '🎉'], [/concert|festival/i, '🎵'], [/cinema|cinéma|movie/i, '🎬'], [/ticket|billet|theatre|théâtre/i, '🎟️'], [/repair|fix|tyre|tire|répar/i, '🔧'], [/bike|vélo/i, '🚲'], [/hair|coiff/i, '💇'], [/spa|massage/i, '💆'], [/doctor|médecin|dentist/i, '🩺'], [/dog|chien|cat|chat|pet/i, '🐾'], [/move|déménag/i, '📦'], [/clean|ménage/i, '🧹']];
 const compose = { budget: 400, auto: false, touched: false, emoji: null, photos: [], voice: false };
 
 // Ideas: tapping one fills the box — it never starts anything by itself.
@@ -150,14 +150,32 @@ for (const v of [50, 100, 200, 400, 700, 1000]) {
   b.addEventListener('click', () => { setBudget(v, { touched: true }); toggleBudget(false); });
   $('#cChips').append(b);
 }
+// The amount is edited right inside the pill; a thin row of quick amounts shows underneath.
+const fitBudgetIn = () => { const i = $('#cBudgetIn'); i.style.width = Math.max(2, i.value.length + 0.4) + 'ch'; };
 function toggleBudget(open = $('#cBudgetEdit').hidden) {
   $('#cBudgetEdit').hidden = !open;
+  $('#cBudgetBtn').classList.toggle('editing', open);
   $('#cBudgetBtn').setAttribute('aria-expanded', String(open));
+  if (open) {
+    $('#cBudgetIn').value = compose.budget;
+    fitBudgetIn();
+    requestAnimationFrame(() => { const i = $('#cBudgetIn'); i.focus(); i.select(); });
+  } else $('#cBudgetIn').blur();
 }
-$('#cBudgetBtn').addEventListener('click', () => toggleBudget());
+$('#cBudgetBtn').addEventListener('click', (e) => { if (!e.target.closest('input')) toggleBudget(); });
+$('#cBudgetBtn').addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); toggleBudget(); } });
+$('#cBudgetIn').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); toggleBudget(false); } });
+document.addEventListener('pointerdown', (e) => { if (!$('#cBudgetEdit').hidden && !e.target.closest('#cBudgetBtn, #cBudgetEdit')) toggleBudget(false); });
 $('#cBudgetIn').addEventListener('input', () => {
-  const v = Math.round(Number($('#cBudgetIn').value.replace(',', '.')));
-  if (v > 0) setBudget(v, { touched: true });
+  const raw = $('#cBudgetIn').value.replace(/[^\d.,]/g, '');
+  if (raw !== $('#cBudgetIn').value) $('#cBudgetIn').value = raw; // digits only
+  const v = Math.round(Number(raw.replace(/\s/g, '').replace(',', '.')));
+  if (v > 0 && v < 100000) {
+    const keep = $('#cBudgetIn').value;
+    setBudget(v, { touched: true });
+    $('#cBudgetIn').value = keep; // don't reformat while typing
+  }
+  fitBudgetIn();
 });
 $('#cGo').addEventListener('click', (e) => {
   if ($('#compose').classList.contains('has-text')) return; // the form submits
@@ -204,7 +222,7 @@ $('#compose').addEventListener('submit', async (e) => {
   $('#compose').classList.add('sending');
   try {
     const location = await locate();
-    const emoji = compose.emoji || EMOJI.find(([re]) => re.test(intent))?.[1] || '✦';
+    const emoji = compose.emoji || EMOJI.find(([re]) => re.test(intent))?.[1] || '';
     const r = await post('/api/missions', { intent, budget: compose.budget, emoji, location, images: compose.photos });
     state.voiceTurn = compose.voice;
     resetCompose();
@@ -430,6 +448,7 @@ async function openMission(id) {
   $('#feed').innerHTML = '';
   const r = await get(`/api/missions/${id}`);
   $('#topTitle').textContent = cleanTitle(r.summary.title);
+  setTopEmoji(r.summary.emoji);
   $('#stopMission').classList.toggle('on', r.summary.status === 'stopped');
   envelope(r.envelope);
   show('live');
@@ -560,12 +579,15 @@ function handle({ type, data }) {
       closeSteps();
       typing(data?.busy);
       return requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight })); // land on the latest, no animation
-    case 'title': $('#topTitle').textContent = data.title; return;
+    case 'title': $('#topTitle').textContent = data.title; if (data.emoji) setTopEmoji(data.emoji); return;
+    case 'memory': return memoryStep(data);
+    case 'clash': return clashCard(data);
     case 'busy': state.busy = data.on; if (!data.on) closeSteps(); typing(data.on); return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
     case 'tool': typing(state.busy); return toolStep(data);
     case 'places': return placesCard(data);
     case 'preview': return previewCard(data);
     case 'reminder': return reminderCard(data);
+    case 'wrapup': return wrapupCard(data);
     case 'reminder_due': {
       const card = state.cards['rm:' + data.id];
       if (card) card.classList.add('done');
@@ -592,6 +614,7 @@ function handle({ type, data }) {
 
 const TOOL_LABEL = {
   show_place_preview: (a) => `Looking up ${a.name}`,
+  check_schedule: () => 'Checking your schedule',
   find_real_places: (a) => `Looking for real ${many(a.category)} nearby`,
   find_network_merchants: (a) => `Checking ${many(a.category)} I can book and pay`,
   cancel_hold: () => 'Releasing a hold',
@@ -743,6 +766,45 @@ function previewCard(v) {
     const strip = li.querySelector('.pv-photos');
     if (strip && !strip.querySelector('img')) strip.outerHTML = noPhoto(v);
   }));
+  add(li);
+}
+// "All set": the whole result at a glance, the money, the reminders — and an easy way to change anything.
+function wrapupCard(w) {
+  state.cards.wrap?.remove();
+  const li = state.cards.wrap = el('li', 'card wrapup');
+  const day = (x) => {
+    if (!x) return '';
+    const d = new Date(String(x).slice(0, 10) + 'T12:00:00');
+    const t = /\d{2}:\d{2}/.test(x) ? String(x).match(/\d{2}:\d{2}/)[0] : '';
+    return `${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}${t ? ' · ' + t : ''}`;
+  };
+  const money = [w.paid ? `${fmtC(w.paid, w.currency)} paid` : '', w.held ? `${fmtC(w.held, w.currency)} held until confirmed` : ''].filter(Boolean).join(' · ');
+  li.innerHTML = `<div class="wu-head"><span class="wu-check">✓</span><div><b>${esc(w.headline)}</b><small>${money || 'Nothing left to do'}</small></div></div>
+    <ol class="wu-lines">${(w.lines || []).map((l) => `<li><span class="wu-when">${esc(day(l.when))}</span><span class="wu-what">${esc(l.what)}${l.where ? ` <i>· ${esc(l.where)}</i>` : ''}</span></li>`).join('')}</ol>
+    ${w.note ? `<p class="wu-note">${esc(w.note)}</p>` : ''}
+    ${w.reminders?.length ? `<p class="wu-rem">⏰ ${w.reminders.map((r) => esc(new Date(r.at).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))).join(' · ')} — on your phone</p>` : ''}
+    <div class="wu-actions"><a class="pill-btn" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} Add all to Calendar</a><button type="button" class="wu-change">Change something</button></div>`;
+  li.querySelector('.wu-change').addEventListener('click', () => { const t = $('#sayText'); t.value = 'I would like to change '; syncComposer(); t.focus(); });
+  add(li);
+}
+// The mission's emoji replaces the brand mark in the top bar.
+function setTopEmoji(e) {
+  $('#topEmoji').textContent = e || '';
+  $('#topEmoji').hidden = !e;
+  $('#brand').classList.toggle('has-emoji', !!e);
+}
+// Memory: a quiet line in the steps ("Noted for next time · Ana is vegetarian").
+function memoryStep(m) {
+  if (m.action === 'forgotten') return addStep('Updated my memory', 'step mem');
+  addStep(`${m.scope === 'mission' ? 'Noted for this mission' : 'Noted for next time'} · ${m.text}`, 'step mem');
+  if (m.scope === 'global' && state.me) state.me.memory = [...(state.me.memory || []).filter((x) => x.id !== m.id), m];
+}
+// A clash with something already planned (here or in another mission), with a way to look at it.
+const CLASH_TITLE = { overlap: 'Schedule clash', too_close: 'Tight timing', double_stay: 'Two stays on the same night', away: 'You may be away' };
+function clashCard(c) {
+  const li = el('li', 'card clash');
+  li.innerHTML = `<span class="cl-ic" aria-hidden="true">!</span><div class="cl-main"><b>${esc(CLASH_TITLE[c.type] || 'Clash')}</b><small>${esc(c.text)}</small></div>${c.with?.missionId ? '<button type="button" class="cl-open">Open</button>' : ''}`;
+  li.querySelector('.cl-open')?.addEventListener('click', () => openMission(c.with.missionId));
   add(li);
 }
 // A scheduled reminder: when it will ping the phone, and one tap to put it in the calendar.
@@ -1177,7 +1239,42 @@ function renderSettings() {
   renderPush();
   $('#sKnows').textContent = u.knows || 'Nothing yet.';
   renderPeople(u.profile.people);
+  renderMemory(u.memory || []);
 }
+const KIND_LABEL = { preference: 'Likes', person: 'People', place: 'Places', habit: 'Habits', constraint: 'Rules', fact: 'Facts' };
+function renderMemory(list) {
+  const box = $('#memList');
+  box.innerHTML = '';
+  $('#memCount').textContent = list.length ? `${list.length}` : '';
+  if (!list.length) return box.append(el('p', 'mem-empty', 'Nothing yet. Mandat learns as you go — your tastes, the people you plan with, the places you love.'));
+  const order = Object.keys(KIND_LABEL);
+  for (const m of [...list].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || String(b.at).localeCompare(String(a.at)))) {
+    const row = el('div', 'mem-row');
+    const from = m.from === 'you' ? 'Added by you' : m.fromTitle ? `Learned in “${m.fromTitle}”` : 'Learned in a mission';
+    row.innerHTML = `<span class="mem-kind k-${esc(m.kind)}">${esc(KIND_LABEL[m.kind] || 'Facts')}</span><div class="grow"><b>${esc(m.text)}</b><small>${esc(from)} · ${new Date(m.at).toLocaleDateString('en', { day: 'numeric', month: 'short' })}</small></div><button type="button" aria-label="Forget this">−</button>`;
+    row.querySelector('button').addEventListener('click', async () => {
+      row.classList.add('leaving');
+      state.me = (await fetch('/api/me/memory/' + m.id, { method: 'DELETE', headers: { 'X-TZ': TZ } }).then((r) => r.json())).user;
+      renderMemory(state.me.memory || []);
+    });
+    box.append(row);
+  }
+}
+$('#memAdd').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('#memText').value.trim();
+  if (text.length < 3) return;
+  try {
+    state.me = (await post('/api/me/memory', { text })).user;
+    $('#memText').value = '';
+    renderMemory(state.me.memory || []);
+  } catch (err) {
+    const inp = $('#memText');
+    inp.setCustomValidity(err.message);
+    inp.reportValidity();
+    setTimeout(() => inp.setCustomValidity(''), 3000);
+  }
+});
 function renderPeople(people) {
   const g = $('#people');
   g.innerHTML = '';
