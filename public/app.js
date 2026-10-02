@@ -17,6 +17,7 @@ function show(view) {
   for (const v of VIEWS) $('#' + v).hidden = v !== view;
   $('#tabbar').hidden = !['home', 'activity', 'settings'].includes(view);
   $('#composer').hidden = view !== 'live';
+  document.documentElement.classList.toggle('on-live', view === 'live'); // the conversation scrolls inside, the page never moves
   $('#bottomFade').hidden = view !== 'live';
   $('#tray').hidden = view !== 'live' || !state.attach?.length;
   $('#back').hidden = view !== 'live';
@@ -32,6 +33,7 @@ function show(view) {
   if (view !== 'live') { $('#topTitle').textContent = TAB_TITLE[view] ? t(TAB_TITLE[view]) : 'Mandat'; setTopEmoji(''); }
   $$('#tabbar button').forEach((b) => (b.dataset.tab === view ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   window.scrollTo({ top: 0 });
+  $('#live').scrollTop = 0;
   if (view === 'home') requestAnimationFrame(placePill);
   requestAnimationFrame(() => placeLens());
 }
@@ -97,7 +99,7 @@ async function boot() {
   let back = null;
   try { back = JSON.parse(sessionStorage.getItem('mandat_return') || 'null'); sessionStorage.removeItem('mandat_return'); } catch {}
   restorePending();
-  if (open) openMission(open);
+  if (open) openMission(open).catch(() => { history.replaceState(null, '', '/'); refreshHome(); show('home'); }); // a mission that no longer exists: back to the list
   else if (back?.view === 'settings') { TABS.settings(); show('settings'); requestAnimationFrame(() => scrollTo({ top: back.y || 0 })); }
   else show('home');
 }
@@ -862,7 +864,7 @@ function handle({ type, data }) {
       state.live = true;
       closeSteps();
       typing(data?.busy);
-      return requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight })); // land on the latest, no animation
+      return requestAnimationFrame(() => toBottom()); // land on the latest, no animation
     case 'title': $('#topTitle').textContent = data.title; if (data.emoji) setTopEmoji(data.emoji); return;
     case 'memory': return memoryStep(data);
     case 'budget_changed': return addStep(t('Budget changed · {from} → {to}', { from: fmtC(data.from, data.currency), to: fmtC(data.to, data.currency) }));
@@ -2712,18 +2714,21 @@ function fmtC(v, cur = 'EUR') {
   return new Intl.NumberFormat(locale(), { style: 'currency', currency: cur, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
 }
 // Follow new content only if you are already at the bottom; otherwise offer a "New message" pill.
-const nearBottom = () => innerHeight + scrollY >= document.documentElement.scrollHeight - 160;
+// In a mission the messages scroll inside #live (the page itself stays put, so the message bar never moves).
+const feedBox = () => (document.documentElement.classList.contains('on-live') ? $('#live') : document.scrollingElement);
+const toBottom = (smooth) => { const b = feedBox(); b.scrollTo({ top: b.scrollHeight, ...(smooth ? { behavior: 'smooth' } : {}) }); };
+const nearBottom = () => { const b = feedBox(); return b.clientHeight + b.scrollTop >= b.scrollHeight - 160; };
 function add(node, { stick = false } = {}) {
   const follow = stick || nearBottom();
   const t = $('#feed > li.typing');
   if (t) $('#feed').insertBefore(node, t);
   else $('#feed').append(node);
   if (!state.live) return; // replaying history: one jump at the end, not a scroll per item
-  if (follow) requestAnimationFrame(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }));
+  if (follow) requestAnimationFrame(() => toBottom(true));
   else $('#newPill').hidden = false;
 }
 function keepBottom() {
-  if (nearBottom()) window.scrollTo({ top: document.documentElement.scrollHeight });
+  if (nearBottom()) toBottom();
 }
 // The reply being written, word by word.
 function streamText(t) {
@@ -2737,13 +2742,14 @@ function streamText(t) {
   const follow = nearBottom();
   state.streamRaw = (state.streamRaw || '') + t;
   state.streamLi.firstChild.textContent = state.streamRaw.split(/\n?\s*>>/)[0];
-  if (follow) window.scrollTo({ top: document.documentElement.scrollHeight });
+  if (follow) toBottom();
 }
 $('#newPill').addEventListener('click', () => {
   $('#newPill').hidden = true;
-  window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+  toBottom(true);
 });
 addEventListener('scroll', () => { if (nearBottom()) $('#newPill').hidden = true; }, { passive: true });
+$('#live').addEventListener('scroll', () => { if (nearBottom()) $('#newPill').hidden = true; }, { passive: true });
 function step(text) { return el('li', 'step', text); }
 
 // "…" bubble while the agent works; it always stays last in the feed.

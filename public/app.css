@@ -1345,3 +1345,8 @@ body.on-welcome .top-fade { display: none; }
 body.kb-open .composer { top: var(--kb-top, auto); bottom: auto; transition: none; }
 body.kb-open .tabbar { display: none; }
 body.kb-open .bottom-fade { display: none; }
+
+/* A mission is a chat: only the messages scroll; the page, the top bar and the message bar never move */
+html.on-live, html.on-live body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+html.on-live #live { position: fixed; inset: 0; max-width: none; margin: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: calc(env(safe-area-inset-top) + var(--top-h, 60px) + 28px) max(20px, calc((100% - 580px) / 2)) calc(env(safe-area-inset-bottom) + 24px); }
