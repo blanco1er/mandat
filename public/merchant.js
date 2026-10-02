@@ -4,6 +4,7 @@ import { t, lang, locale, applyI18n } from '/i18n.js';
 const $ = (s) => document.querySelector(s);
 const mid = location.pathname.split('/').pop();
 const k = new URLSearchParams(location.search).get('k') || '';
+const rid = new URLSearchParams(location.search).get('r') || ''; // a private link opens one request
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const fmt = (v) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'EUR', maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
 const when = (iso) => new Date(iso).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -14,7 +15,7 @@ applyI18n();
 document.title = t('Merchant inbox · Mandat');
 
 async function load() {
-  const r = await fetch(`/api/merchants/${mid}/requests?k=${encodeURIComponent(k)}`, { headers: { 'X-Lang': lang } });
+  const r = await fetch(`/api/merchants/${mid}/requests?k=${encodeURIComponent(k)}&r=${encodeURIComponent(rid)}`, { headers: { 'X-Lang': lang } });
   const data = await r.json();
   if (!r.ok) {
     $('#inbox').innerHTML = `<p class="err">${esc(data.error || t('This inbox is not available.'))}</p>`;
@@ -55,7 +56,7 @@ function card(x, m) {
   el.innerHTML = `<div class="req-top"><b>${esc(x.customer)}</b><time>${when(x.createdAt)}</time></div>
     <div class="req-via">${t('Sent by their Mandat agent · pays with PayPal')}</div>
     ${x.slot ? `<span class="req-when">🕒 ${esc(x.slot)}</span>` : ''}
-    <ul class="req-lines">${x.items.map((i) => `<li><span>${i.qty}× ${esc(i.label)}</span><span>${fmt(i.qty * i.unit_price)}</span></li>`).join('')}<li class="total"><span>${t('Total')}</span><span>${fmt(x.total)}</span></li></ul>
+    <ul class="req-lines">${x.items.map((i) => `<li><span>${esc(i.qty)}× ${esc(i.label)}</span><span>${fmt(i.qty * i.unit_price)}</span></li>`).join('')}<li class="total"><span>${t('Total')}</span><span>${fmt(x.total)}</span></li></ul>
     ${x.note ? `<p class="req-note">${esc(t('“{text}”', { text: x.note }))}</p>` : ''}
     <p class="req-deposit">${esc(t('Deposit {amount} ({pct}%), held with PayPal as soon as you accept and paid to you when the booking is confirmed.', { amount: fmt(x.deposit), pct: Math.round(m.deposit * 100) }))}</p>
     <div class="req-actions"><button class="btn accept" data-a="accept">${t('Accept')}</button><button class="btn other" data-a="other">${t('Other time')}</button><button class="btn decline" data-a="decline">${t('Decline')}</button></div>

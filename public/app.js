@@ -1119,7 +1119,7 @@ function requestCard(r) {
   const [label, cls] = { accepted: ['Accepted', 'wait'], confirmed: ['Confirmed', 'paid'], declined: ['Declined', 'off'], countered: ['Other time', 'part'] }[r.status] || ['Waiting', 'wait'];
   const sub = r.status === 'pending' ? t('No AI agent · request sent to their inbox') : r.status === 'countered' ? t('Proposes {slot} instead', { slot: r.counterSlot }) : r.status === 'accepted' ? t('Accepted · confirms when the deposit is held') : r.status === 'confirmed' ? t('Confirmed · deposit paid with PayPal') : t('Declined');
   card.innerHTML = `<header><span class="avatar m">${esc(r.merchant[0])}</span><div><b>${esc(r.merchant)}</b><small>${esc(sub)}</small></div><span class="chip ${cls}">${t(label)}</span></header>
-    <p>${r.items.map((i) => `${i.qty}× ${esc(i.label)}`).join(', ')}${r.slot ? ' · ' + esc(r.slot) : ''} · ${esc(t('{total}, deposit {deposit}', { total: fmt(r.total), deposit: fmt(r.deposit) }))}</p>${r.reply ? `<p class="req-reply">${esc(t('“{text}”', { text: r.reply }))}</p>` : ''}
+    <p>${r.items.map((i) => `${esc(i.qty)}× ${esc(i.label)}`).join(', ')}${r.slot ? ' · ' + esc(r.slot) : ''} · ${esc(t('{total}, deposit {deposit}', { total: fmt(r.total), deposit: fmt(r.deposit) }))}</p>${r.reply ? `<p class="req-reply">${esc(t('“{text}”', { text: r.reply }))}</p>` : ''}
     ${r.inbox && (r.status === 'pending' || r.status === 'accepted') ? `<a class="inbox-link" href="${esc(r.inbox)}" target="_blank" rel="noopener">${esc(t('See it from {merchant}’s side (demo inbox)', { merchant: r.merchant }))} ↗</a>` : ''}`;
   fold(card);
 }
@@ -1170,8 +1170,8 @@ function planCard({ items }) {
       const [st, cls] = PLAN_STATUS[it.status] || [it.status, 'off'];
       const time = /\d{2}:\d{2}/.test(it.when || '') ? it.when.match(/\d{2}:\d{2}/)[0] : !it.d && it.when ? it.when : '';
       return `<div class="tl-item ${it.status === 'cancelled' ? 'off' : ''}"><span class="tl-ic">${KIND[it.kind] || (/(train|flight|bus|→)/i.test(it.what) ? '🚆' : /(night|hostel|hotel|room|stay)/i.test(it.what) ? '🛏️' : '•')}</span>
-        <div class="tl-main"><b>${esc(it.what)}${it.nights ? ` · ${tn(it.nights, '{n} night', '{n} nights')}` : ''}</b><small>${[it.merchant, time].filter(Boolean).map(esc).join(' · ')}</small></div>
-        <div class="tl-side">${it.total ? `<span class="tl-amt">${fmt(it.total)}</span>` : ''}<span class="chip ${cls}">${t(st)}</span></div></div>`;
+        <div class="tl-main"><b>${esc(it.what)}${it.nights ? ` · ${esc(tn(Number(it.nights) || 0, '{n} night', '{n} nights'))}` : ''}</b><small>${[it.merchant, time].filter(Boolean).map(esc).join(' · ')}</small></div>
+        <div class="tl-side">${it.total ? `<span class="tl-amt">${fmt(it.total)}</span>` : ''}<span class="chip ${cls}">${esc(t(st))}</span></div></div>`;
     }).join('')}</section>`).join('')}</div>
     ${items.some((i) => /^\d{4}-\d{2}-\d{2}/.test(i.when || '') && i.status !== 'cancelled') ? `<a class="tl-cal" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} ${multiDay ? t('Add the whole trip') : t('Add to Calendar')}</a>` : ''}
     ${planned ? `<div class="tl-total"><span>${budget ? t('Planned {amount} of {total}', { amount: fmt(planned), total: fmt(budget) }) : t('Planned {amount}', { amount: fmt(planned) })}</span>${budget ? `<span class="${planned > budget ? 'over' : ''}">${esc(planned > budget ? t('Over by {amount}', { amount: fmt(planned - budget) }) : t('{amount} left for food & extras', { amount: fmt(budget - planned) }))}</span>` : ''}</div>
@@ -1340,7 +1340,8 @@ $('#sheetLater').addEventListener('click', closeSheet);
       btn.querySelector('.label').textContent = t('Approved');
       const id = pending.id;
       setTimeout(closeSheet, 500);
-      await post(`/api/missions/${state.mission}/approvals/${id}`, { approved: true });
+      try { await post(`/api/missions/${state.mission}/approvals/${id}`, { approved: true }); }
+      catch (err) { add(el('li', 'step error', err.message)); }
     }, 900);
   });
   const cancel = () => {
@@ -1352,7 +1353,8 @@ $('#sheetLater').addEventListener('click', closeSheet);
     if (!pending) return;
     const id = pending.id;
     closeSheet();
-    await post(`/api/missions/${state.mission}/approvals/${id}`, { approved: false });
+    try { await post(`/api/missions/${state.mission}/approvals/${id}`, { approved: false }); }
+    catch (err) { add(el('li', 'step error', err.message)); }
   });
 })();
 
@@ -1522,29 +1524,94 @@ function renderSettings() {
   $('#aPhotoRemove').hidden = !u.avatar;
   renderPush();
   setSeg('#sLang', chosenLang());
-  $('#sKnows').textContent = u.knows || t('Nothing yet.');
   renderPeople(u.profile.people);
   renderMemory(u.memory || []);
 }
-const KIND_LABEL = { preference: 'Likes', person: 'People', place: 'Places', habit: 'Habits', constraint: 'Rules', fact: 'Facts' };
+// Settings shows a one-line summary; the profile page tells the rest.
+const kn = { editing: false, key: '', ready: null };
 function renderMemory(list) {
-  const box = $('#memList');
-  box.innerHTML = '';
-  $('#memCount').textContent = list.length ? `${list.length}` : '';
-  if (!list.length) return box.append(el('p', 'mem-empty', t('Nothing yet. Mandat learns as you go: your tastes, the people you plan with, the places you love.')));
-  const order = Object.keys(KIND_LABEL);
-  for (const m of [...list].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || String(b.at).localeCompare(String(a.at)))) {
-    const row = el('div', 'mem-row');
-    const from = m.from === 'you' ? t('Added by you') : m.fromTitle ? t('Learned in “{title}”', { title: m.fromTitle }) : t('Learned in a mission');
-    row.innerHTML = `<span class="mem-kind k-${esc(m.kind)}">${esc(t(KIND_LABEL[m.kind] || 'Facts'))}</span><div class="grow"><b>${esc(m.text)}</b><small>${esc(from)} · ${dayMonth(new Date(m.at))}</small></div><button type="button" aria-label="${esc(t('Forget this'))}">−</button>`;
-    row.querySelector('button').addEventListener('click', async () => {
-      row.classList.add('leaving');
-      state.me = (await fetch('/api/me/memory/' + m.id, { method: 'DELETE', headers: HEADERS }).then((r) => r.json())).user;
-      renderMemory(state.me.memory || []);
-    });
-    box.append(row);
-  }
+  $('#memSummary').textContent = list.length ? tn(list.length, '{n} thing remembered', '{n} things remembered') : t('Nothing yet');
+  // prepared quietly in the background, so the page opens instantly
+  const key = list.map((m) => m.id + m.text).join('|');
+  if (list.length && kn.key !== key) { kn.key = key; kn.ready = get('/api/me/knowledge').catch(() => null); }
 }
+// ---------- What Mandat knows: a profile written for you ----------
+async function knowsOpen() {
+  kn.editing = false;
+  $('#knowsEdit').textContent = t('Edit');
+  $('#knowsBody').innerHTML = '<div class="kn-loading"><span class="dots"><i></i><i></i><i></i></span></div>';
+  $('#knows').hidden = false;
+  document.body.classList.add('iv-open');
+  try { knowsDraw((await kn.ready) || (await get('/api/me/knowledge'))); } catch (err) { $('#knowsBody').textContent = err.message; }
+}
+function knowsClose() {
+  $('#knows').hidden = true;
+  document.body.classList.remove('iv-open');
+  renderMemory(state.me.memory || []);
+}
+function knowsDraw(k) {
+  const body = $('#knowsBody');
+  body.innerHTML = '';
+  body.classList.toggle('editing', kn.editing);
+  const forget = async (ids, node) => {
+    node.classList.add('leaving');
+    for (const id of ids || []) {
+      try { state.me = (await fetch('/api/me/memory/' + id, { method: 'DELETE', headers: HEADERS }).then((r) => r.json())).user; } catch {}
+    }
+    node.remove();
+  };
+  const line = (item) => {
+    const li = el('li', 'kn-line');
+    li.append(el('span', '', item.text));
+    const x = el('button', 'kn-x');
+    x.type = 'button';
+    x.setAttribute('aria-label', t('Forget this'));
+    x.innerHTML = svg('close');
+    x.addEventListener('click', () => forget(item.ids, li));
+    li.append(x);
+    return li;
+  };
+  if (!k.count) {
+    const empty = el('div', 'kn-empty');
+    empty.innerHTML = `<b>${esc(t('Mandat does not know you yet'))}</b><p>${esc(t('Talk a little, and every mission will need fewer questions.'))}</p>`;
+    const go = el('button', 'pp-btn kn-go', t('Get to know me'));
+    go.type = 'button';
+    go.addEventListener('click', () => { knowsClose(); ivOpen(); });
+    empty.append(go);
+    return body.append(empty);
+  }
+  if (k.summary) body.append(el('p', 'kn-summary', k.summary));
+  if (k.people?.length) {
+    body.append(el('h2', 'group-title', t('Your people')));
+    for (const p of k.people) {
+      const card = el('section', 'kn-person');
+      card.innerHTML = `<header><span class="p-av">${esc((p.name || '?').slice(0, 1).toUpperCase())}</span><div><b>${esc(p.name)}</b>${p.relation ? `<small>${esc(p.relation)}</small>` : ''}</div></header>`;
+      const ul = el('ul', 'kn-lines');
+      for (const d of p.details || []) ul.append(line(d));
+      card.append(ul);
+      body.append(card);
+    }
+  }
+  for (const g of k.groups || []) {
+    if (!g.items?.length) continue;
+    body.append(el('h2', 'group-title', g.title));
+    const ul = el('ul', 'kn-lines group');
+    for (const it of g.items) ul.append(line(it));
+    body.append(ul);
+  }
+  const talk = el('button', 'row-btn kn-talk', t('Tell Mandat something new'));
+  talk.type = 'button';
+  talk.addEventListener('click', () => { knowsClose(); ivOpen(); });
+  body.append(talk);
+  body.append(el('p', 'fine settings-fine', t('Mandat uses this to choose for you and to spot clashes in your plans. It never shares it.')));
+}
+$('#memOpen').addEventListener('click', knowsOpen);
+$('#knowsBack').addEventListener('click', knowsClose);
+$('#knowsEdit').addEventListener('click', () => {
+  kn.editing = !kn.editing;
+  $('#knowsEdit').textContent = kn.editing ? t('OK') : t('Edit');
+  $('#knowsBody').classList.toggle('editing', kn.editing);
+});
 // Getting to know you: Mandat asks one short question at a time, offers ready answers, and remembers.
 const iv = { history: [], busy: false, sel: new Set() };
 function ivBubble(cls, text) {
@@ -1805,7 +1872,6 @@ function addressSuggest(input, listSel, onPick) {
 addressSuggest('#pHome', '#pHomeList', setHome);
 async function saveProfile(profile) {
   state.me = (await post('/api/me', { profile })).user;
-  $('#sKnows').textContent = state.me.knows || t('Nothing yet.');
 }
 async function saveRules(rules) {
   state.me = (await post('/api/me', { rules })).user;

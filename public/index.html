@@ -219,12 +219,11 @@
       <button type="button" class="row-btn" id="addPerson">Add someone</button></div>
     <p class="fine settings-fine">Say “split it with Sam” and Mandat sends Sam’s PayPal request to this email, without asking you again. People you split a bill with are added here for next time.</p>
 
-    <h2 class="group-title">Memory <span class="mem-count" id="memCount"></span></h2>
+    <h2 class="group-title">Memory</h2>
     <div class="group mem-group">
-      <div id="memList"></div>
-      <button type="button" class="mem-talk" id="memTalk"><span class="disc-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H9l-4 2.5Z"/><path d="M9 9.5h6M9 12.5h3.5"/></svg></span><span class="grow"><b>Get to know me</b><small>A few quick questions, so missions need fewer.</small></span><span class="chev" aria-hidden="true"></span></button>
+      <button type="button" class="mem-talk" id="memTalk"><span class="disc-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 18.5V7a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 7v6.5a2.5 2.5 0 0 1-2.5 2.5H9l-4 2.5Z"/><path d="M9 9.5h6M9 12.5h3.5"/></svg></span><span class="grow"><b>Get to know me</b><small>Talk with Mandat about anything: your people, tastes, changes.</small></span><span class="chev" aria-hidden="true"></span></button>
     </div>
-    <p class="fine settings-fine">Mandat remembers what matters across missions and checks your plans for clashes. Remove anything, anytime.</p>
+    <p class="fine settings-fine">What Mandat learns goes into “What Mandat knows about you”, below.</p>
 
     <h2 class="group-title">App</h2>
     <div class="group">
@@ -242,7 +241,7 @@
     </div>
 
     <h2 class="group-title">Privacy</h2>
-    <details class="group knows-box"><summary>What Mandat knows about you</summary><pre class="knows" id="sKnows"></pre></details>
+    <div class="group"><button type="button" class="mem-talk" id="memOpen"><span class="disc-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/></svg></span><span class="grow"><b>What Mandat knows about you</b><small id="memSummary">Nothing yet</small></span><span class="chev" aria-hidden="true"></span></button></div>
     <div class="group"><button type="button" class="row-btn danger" id="sForget">Forget everything about me</button></div>
     <p class="fine settings-fine">Stored on your account only, used only to act for you, never sold. PayPal keeps your payment details.</p>
     <div class="feed-spacer"></div>
@@ -267,6 +266,12 @@
       <label class="field"><span>Phone</span><input id="pPhone" type="tel" autocomplete="tel"></label>
     </div>
     </div>
+  </div>
+
+  <!-- What Mandat knows: the memory as a profile written for you, grouped by person and theme -->
+  <div class="iv acct knows-page" id="knows" hidden role="dialog" aria-modal="true" aria-label="What Mandat knows about you">
+    <header class="iv-head"><button type="button" class="acct-back" id="knowsBack"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg><span>Settings</span></button><b>Memory</b><button type="button" class="link kn-edit" id="knowsEdit">Edit</button></header>
+    <div class="acct-body" id="knowsBody"></div>
   </div>
 
   <!-- Getting to know you: Mandat asks, one question at a time, and remembers -->

@@ -1232,3 +1232,27 @@ body.iv-open { overflow: hidden; }
 .sg-go { background: var(--accent); color: #fff; }
 .iv-go { align-self: flex-end; height: 38px; padding: 0 18px; border-radius: 19px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; animation: storyIn 0.3s var(--spring) both; }
 .iv-choices .ob-chip.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+/* What Mandat knows: a profile, not a log */
+.mem-group .mem-talk + .mem-talk { border-top: 0.5px solid var(--card-line); }
+.kn-edit { justify-self: end; font-size: 16px; }
+.kn-loading { display: grid; place-items: center; padding: 60px 0; }
+.kn-summary { margin: 14px 4px 4px; font-size: 16px; line-height: 22px; color: var(--ink-2); }
+.kn-person { background: var(--card); border: 1px solid var(--card-line); border-radius: 18px; padding: 12px 14px 6px; margin-bottom: 10px; }
+.kn-person header { display: flex; gap: 12px; align-items: center; padding-bottom: 6px; }
+.kn-person header b { display: block; font-size: 16px; }
+.kn-person header small { font-size: 13px; color: var(--ink-3); }
+.kn-lines { list-style: none; margin: 0; padding: 0; }
+.kn-lines.group { background: var(--card); border: 1px solid var(--card-line); border-radius: 18px; padding: 4px 14px; }
+.kn-line { display: flex; align-items: center; gap: 10px; min-height: 42px; border-top: 0.5px solid var(--card-line); font-size: 15px; transition: opacity 0.2s, transform 0.2s; }
+.kn-lines.group .kn-line:first-child { border-top: 0; }
+.kn-line span { flex: 1; min-width: 0; }
+.kn-line.leaving { opacity: 0; transform: translateX(-8px); }
+.kn-x { display: none; width: 28px; height: 28px; border-radius: 14px; place-items: center; background: rgba(229, 72, 77, 0.12); color: var(--warn); flex: none; }
+.kn-x .i { width: 13px; height: 13px; stroke-width: 2.4; }
+.editing .kn-x { display: grid; }
+.kn-talk { width: 100%; margin-top: 14px; color: var(--accent); }
+.kn-empty { text-align: center; padding: 50px 10px; }
+.kn-empty b { font-size: 19px; }
+.kn-empty p { color: var(--ink-3); font-size: 15px; margin: 6px 0 20px; }
+.kn-go { background: var(--accent); color: #fff; }

@@ -4,7 +4,7 @@ import express from 'express';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary, wrapCard, autoReminders } from './lib/agent.mjs';
+import { setLiveLookup, createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary, wrapCard, autoReminders } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
 import { geocode, searchAddress, reverseAddress } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
@@ -17,7 +17,7 @@ import { emojiFor, isEmoji } from './lib/emoji.mjs';
 import { budgetFromText } from './lib/budget.mjs';
 import * as Push from './lib/push.mjs';
 import { tr, trn, langOf, money } from './lib/i18n-server.mjs';
-import { merchant, checkInbox } from './lib/merchants.mjs';
+import { merchant, inboxAccess, inboxUrl } from './lib/merchants.mjs';
 import { newUser, getUser, userWithSetup, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
 const app = express();
@@ -82,9 +82,15 @@ function cookie(req, name) {
   const m = (req.headers.cookie || '').match(new RegExp('(?:^|; )' + name + '=([^;]+)'));
   return m ? decodeURIComponent(m[1]) : null;
 }
+// New accounts per address and hour are limited: a robot cannot fill the disk.
+const created = new Map();
 function me(req, res) {
   let u = getUser(cookie(req, 'mandat_uid'));
   if (!u) {
+    const hour = new Date().toISOString().slice(0, 13), key = req.ip + '|' + hour;
+    if ((created.get(key) || 0) >= 40) throw Object.assign(new Error('Too many new visitors from this network. Please try again later.'), { status: 429 });
+    created.set(key, (created.get(key) || 0) + 1);
+    if (created.size > 5000) created.clear();
     u = newUser();
     saveUser(u);
     res.setHeader('Set-Cookie', `mandat_uid=${u.id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`);
@@ -97,8 +103,15 @@ function publicUser(u) {
 }
 
 // ---------- missions in memory, persisted after every agent run ----------
+setLiveLookup((id) => live.get(id)?.s);
+// Missions nobody watches and nothing runs leave memory after half an hour (they are on disk and in R2).
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, b] of live) if (!b.running && !b.clients.size && now - (b.used || 0) > 30 * 60000) live.delete(id);
+}, 10 * 60000).unref();
 function box(id, user) {
   let b = live.get(id);
+  if (b) b.used = Date.now();
   if (!b) {
     const s = getMission(id);
     if (!s) throw Object.assign(new Error('Unknown mission'), { status: 404 });
@@ -111,6 +124,8 @@ function box(id, user) {
         else if (m.role === 'assistant' && m.content?.trim()) s.feed.push({ type: 'say', data: { text: m.content.trim() }, at });
       }
     }
+    for (const r of Object.values(s.requests || {})) r.inbox = inboxUrl(r.merchant_id, r.id); // private link per request
+    for (const e of s.feed) if (e.type === 'request' && e.data?.id && e.data.merchant_id) e.data.inbox = inboxUrl(e.data.merchant_id, e.data.id);
     b = { s, clients: new Set(), busy: Promise.resolve(), log: s.feed };
     live.set(id, b);
   }
@@ -140,10 +155,18 @@ function needsCount(u) {
   return u.missions.map(getMission).filter(Boolean).map((s) => missionSummary(live.get(s.id)?.s || s, { busy: !!live.get(s.id)?.running })).filter((m) => m.status === 'needs_you' && !m.archived).length;
 }
 async function pushTo(s, msg) {
-  const u = getUser(s.userId);
-  if (!u?.push?.length) return;
-  const changed = await Push.notify(u, { ...msg, url: `/?mission=${s.id}`, badge: needsCount(u) });
-  if (changed) saveUser(u);
+  try {
+    const u = getUser(s.userId);
+    if (!u?.push?.length) return;
+    const changed = await Push.notify(u, { ...msg, url: `/?mission=${s.id}`, badge: needsCount(u) });
+    if (changed) {
+      const fresh = getUser(u.id); // only the subscriptions change; anything saved meanwhile is kept
+      fresh.push = u.push;
+      saveUser(fresh);
+    }
+  } catch (e) {
+    console.warn('[push]', e.message);
+  }
 }
 function pushFor(b, { type, data }) {
   if (b.clients.size && type !== 'wrapup') return; // they are looking at this mission right now (the recap always goes to the phone)
@@ -195,14 +218,20 @@ function run(b, fn) {
       emit('error', { message: e.message });
     } finally {
       b.running = false;
-      emit('busy', { on: false });
-      emit('envelope', envelopeView(b.s));
-      emit('summary', missionSummary(b.s));
-      closeLoop(b, emit);
-      pushAfterRun(b);
-      saveMission(b.s);
+      try {
+        emit('busy', { on: false });
+        if (!b.deleted) {
+          emit('envelope', envelopeView(b.s));
+          emit('summary', missionSummary(b.s));
+          closeLoop(b, emit);
+          pushAfterRun(b);
+          saveMission(b.s);
+        }
+      } catch (e) {
+        console.error('[after turn]', e);
+      }
     }
-  });
+  }).catch((e) => console.error('[turn]', e)); // the queue keeps going whatever happens
   return b.busy;
 }
 const api = (h) => async (req, res) => {
@@ -263,6 +292,40 @@ app.post('/api/me/avatar', api(async (req, res) => {
   return { user: publicUser(u) };
 }));
 
+// What Mandat knows, as a profile the person reads: grouped by person and theme, short, in their language.
+// Organised once by the fast model and cached until the memory changes (forgetting one line updates the cache).
+const memHash = (mem, L) => crypto.createHash('sha1').update('k3' + L + JSON.stringify((mem || []).map((m) => [m.id, m.text]))).digest('hex');
+app.get('/api/me/knowledge', api(async (req, res) => {
+  const u = me(req, res);
+  const L = reqLang(req);
+  const mem = u.memory || [];
+  if (!mem.length) return { count: 0, people: [], groups: [] };
+  const hash = memHash(mem, L);
+  if (u.knowledge?.hash === hash) return { ...u.knowledge.data, count: mem.length };
+  const notes = mem.map((m, i) => `[${i + 1}] ${m.text}`).join('\n'); // short numbers: the model copies them reliably
+  const fr = L === 'fr';
+  const sys = `You organise the memory of Mandat, a personal assistant app, into the page its user reads under "What Mandat knows about you". "The user" in the notes is the reader. Write in ${fr ? 'French, addressing the reader as "vous"' : 'English, addressing the reader as "you"'}. Do not deliberate: map each note directly.
+Rules: each other person (partner, child, friend) gets one card: name, relation to the reader (${fr ? '"Votre partenaire"' : '"Your partner"'}), and details as short phrases of at most 6 words (${fr ? '"Née le 21 octobre 2002", "Halal, sans porc", "E-mail : x"' : '"Born 21 October 2002", "Halal, no pork", "Email: x"'}). Everything about the reader goes into groups with short titles (${fr ? '"Vos goûts", "Vos habitudes", "Vos lieux", "Vos règles", "À savoir"' : '"Your tastes", "Your habits", "Your places", "Your rules", "Good to know"'}), items as short phrases. Merge duplicates, drop empty statements (e.g. "avoids nothing in particular"). Each item lists the numbers of its notes in "ids" (e.g. [2, 5]). "summary": one short friendly line about the reader.
+JSON only: {"summary":"","people":[{"name":"","relation":"","details":[{"text":"","ids":[]}]}],"groups":[{"title":"","items":[{"text":"","ids":[]}]}]}`;
+  let data = null;
+  try {
+    const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, json: true, temperature: 0.2, maxTokens: 6000, messages: [{ role: 'system', content: sys }, { role: 'user', content: notes }] });
+    data = JSON.parse(message.content || '{}');
+  } catch {}
+  const idOf = (x) => mem[parseInt(String(x).replace(/\D/g, ''), 10) - 1]?.id;
+  const clean = (it) => ({ text: String(it?.text || '').slice(0, 90), ids: [...new Set((Array.isArray(it?.ids) ? it.ids : []).map(idOf).filter(Boolean))] });
+  data = data && (Array.isArray(data.people) || Array.isArray(data.groups)) ? {
+    summary: String(data.summary || '').slice(0, 140),
+    people: (data.people || []).slice(0, 20).map((p) => ({ name: String(p?.name || '').slice(0, 40), relation: String(p?.relation || '').slice(0, 40), details: (p?.details || []).slice(0, 12).map(clean).filter((d) => d.text) })).filter((p) => p.name),
+    groups: (data.groups || []).slice(0, 8).map((g) => ({ title: String(g?.title || '').slice(0, 40), items: (g?.items || []).slice(0, 20).map(clean).filter((d) => d.text) })).filter((g) => g.items.length),
+  } : null;
+  if (!data) return { count: mem.length, summary: '', people: [], groups: [{ title: '', items: mem.map((m) => ({ text: m.text, ids: [m.id] })) }] };
+  const fresh = getUser(u.id);
+  fresh.knowledge = { hash, lang: L, data };
+  saveUser(fresh);
+  return { ...data, count: mem.length };
+}));
+
 // Getting to know you: one short question at a time; every lasting answer goes into memory.
 app.post('/api/me/interview', api(async (req, res) => {
   const u = me(req, res);
@@ -270,8 +333,8 @@ app.post('/api/me/interview', api(async (req, res) => {
   // The opening is fixed: instant and free. Someone Mandat already knows is asked what has changed.
   if (!(Array.isArray(req.body?.history) && req.body.history.length)) {
     if (u.memory?.length || u.profile.people?.length) return {
-      say: tr(L, 'Good to see you again. Has anything changed since last time?'),
-      choices: ['Nothing has changed', 'I moved', 'My situation changed', 'Tell you more'].map((c) => tr(L, c)),
+      say: tr(L, 'Good to see you again. What shall we talk about? Anything goes.'),
+      choices: ['My people', 'My tastes', 'A plan coming up', 'A change in my life'].map((c) => tr(L, c)),
       saved: [], done: false, user: publicUser(u),
     };
     return {
@@ -285,12 +348,12 @@ app.post('/api/me/interview', api(async (req, res) => {
     .map((m) => ({ role: m.role === 'you' ? 'user' : 'assistant', content: String(m.text || '').slice(0, 500) }));
   const known = [agentBrief(u), memoryBrief(u)].filter(Boolean).join('\n') || 'Nothing yet.';
   const asked = hist.filter((m) => m.role === 'assistant').length;
-  const sys = `You are Mandat, a personal agent that books and pays errands (restaurants, trips, gifts, repairs, bills shared with friends). You are getting to know the user in a short, warm interview so future missions need fewer questions. Write in ${L === 'fr' ? 'French, using "vous"' : 'English'}.
+  const sys = `You are Mandat, a personal agent that books and pays errands (restaurants, trips, gifts, repairs, bills shared with friends). You are getting to know the user in a warm, free conversation: they can talk about anything (people, tastes, places, habits, plans, changes in their life) and you keep it going with one good question at a time, so future missions need fewer questions. Write in ${L === 'fr' ? 'French, using "vous"' : 'English'}.
 What you already know (never ask it again):
 ${known}
 What their missions show (use it to propose smart answers and good questions, e.g. a place they booked twice, people they split bills with):
 ${missionsBrief(u) || 'No mission yet.'}
-Rules: ask ONE short, concrete question at a time (20 words at most) about what helps with errands: the people they often plan with (name, relation, email for PayPal requests), their diets and allergies, favourite or avoided places and cuisines, usual budgets, how they like to travel, timing habits, important dates (birthdays, anniversaries), accessibility needs. Go deeper before moving on: when the user mentions a person (partner, child, friend, parent), ask their first name next, then one or two useful details about them, one question at a time (birthday or age, diet or allergies, what they love, email for PayPal requests), then change topic. Save people completely, with name and relation (e.g. "Léa is the user's daughter, born on 12 March 2015"); keep a birth date rather than an age when you can. Always give 2 to 4 short ready answers in "choices" (3 words or fewer each), even for names, dates or emails: offer what makes sense there (names you already know, "Not sure", "I'll add it later"...). For people, think partner, children, family, friends, colleagues. Every choice must be a real possible answer to your question (never filler like "I note it"); for a name, offer names you already know or "Later". Always speak to the user, never to the people they mention. The user can tick several answers at once and add their own words (they arrive comma-separated): take them all into account, and when several people come up, go through them one at a time. The user can always type their own answer or skip.
+Follow the user's lead first: whatever they bring up (a sport, a trip, a pet, a new job, a worry), react to it in a few natural words, save what lasts, and ask a follow-up about THAT before moving to anything else. When they pick a topic, ask about that topic. Rules: ask ONE short, concrete question at a time (20 words at most) about what helps with errands: the people they often plan with (name, relation, email for PayPal requests), their diets and allergies, favourite or avoided places and cuisines, usual budgets, how they like to travel, timing habits, important dates (birthdays, anniversaries), accessibility needs. Go deeper before moving on: when the user mentions a person (partner, child, friend, parent), ask their first name next, then one or two useful details about them, one question at a time (birthday or age, diet or allergies, what they love, email for PayPal requests), then change topic. Save people completely, with name and relation (e.g. "Léa is the user's daughter, born on 12 March 2015"); keep a birth date rather than an age when you can. Always give 2 to 4 short ready answers in "choices" (3 words or fewer each), even for names, dates or emails: offer what makes sense there (names you already know, "Not sure", "I'll add it later"...). For people, think partner, children, family, friends, colleagues. Every choice must be a real possible answer to your question (never filler like "I note it"); for a name, offer names you already know or "Later". Always speak to the user, never to the people they mention. The user can tick several answers at once and add their own words (they arrive comma-separated): take them all into account, and when several people come up, go through them one at a time. The user can always type their own answer or skip.
 Life changes: if an answer contradicts what you know (a breakup, a move, a new job, someone no longer around), put the outdated memory ids in "forget" and save the new facts, and say it in a few kind words. When the user says nothing has changed, thank them and offer to add more or stop.
 When you close (done=true), always end with one sentence inviting them to come back here if their life changes (a move, new people around them, new habits). From the user's last answer, put each lasting fact in "save" as one self-contained sentence. Questions asked so far: ${asked}. After about 6 questions, or if the user wants to stop, ask if there is anything else Mandat should know; when they say no, thank them in one warm sentence and set "done" to true. Never ask for payment details, passwords or ID numbers. No dashes as punctuation.
 When the user gives someone's email, also put that person in "people" (name and email) so their PayPal requests can be sent.
@@ -341,6 +404,12 @@ app.post('/api/me/memory', api(async (req, res) => {
 app.delete('/api/me/memory/:id', api(async (req, res) => {
   const u = me(req, res);
   u.memory = (u.memory || []).filter((m) => m.id !== req.params.id);
+  if (u.knowledge?.data) {
+    const d = u.knowledge.data, gone = (x) => (x.ids || []).includes(req.params.id) && x.ids.length === 1;
+    d.people = (d.people || []).map((p) => ({ ...p, details: p.details.filter((x) => !gone(x)) })).filter((p) => p.details.length);
+    d.groups = (d.groups || []).map((g) => ({ ...g, items: g.items.filter((x) => !gone(x)) })).filter((g) => g.items.length);
+    u.knowledge.hash = memHash(u.memory, u.knowledge.lang);
+  }
   saveUser(u);
   return { user: publicUser(u) };
 }));
@@ -503,7 +572,7 @@ app.post('/api/missions', api(async (req, res) => {
   emitter(b)('user', { text: intent, images: imgs.map((i) => i.url) });
   run(b, (emit) => userTurn(b.s, intent, emit, { images: imgs.map((i) => i.data) }));
   titleFor(intent).then(({ title, emoji: e }) => {
-    if (b.s.titleByUser || (title === b.s.title && e === b.s.emoji)) return;
+    if (b.deleted || b.s.titleByUser || (title === b.s.title && e === b.s.emoji)) return;
     b.s.title = title;
     b.s.emoji = e;
     saveMission(b.s);
@@ -535,7 +604,7 @@ async function titleFor(intent) {
 app.get('/api/missions/:id', api(async (req, res) => {
   const u = me(req, res);
   const b = box(req.params.id, u);
-  return { summary: missionSummary(b.s), envelope: envelopeView(b.s) };
+  return { summary: missionSummary(b.s, { busy: !!b.running }), envelope: envelopeView(b.s) };
 }));
 
 app.post('/api/missions/:id/messages', api(async (req, res) => {
@@ -591,7 +660,7 @@ app.get('/api/media/:uid/:file', (req, res) => {
 });
 
 // Devices that receive notifications (one per browser / installed app).
-app.get('/api/health', (req, res) => res.json({ ok: true, paypal: PayPal.MODE }));
+
 app.get('/api/push/key', (req, res) => res.json({ key: Push.publicKey() }));
 app.post('/api/me/push', api(async (req, res) => {
   const u = me(req, res);
@@ -680,6 +749,8 @@ app.delete('/api/missions/:id', api(async (req, res) => {
   const u = me(req, res);
   const b = box(req.params.id, u);
   if (b.s.envelope.entries.some((e) => e.state === 'held')) throw Object.assign(new Error('Money is still held for this mission. Release it or archive the mission instead.'), { status: 409 });
+  if (b.running) throw Object.assign(new Error('Mandat is still working on this mission. Try again in a moment.'), { status: 409 });
+  b.deleted = true;
   for (const c of b.clients) c.end();
   live.delete(b.s.id);
   u.missions = u.missions.filter((id) => id !== b.s.id);
@@ -693,6 +764,7 @@ app.post('/api/missions/:id/location', api(async (req, res) => {
   const { lat, lon, label } = req.body || {};
   if (typeof lat !== 'number' || typeof lon !== 'number') throw new Error('lat/lon required');
   b.s.location = { lat, lon, label: String(label || 'your location').slice(0, 120) };
+  saveMission(b.s);
   return { ok: true };
 }));
 
@@ -708,7 +780,6 @@ app.post('/api/missions/:id/stop', api(async (req, res) => {
 app.post('/api/missions/:id/approvals/:aid', api(async (req, res) => {
   const u = me(req, res);
   const b = box(req.params.id, u);
-  allowance(u);
   run(b, (emit) => resolveApproval(b.s, req.params.aid, !!req.body?.approved, emit));
   return { queued: true };
 }));
@@ -771,10 +842,10 @@ function missionsOnDisk() {
 app.get('/merchant/:mid', (req, res) => res.sendFile(path.resolve('public/merchant.html')));
 app.get('/api/merchants/:mid/requests', api(async (req) => {
   const m = merchant(req.params.mid);
-  checkInbox(m.id, req.query.k);
+  const acc = inboxAccess(m.id, req.query.k, req.query.r);
   const out = [];
   for (const s of missionsOnDisk()) for (const r of Object.values(s.requests || {})) {
-    if (r.merchant_id !== m.id) continue;
+    if (r.merchant_id !== m.id || (acc.rid && r.id !== acc.rid)) continue;
     const { sessionId, inbox, ...pub } = r;
     const pay = r.paymentId ? s.envelope.entries.find((e) => e.id === r.paymentId) : null;
     out.push({ ...pub, customer: r.customer ? String(r.customer).split(' ')[0] : 'A Mandat customer', deposit_state: pay?.state || null, deposit_held: pay?.amount || 0 });
@@ -783,7 +854,7 @@ app.get('/api/merchants/:mid/requests', api(async (req) => {
 }));
 app.post('/api/merchants/:mid/requests/:rid', api(async (req) => {
   const m = merchant(req.params.mid);
-  checkInbox(m.id, req.body?.k);
+  inboxAccess(m.id, req.body?.k, req.params.rid);
   const action = ['accept', 'decline', 'counter'].includes(req.body?.action) ? req.body.action : null;
   if (!action) throw new Error('Choose accept, decline or counter');
   if (action === 'counter' && !String(req.body?.slot || '').trim()) throw new Error('Say which time you can do');
@@ -799,7 +870,7 @@ app.post('/api/merchants/:mid/requests/:rid', api(async (req) => {
 // The merchant confirms the booking: the held deposit is captured and paid to them.
 app.post('/api/merchants/:mid/requests/:rid/collect', api(async (req) => {
   const m = merchant(req.params.mid);
-  checkInbox(m.id, req.body?.k);
+  inboxAccess(m.id, req.body?.k, req.params.rid);
   const s = missionsOnDisk().find((x) => x.requests?.[req.params.rid]?.merchant_id === m.id);
   const r = s?.requests[req.params.rid];
   if (!r) throw Object.assign(new Error('Unknown request'), { status: 404 });
