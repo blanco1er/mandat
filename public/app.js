@@ -12,10 +12,12 @@ function show(view) {
   for (const v of VIEWS) $('#' + v).hidden = v !== view;
   $('#tabbar').hidden = !['home', 'activity', 'settings'].includes(view);
   $('#composer').hidden = view !== 'live';
+  $('#bottomFade').hidden = view !== 'live';
   $('#back').hidden = view !== 'live';
   $('#topBudget').hidden = view !== 'live';
   $('#topbar').classList.toggle('has-budget', view === 'live');
-  $('#topbar').classList.remove('compact');
+  $('#topbar').classList.remove('expanded');
+  $('#topSub').hidden = view !== 'live';
   $('#stopMission').hidden = view !== 'live';
   $('#newMission').hidden = view !== 'home';
   $('.brand-mark').hidden = view === 'live';
@@ -342,18 +344,13 @@ async function openMission(id) {
   state.es = new EventSource(`/api/missions/${id}/events`);
   state.es.onmessage = (m) => handle(JSON.parse(m.data));
 }
-// Reserve the top bar's full height in the page; the slim state floats over it, so nothing jumps.
-new ResizeObserver(() => {
-  const t = $('#topbar');
-  if (!t.classList.contains('compact')) document.documentElement.style.setProperty('--top-h', t.offsetHeight + 8 + 'px');
-}).observe($('#topbar'));
-// Slim the title + budget bar once the feed scrolls.
-addEventListener('scroll', () => {
-  const card = $('#topbar');
-  const y = scrollY;
-  if (y > 40) card.classList.add('compact');
-  else if (y < 8) card.classList.remove('compact');
-}, { passive: true });
+// Reserve the top bar's height in the page (it floats, fixed).
+new ResizeObserver(() => document.documentElement.style.setProperty('--top-h', $('#topbar').offsetHeight + 8 + 'px')).observe($('#topbar'));
+// In a mission, the bar is one slim line; tapping the title unfolds paid / held / left.
+$('#brand').addEventListener('click', () => {
+  if (!state.mission || $('#live').hidden) return;
+  $('#topbar').classList.toggle('expanded');
+});
 $('#back').addEventListener('click', () => {
   if (state.es) state.es.close();
   stopWatchingShares();
@@ -643,7 +640,7 @@ function envelope(e) {
   $('#envSpent').textContent = fmt(e.spent);
   $('#envHeld').textContent = fmt(e.held);
   $('#envLeft').textContent = fmt(e.remaining);
-  $('#envPurpose').textContent = fmt(e.total);
+  $('#topSub').textContent = `${fmt(e.remaining)} left of ${fmt(e.total)}${e.held ? ` · ${fmt(e.held)} held` : ''}${e.spent ? ` · ${fmt(e.spent)} paid` : ''}`;
   const p = (v) => (100 * v) / (e.total || 1);
   $('.env-bar .spent').style.width = p(e.spent) + '%';
   $('.env-bar .held').style.width = p(e.held) + '%';
