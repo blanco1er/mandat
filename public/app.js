@@ -706,6 +706,15 @@ function envelope(e) {
   const p = (v) => (100 * v) / (e.total || 1);
   $('.env-bar .spent').style.width = p(e.spent) + '%';
   $('.env-bar .held').style.width = p(e.held) + '%';
+  // Receipts: every payment of this mission with its PayPal reference (shown when the bar is unfolded).
+  const RS = { held: ['Held', 'wait'], captured: ['Paid', 'paid'], released: ['Released', 'off'], refunded: ['Refunded', 'part'] };
+  $('#receipts').innerHTML = (e.entries || []).length
+    ? e.entries.map((x) => {
+      const [st, cls] = RS[x.state] || [x.state, 'off'];
+      const ref = x.paypal?.captureId || x.paypal?.authorizationId || '';
+      return `<li><div><b>${esc(x.merchant)}</b><small>${esc(shortLabel(x.merchant, x.label))}${ref ? ` · <span class="ref">${esc(ref)}</span>` : ''}</small></div><span class="chip ${cls}">${st}</span><span class="r-amt">${fmt(x.amount - (x.refunded || 0))}</span></li>`;
+    }).join('')
+    : '<li class="none">No payment yet in this mission.</li>';
 }
 
 // ---------- approval sheet: hold to approve ----------

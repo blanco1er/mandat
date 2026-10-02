@@ -613,3 +613,14 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 .points small { font-size: 13px; line-height: 18px; color: var(--ink-3); }
 .pt-ic { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; background: rgba(10, 132, 255, 0.12); flex: none; }
 .pt-ic svg { width: 19px; height: 19px; fill: var(--accent); }
+
+/* Receipts inside the unfolded mission bar */
+.receipts { display: none; list-style: none; margin: 0 0 12px; padding: 0; max-height: 40vh; overflow: auto; }
+.topbar.expanded .receipts { display: block; animation: rise 0.3s var(--spring) both; }
+.receipts li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--card-line); }
+.receipts li > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.receipts b { font-size: 14px; }
+.receipts small { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.receipts .ref { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; }
+.receipts .r-amt { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; }
+.receipts li.none { color: var(--ink-3); font-size: 13px; }
