@@ -1103,7 +1103,7 @@ function productsCard(d) {
   const li = el('li', 'card top shop');
   const list = d.products || [];
   li.innerHTML = `<div class="tp-head"><b>${esc(t('Products · {query}', { query: d.query }))}</b><small>${esc(t('{n} retailers compared', { n: new Set(list.flatMap((p) => p.offers.map((o) => o.retailer))).size }))}</small></div>
-    <div class="tp-row">${list.map((p, i) => `<button type="button" class="tp-tile" data-i="${i}">${p.image ? `<img class="pr-img" src="${esc(p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="tp-ph">🛍️</span>'}<b>${esc(p.title)}</b><small><strong>${esc(fmtC(p.price, p.currency))}</strong>${p.was && p.was > p.price ? ` <s>${esc(fmtC(p.was, p.currency))}</s>` : ''} · ${esc(p.retailer)}</small></button>`).join('')}</div>
+    <div class="tp-row">${list.map((p, i) => `<button type="button" class="tp-tile" data-i="${i}">${p.image ? `<img class="pr-img" src="${esc(p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="tp-ph">🛍️</span>'}${p.pick ? `<i class="pr-pick">${esc(t('Best value'))}</i>` : ''}<b>${esc(p.title)}</b><small><strong>${esc(fmtC(p.price, p.currency))}</strong>${p.was && p.was > p.price ? ` <s>${esc(fmtC(p.was, p.currency))}</s>` : ''} · ${esc(p.retailer)}</small></button>`).join('')}</div>
     <div class="tp-detail" hidden></div>`;
   const detail = li.querySelector('.tp-detail');
   li.querySelectorAll('.tp-tile').forEach((b) => b.addEventListener('click', () => {
@@ -1114,6 +1114,7 @@ function productsCard(d) {
     const p = list[Number(b.dataset.i)];
     detail.innerHTML = `${p.photo || p.image ? `<img class="zoomable pr-hero" src="${esc(p.photo || p.image)}" alt="${esc(p.title)}" referrerpolicy="no-referrer">` : ''}
       <div class="tp-info"><b>${esc(p.title)}</b><small>${esc([p.brand, p.category].filter(Boolean).join(' · '))}</small>
+      ${p.look ? `<p class="pr-look">${esc(p.look)}</p>` : ''}
       ${p.features?.length ? `<ul class="op-hl">${p.features.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
       <ul class="pr-offers">${p.offers.map((o) => `<li><span>${esc(o.retailer)}</span><b>${esc(fmtC(o.price, o.currency))}</b></li>`).join('')}</ul>
       <div class="pv-actions"><button type="button" class="pill-btn pr-buy">${t('Choose this one')}</button><a href="${esc(p.url)}" target="_blank" rel="noopener sponsored">${esc(t('See it at {shop}', { shop: p.retailer }))}</a></div></div>`;
@@ -1262,7 +1263,7 @@ function verifiedMark({ merchant_id, name, ok }) {
   if (card) card.querySelector('.shield').hidden = !ok;
   addStep(t(ok ? '{name}: identity verified' : '{name}: identity could not be verified', { name }));
 }
-function negotiation({ merchant_id, name, from, text, offer }) {
+function negotiation({ merchant_id, name, from, text, offer, photo }) {
   let card = state.cards['n:' + merchant_id];
   if (!card) {
     card = $('#tpl-negotiation').content.firstElementChild.cloneNode(true);
@@ -1272,7 +1273,9 @@ function negotiation({ merchant_id, name, from, text, offer }) {
     state.cards['n:' + merchant_id] = card;
     add(card);
   }
-  card.querySelector('.bubbles').append(el('li', from, text));
+  const bubble = el('li', from, text);
+  if (photo) { const im = el('img', 'nego-photo zoomable'); im.src = photo; im.alt = t('Photo sent'); bubble.prepend(im); } // the photo the merchant was sent
+  card.querySelector('.bubbles').append(bubble);
   const n = card.querySelectorAll('.bubbles li').length;
   card.querySelector('.sub').textContent = offer?.total ? `${t('Offer {amount}', { amount: fmt(offer.total) })}${offer.discount ? ` · −${fmt(offer.discount)}` : ''} · ${tn(n, '{n} message', '{n} messages')}` : `${t('Negotiating with their AI agent')} · ${tn(n, '{n} message', '{n} messages')}`;
   fold(card);

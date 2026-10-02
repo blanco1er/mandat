@@ -577,7 +577,7 @@ app.post('/api/missions', api(async (req, res) => {
   b.s._user = u;
   const imgs = saveImages(u, req.body?.images || (req.body?.image ? [req.body.image] : []));
   emitter(b)('user', { text: intent, images: imgs.map((i) => i.url) });
-  run(b, (emit) => userTurn(b.s, intent, emit, { images: imgs.map((i) => i.data) }));
+  run(b, (emit) => userTurn(b.s, intent, emit, { images: imgs.map((i) => i.data), urls: imgs.map((i) => i.url) }));
   titleFor(intent).then(({ title, emoji: e }) => {
     if (b.deleted || b.s.titleByUser || (title === b.s.title && e === b.s.emoji)) return;
     b.s.title = title;
@@ -623,7 +623,7 @@ app.post('/api/missions/:id/messages', api(async (req, res) => {
   allowance(u);
   emitter(b)('user', { text, images: imgs.map((i) => i.url) });
   b.s._voice = req.body?.voice === true; // a live voice conversation: short spoken replies
-  run(b, (emit) => userTurn(b.s, text, emit, { images: imgs.map((i) => i.data) }));
+  run(b, (emit) => userTurn(b.s, text, emit, { images: imgs.map((i) => i.data), urls: imgs.map((i) => i.url) }));
   return { queued: true };
 }));
 

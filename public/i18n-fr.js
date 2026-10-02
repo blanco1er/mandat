@@ -620,4 +620,6 @@ export default {
   "I choose {title} ({price})": "Je choisis {title} ({price})",
   "Comparing products: {query}": "Je compare les produits : {query}",
   "Paying with PayPal": "Paiement avec PayPal",
+  "Best value": "Meilleur rapport qualité-prix",
+  "Photo sent": "Photo envoyée",
 };
