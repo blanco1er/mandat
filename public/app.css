@@ -702,3 +702,54 @@ body.no-scroll { overflow: hidden; }
   :root:not([data-theme="light"]) .tab-lens { background: linear-gradient(180deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.06)); box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), inset 0 0 0 0.5px rgba(255, 255, 255, 0.18), 0 6px 18px rgba(0, 0, 0, 0.35); }
 }
 @media (prefers-reduced-motion: reduce) { .tab-lens { transition: none; } }
+
+/* ===== Conversation, compact: one line per card, unfold on tap ===== */
+.feed .card { padding: 0; overflow: hidden; }
+.feed .card > header, .feed .card.fold > header { display: flex; align-items: center; gap: 10px; padding: 10px 12px; min-height: 52px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.feed .card > header .avatar { width: 30px; height: 30px; border-radius: 9px; font-size: 13px; }
+.feed .card > header > div { flex: 1; min-width: 0; }
+.feed .card > header b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.feed .card > header small { font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.chev { width: 18px; height: 18px; flex: none; margin-left: 2px; background: currentColor; color: var(--ink-3); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 6 6 6-6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 6 6 6-6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; transition: transform 0.3s var(--spring); }
+.fold.open > header .chev, .steps.open .chev { transform: rotate(90deg); }
+.fold-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.35s var(--smooth); }
+.fold.open > .fold-body, .steps.open > .fold-body { grid-template-rows: 1fr; }
+.fold-inner { overflow: hidden; min-height: 0; }
+.fold.open > .fold-body > .fold-inner { padding: 0 12px 12px; }
+.fold > .fold-body > .fold-inner > :first-child { margin-top: 0; }
+@media (prefers-reduced-motion: reduce) { .fold-body, .chev { transition: none; } }
+/* Steps */
+.feed > li.steps { animation: none; }
+.steps-head { display: flex; align-items: center; gap: 8px; padding: 2px 4px; font-size: 13px; color: var(--ink-3); background: none; text-align: left; max-width: 100%; }
+.steps-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.steps-dot { width: 6px; height: 6px; border-radius: 3px; background: currentColor; opacity: 0.7; flex: none; }
+.steps:not(.closed-group) .steps-dot { background: var(--accent); opacity: 1; animation: breathe 1s ease-in-out infinite; }
+.steps:not(.multi) .chev, .steps:not(.closed-group) .chev { display: none; }
+.steps-list { list-style: none; margin: 0; padding: 4px 0 2px 18px; }
+.steps-list li { font-size: 12.5px; color: var(--ink-3); padding: 2px 0; }
+.steps-list li.seen { color: var(--ink-2); }
+/* Payment line */
+.card.pay > header .lock { width: 30px; height: 30px; border-radius: 9px; font-size: 13px; }
+.card.pay > header .pay-main b { font-size: 14px; }
+.card.pay > header .amt { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+.pay-detail p { margin: 0; font-size: 13px; color: var(--ink-2); }
+.pay-detail .why { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+/* Places, plan, request, negotiation bodies */
+.place-map { margin: 0 0 4px; height: 190px; border-radius: 12px; }
+.place-list { margin: 4px -8px 0; }
+.card.req .chip { margin-left: auto; flex: none; }
+.card.req .fold-inner p { margin: 0 0 4px; font-size: 13px; color: var(--ink-2); }
+.card.nego .shield { flex: none; }
+.timeline { margin-top: 0; }
+/* Split: compact friend lines, icon buttons, QR opens in the viewer */
+.split-how { margin: 0 0 8px; }
+.split-list { margin: 0; gap: 0; border-radius: 12px; overflow: hidden; background: var(--card-line); }
+.split-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 0; background: none; }
+.split-row + .split-row { border-top: 1px solid var(--card); }
+.split-row .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.split-row .who b { font-size: 14px; }
+.split-row .who small { font-size: 11px; color: var(--ink-3); }
+.split-row .amt { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.split-row .split-actions { display: flex; gap: 2px; margin: 0; }
+.split-row .split-actions button { width: 30px; height: 30px; padding: 0; border-radius: 15px; justify-content: center; background: var(--card); }
+.split-foot { margin: 8px 2px 0; }

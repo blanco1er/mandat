@@ -529,7 +529,7 @@ function handle({ type, data }) {
       if (data.text) li.append(el('div', 'u-text', data.text));
       return add(li, { stick: true }); // your own message always brings you to the bottom
     }
-    case 'photo_read': return add(el('li', 'seen', data.summary));
+    case 'photo_read': return addStep(data.summary, 'seen');
     // Read aloud only live replies to a spoken message, never the replayed history or replies to typing.
     case 'say': {
       const done = sayBubble(data.text);
@@ -542,10 +542,11 @@ function handle({ type, data }) {
     case 'say_reset': state.streamLi?.remove(); state.streamLi = null; return typing(state.busy);
     case 'ready':
       state.live = true;
+      closeSteps();
       typing(data?.busy);
       return requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight })); // land on the latest, no animation
     case 'title': $('#topTitle').textContent = data.title; return;
-    case 'busy': state.busy = data.on; typing(data.on); return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
+    case 'busy': state.busy = data.on; if (!data.on) closeSteps(); typing(data.on); return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
     case 'tool': typing(state.busy); return toolStep(data);
     case 'places': return placesCard(data);
     case 'verified': return verifiedMark(data);
@@ -575,7 +576,52 @@ const TOOL_LABEL = {
 };
 function toolStep({ name, args }) {
   const label = TOOL_LABEL[name]?.(args);
-  if (label) add(step(label));
+  if (label) addStep(label);
+}
+// The agent's small steps collapse into one quiet line ("Worked through 6 steps ›"); the latest shows while it works.
+function addStep(text, cls = 'step') {
+  const feed = $('#feed');
+  let g = [...feed.children].filter((c) => !c.classList.contains('typing')).pop();
+  if (!g || !g.classList.contains('steps') || g.classList.contains('closed-group')) {
+    g = el('li', 'steps');
+    g.innerHTML = '<button type="button" class="steps-head"><span class="steps-dot"></span><span class="steps-label"></span><span class="chev" aria-hidden="true"></span></button><div class="fold-body"><ol class="steps-list fold-inner"></ol></div>';
+    g.querySelector('.steps-head').addEventListener('click', () => g.classList.contains('multi') && g.classList.toggle('open'));
+    add(g);
+  }
+  g.querySelector('.steps-list').append(el('li', cls, text));
+  const n = g.querySelectorAll('.steps-list li').length;
+  g.classList.toggle('multi', n > 1);
+  g.querySelector('.steps-label').textContent = text;
+  if (!state.busy) closeSteps();
+}
+function closeSteps() {
+  for (const g of $$('#feed > li.steps:not(.closed-group)')) {
+    const n = g.querySelectorAll('.steps-list li').length;
+    if (n > 1) g.querySelector('.steps-label').textContent = `Worked through ${n} steps`;
+    g.classList.add('closed-group');
+  }
+}
+// Cards fold to one line; tap the header to unfold (the open state survives updates).
+function fold(card, openByDefault = false) {
+  const head = card.querySelector(':scope > header');
+  if (!head) return card;
+  if (!card.querySelector(':scope > .fold-body')) {
+    const body = el('div', 'fold-body');
+    const inner = el('div', 'fold-inner');
+    for (const c of [...card.children]) if (c !== head) inner.append(c);
+    body.append(inner);
+    card.append(body);
+  }
+  if (!head.querySelector('.chev')) head.append(el('span', 'chev'));
+  if (card.dataset.open === undefined) card.dataset.open = openByDefault ? '1' : '0';
+  card.classList.add('fold');
+  card.classList.toggle('open', card.dataset.open === '1');
+  head.onclick = (e) => {
+    if (e.target.closest('button, a')) return;
+    card.dataset.open = card.dataset.open === '1' ? '0' : '1';
+    card.classList.toggle('open', card.dataset.open === '1');
+  };
+  return card;
 }
 // Real places, on an interactive map right in the conversation (MapLibre + OpenFreeMap: free, no key).
 const MAPLIBRE = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/';
@@ -602,10 +648,10 @@ function placesCard({ category, center, places }) {
   if (!places?.length) return;
   const shown = places.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lon)).slice(0, 5);
   const li = el('li', 'card places');
-  li.innerHTML = `<header><span class="avatar" style="background:#19a463">⌖</span><div><b>Real ${many(category)} near you</b><small>OpenStreetMap</small></div></header>
+  li.innerHTML = `<header><span class="avatar" style="background:#19a463">⌖</span><div><b>${places.length} real ${many(category)} nearby</b><small>${esc(places.slice(0, 2).map((p) => p.name).join(', '))}${places.length > 2 ? '…' : ''} · map</small></div></header>
     ${shown.length ? `<div class="place-map" role="region" aria-label="Map of ${esc(many(category))} nearby"></div>` : ''}
     <ol class="place-list">${(shown.length ? shown : places.slice(0, 4)).map((p, i) => `<li><button type="button" data-i="${i}"><span class="pin-n">${i + 1}</span><span class="pl-name">${esc(p.name)}</span><span class="pl-meta">${p.distance} m${p.openingHours ? ' · ' + esc(p.openingHours.slice(0, 28)) : ''}</span></button></li>`).join('')}</ol>`;
-  add(li);
+  add(fold(li));
   const box = li.querySelector('.place-map');
   if (!box) return;
   box.start = async () => {
@@ -660,7 +706,7 @@ function verifiedMark({ merchant_id, name, ok }) {
   state.verified[merchant_id] = ok;
   const card = state.cards['n:' + merchant_id];
   if (card) card.querySelector('.shield').hidden = !ok;
-  add(step(`${name} — identity ${ok ? 'verified' : 'could not be verified'}`));
+  addStep(`${name} — identity ${ok ? 'verified' : 'could not be verified'}`);
 }
 function negotiation({ merchant_id, name, from, text, offer }) {
   let card = state.cards['n:' + merchant_id];
@@ -673,6 +719,9 @@ function negotiation({ merchant_id, name, from, text, offer }) {
     add(card);
   }
   card.querySelector('.bubbles').append(el('li', from, text));
+  const n = card.querySelectorAll('.bubbles li').length;
+  card.querySelector('.sub').textContent = offer?.total ? `Offer ${fmt(offer.total)}${offer.discount ? ` · −${fmt(offer.discount)}` : ''} · ${n} messages` : `Negotiating with their AI agent · ${n} message${n > 1 ? 's' : ''}`;
+  fold(card);
   if (offer) {
     const o = card.querySelector('.offer');
     o.hidden = false;
@@ -692,6 +741,7 @@ function requestCard(r) {
   card.innerHTML = `<header><span class="avatar m">${esc(r.merchant[0])}</span><div><b>${esc(r.merchant)}</b><small>${sub}</small></div><span class="chip ${cls}">${label}</span></header>
     <p>${r.items.map((i) => `${i.qty}× ${esc(i.label)}`).join(', ')}${r.slot ? ' · ' + esc(r.slot) : ''} — ${fmt(r.total)}, deposit ${fmt(r.deposit)}</p>${r.reply ? `<p class="req-reply">“${esc(r.reply)}”</p>` : ''}
     ${r.inbox && (r.status === 'pending' || r.status === 'accepted') ? `<a class="inbox-link" href="${esc(r.inbox)}" target="_blank" rel="noopener">See it from ${esc(r.merchant)}'s side (demo inbox) ↗</a>` : ''}`;
+  fold(card);
 }
 // Money moments: held (reserved, not charged), paid (merchant confirmed), refunded.
 // "Tren Azul — 6 rail legs" shown under "Tren Azul" reads as "6 rail legs".
@@ -705,7 +755,9 @@ function paymentCard({ kind, entry, mode, why, reason }) {
   const [icon, title, sub] = kind === 'hold' ? ['🔒', 'Held with PayPal', 'Not charged until the merchant confirms']
     : kind === 'capture' ? ['✓', 'Paid with PayPal', why ? why + ' · deposit captured' : 'Merchant confirmed · deposit captured']
     : ['↩︎', 'Refunded with PayPal', reason || 'Back to your PayPal'];
-  li.innerHTML = `<span class="lock">${icon}</span><div class="pay-main"><div class="pay-top"><b>${title}</b><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span></div><small class="pay-what">${esc(entry.merchant)} · ${esc(shortLabel(entry.merchant, entry.label))}</small><small class="why">${esc(sub)}${mode === 'sandbox' ? ' · <i>sandbox</i>' : mode ? ' · <i>demo</i>' : ''}</small></div>`;
+  li.innerHTML = `<header><span class="lock">${icon}</span><div class="pay-main"><b>${title.replace(' with PayPal', '')} · ${esc(entry.merchant)}</b></div><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span></header>
+    <div class="pay-detail"><p>${esc(shortLabel(entry.merchant, entry.label))}</p><p class="why">${esc(sub)} · PayPal${mode === 'sandbox' ? ' sandbox' : mode ? ' (demo)' : ''}</p></div>`;
+  fold(li);
   if (isNew) add(li);
 }
 // The plan as a day-by-day timeline, with the running total against the mission budget.
@@ -732,7 +784,8 @@ function planCard({ items }) {
   const planned = items.filter((i) => i.status !== 'cancelled' && i.total > 0).reduce((t, i) => t + i.total, 0);
   const budget = state.envTotal || 0;
   const multiDay = groups.filter((g) => g.key !== 'later').length > 1;
-  card.innerHTML = `<header><span class="avatar" style="background:var(--accent)">✦</span><div><b>${multiDay ? 'Your trip, day by day' : 'Your plan'}</b><small>${items.length} item${items.length > 1 ? 's' : ''} · updated live</small></div></header>
+  const booked = items.filter((i) => i.status === 'confirmed' || i.status === 'held').length;
+  card.innerHTML = `<header><span class="avatar" style="background:var(--accent)">✦</span><div><b>${multiDay ? 'Your trip, day by day' : 'Your plan'}</b><small>${booked}/${items.length} booked${planned ? ` · ${fmt(planned)}${budget ? ' of ' + fmt(budget) : ''}` : ''}</small></div></header>
     <div class="timeline">${groups.map((g) => `<section class="tl-day"><h3>${label(g.key)}</h3>${g.items.map((it) => {
       const [st, cls] = PLAN_STATUS[it.status] || [it.status, 'off'];
       const time = /\d{2}:\d{2}/.test(it.when || '') ? it.when.match(/\d{2}:\d{2}/)[0] : !it.d && it.when ? it.when : '';
@@ -742,6 +795,7 @@ function planCard({ items }) {
     }).join('')}</section>`).join('')}</div>
     ${planned ? `<div class="tl-total"><span>Planned ${fmt(planned)}${budget ? ` of ${fmt(budget)}` : ''}</span>${budget ? `<span class="${planned > budget ? 'over' : ''}">${planned > budget ? 'Over by ' + fmt(planned - budget) : fmt(budget - planned) + ' left for food & extras'}</span>` : ''}</div>
     <div class="tl-bar"><i style="width:${budget ? Math.min(100, (100 * planned) / budget) : 0}%"></i></div>` : ''}`;
+  fold(card);
   if (!card.isConnected) add(card);
 }
 // Split bill: one real PayPal invoice per friend — emailed by PayPal, plus a pay link and a QR code.
@@ -764,7 +818,7 @@ function splitDetails(b) {
 }
 function sharesCard({ label, per, links, breakdown }) {
   const li = el('li', 'card split');
-  li.innerHTML = `<header><span class="avatar" style="background:#7b61ff">👥</span><div><b>Split with PayPal invoices</b><small>${esc(label)} · ${breakdown ? fmt(breakdown.total) + ' total' : fmt(per) + ' each'}</small></div></header>
+  li.innerHTML = `<header><span class="avatar" style="background:#7b61ff">👥</span><div><b>Split · ${esc(label)}</b><small class="split-sum">${breakdown ? fmt(breakdown.total) + ' · ' : ''}${links.length} invoice${links.length > 1 ? 's' : ''} sent</small></div></header>
     ${splitDetails(breakdown)}<ul class="split-list"></ul>
     <p class="split-foot">No app needed to pay: from PayPal's email, the link, or the QR code.</p>`;
   const ul = li.querySelector('.split-list');
@@ -775,30 +829,36 @@ function sharesCard({ label, per, links, breakdown }) {
       ul.append(row);
       continue;
     }
-    row.innerHTML = `<div class="split-top"><span class="who"><b>${esc(l.friend)}</b><small>${l.emailed ? 'Emailed by PayPal' : 'Pay link & QR code'}</small></span><span class="amt">${fmt(l.amount)}</span><span class="chip"></span></div>
-      <div class="split-actions"><button type="button" data-a="qr">${svg('qr')}QR code</button><button type="button" data-a="share">${svg('share')}Send</button><button type="button" data-a="copy">${svg('copy')}Copy link</button></div>
-      <figure class="qr-box" hidden>${l.qr ? `<img src="${l.qr}" alt="QR code to pay ${esc(l.friend)}'s share with PayPal" width="180" height="180">` : '<span>No QR code in demo mode</span>'}<figcaption>Scan with any phone camera to pay with PayPal</figcaption></figure>`;
+    row.innerHTML = `<span class="who"><b>${esc(l.friend)}</b><small>${l.emailed ? 'Emailed' : 'Link & QR'}</small></span><span class="amt">${fmt(l.amount)}</span><span class="chip"></span>
+      <span class="split-actions"><button type="button" data-a="qr" aria-label="Show ${esc(l.friend)}'s QR code">${svg('qr')}</button><button type="button" data-a="share" aria-label="Send ${esc(l.friend)} the link">${svg('share')}</button><button type="button" data-a="copy" aria-label="Copy ${esc(l.friend)}'s pay link">${svg('copy')}</button></span>`;
     shareChip(row.querySelector('.chip'), l.status, l.mode);
     state.shareRows[l.invoiceId] = row;
     const text = `${l.friend}, your share for ${label}: ${fmt(l.amount)}. Pay with PayPal:`;
-    row.querySelector('[data-a=qr]').addEventListener('click', (e) => {
-      const box = row.querySelector('.qr-box');
-      box.hidden = !box.hidden;
-      e.currentTarget.classList.toggle('on', !box.hidden);
-    });
+    row.querySelector('[data-a=qr]').addEventListener('click', () => (l.qr ? openLightbox(l.qr) : alert('No QR code in demo mode.')));
     row.querySelector('[data-a=share]').addEventListener('click', async (e) => {
       if (navigator.share) return navigator.share({ title: 'Your share', text, url: l.payUrl }).catch(() => {});
       await navigator.clipboard.writeText(`${text} ${l.payUrl}`).catch(() => {});
-      flashLabel(e.currentTarget, 'Copied');
+      flashIcon(e.currentTarget, 'share');
     });
     row.querySelector('[data-a=copy]').addEventListener('click', async (e) => {
       await navigator.clipboard.writeText(l.payUrl).catch(() => {});
-      flashLabel(e.currentTarget, 'Copied');
+      flashIcon(e.currentTarget, 'copy');
     });
     ul.append(row);
   }
-  add(li);
+  add(fold(li));
+  updateSplitSummary(li);
   watchShares();
+}
+function updateSplitSummary(card) {
+  const chips = [...card.querySelectorAll('.split-row .chip')];
+  const paid = chips.filter((c) => c.classList.contains('paid')).length;
+  const s = card.querySelector('.split-sum');
+  if (s && chips.length) s.textContent = s.textContent.replace(/ · \d+\/\d+ paid$|$/, ` · ${paid}/${chips.length} paid`);
+}
+function flashIcon(b, name) {
+  b.innerHTML = svg('check');
+  setTimeout(() => (b.innerHTML = svg(name)), 1400);
 }
 function flashLabel(b, text) {
   const html = b.innerHTML;
@@ -813,7 +873,7 @@ function watchShares() {
       const { shares } = await get(`/api/missions/${state.mission}/shares`);
       for (const sh of shares) {
         const row = state.shareRows[sh.invoiceId];
-        if (row) shareChip(row.querySelector('.chip'), sh.status, sh.mode);
+        if (row) { shareChip(row.querySelector('.chip'), sh.status, sh.mode); updateSplitSummary(row.closest('.card')); }
       }
       if (!shares.some((sh) => !sh.error && sh.mode !== 'offline' && !['PAID', 'CANCELLED', 'REFUNDED'].includes(sh.status))) stopWatchingShares();
     } catch {}
