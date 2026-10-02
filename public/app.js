@@ -723,7 +723,7 @@ function placesCard({ category, center, places }) {
 function previewCard(v) {
   const li = el('li', 'card preview');
   const photos = v.photos || [];
-  const meta = [v.cuisine || v.category, v.distance != null ? `${v.distance} m` : '', v.openingHours ? v.openingHours.slice(0, 40) : ''].filter(Boolean).map(esc).join(' · ');
+  const meta = [v.rating ? `★ ${v.rating.toFixed(1)}${v.ratings ? ` (${v.ratings.toLocaleString('en')})` : ''}` : '', v.cuisine || v.category, v.distance != null ? `${v.distance} m` : '', v.openingHours ? v.openingHours.slice(0, 40) : ''].filter(Boolean).map(esc).join(' · ');
   li.innerHTML = `${photos.length
     ? `<div class="pv-photos">${photos.map((p) => `<img class="zoomable" src="${esc(p.url)}" alt="${esc(v.name)}" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>`
     : `<div class="pv-none"><span>📍</span><small>No public photo yet — open Google Maps for people's photos</small></div>`}
