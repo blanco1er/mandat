@@ -1411,11 +1411,14 @@ function envelope(e) {
   state.envTotal = e.total;
   $('#envSpent').textContent = fmt(e.spent);
   $('#envHeld').textContent = fmt(e.held);
-  $('#envLeft').textContent = fmt(e.remaining);
-  $('#topSub').textContent = `${t('{amount} left of {total}', { amount: fmt(e.remaining), total: fmt(e.total) })}${e.held ? ' · ' + t('{amount} held', { amount: fmt(e.held) }) : ''}${e.spent ? ' · ' + t('{amount} paid', { amount: fmt(e.spent) }) : ''}`;
-  const p = (v) => (100 * v) / (e.total || 1);
+  // What is really left: every booking counted at its full price (deposit now, balance on site).
+  const left = e.left ?? e.remaining;
+  const committed = e.committed ?? e.held + e.spent;
+  $('#envLeft').textContent = fmt(left);
+  $('#topSub').textContent = `${t('{amount} left of {total}', { amount: fmt(left), total: fmt(e.total) })}${committed ? ' · ' + t('{amount} committed', { amount: fmt(committed) }) : ''}`;
+  const p = (v) => Math.min(100, (100 * v) / (e.total || 1));
   $('.env-bar .spent').style.width = p(e.spent) + '%';
-  $('.env-bar .held').style.width = p(e.held) + '%';
+  $('.env-bar .held').style.width = p(Math.max(0, committed - e.spent)) + '%';
   // Receipts: every payment of this mission with its PayPal reference (shown when the bar is unfolded).
   const RS = { held: ['Held', 'wait'], captured: ['Paid', 'paid'], released: ['Released', 'off'], refunded: ['Refunded', 'part'] };
   $('#receipts').innerHTML = (e.entries || []).length

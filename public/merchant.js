@@ -56,6 +56,7 @@ function card(x, m) {
   el.innerHTML = `<div class="req-top"><b>${esc(x.customer)}</b><time>${when(x.createdAt)}</time></div>
     <div class="req-via">${t('Sent by their Mandat agent · pays with PayPal')}</div>
     ${x.slot ? `<span class="req-when">🕒 ${esc(x.slot)}</span>` : ''}
+    ${x.where ? `<span class="req-when">📍 ${esc(x.where)}</span>` : ''}
     <ul class="req-lines">${x.items.map((i) => `<li><span>${esc(i.qty)}× ${esc(i.label)}</span><span>${fmt(i.qty * i.unit_price)}</span></li>`).join('')}<li class="total"><span>${t('Total')}</span><span>${fmt(x.total)}</span></li></ul>
     ${x.note ? `<p class="req-note">${esc(t('“{text}”', { text: x.note }))}</p>` : ''}
     <p class="req-deposit">${esc(t('Deposit {amount} ({pct}%), held with PayPal as soon as you accept and paid to you when the booking is confirmed.', { amount: fmt(x.deposit), pct: Math.round(m.deposit * 100) }))}</p>

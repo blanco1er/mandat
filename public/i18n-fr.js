@@ -606,4 +606,5 @@ export default {
   "Checking the numbers": "Je vérifie les calculs",
   "Request sent · they usually answer within a minute": "Demande envoyée · réponse en général en moins d’une minute",
   "Tap the circle to turn the microphone on.": "Touchez le cercle pour activer le micro.",
+  "{amount} committed": "{amount} engagés",
 };
