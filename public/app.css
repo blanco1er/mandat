@@ -1365,3 +1365,17 @@ html.on-live #live { position: fixed; inset: 0; max-width: none; margin: 0; over
 .home-smoke { position: fixed; left: 0; right: 0; bottom: 0; width: 100%; height: calc(300px + env(safe-area-inset-bottom)); z-index: 4; pointer-events: none; opacity: 0; transition: opacity 0.6s ease;
   -webkit-mask-image: linear-gradient(to top, #000 45%, transparent 100%); mask-image: linear-gradient(to top, #000 45%, transparent 100%); }
 .home-smoke.on { opacity: 1; }
+
+/* Still to pay: who, how much, when */
+.due { margin-top: 12px; border-top: 0.5px solid var(--card-line); padding-top: 10px; }
+.due-head { display: flex; justify-content: space-between; align-items: baseline; }
+.due-head b { font-size: 14px; }
+.due-head span { font-weight: 700; font-size: 15px; }
+.due ul { list-style: none; margin: 6px 0 0; padding: 0; }
+.due li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 0.5px solid var(--card-line); }
+.due li:first-child { border-top: 0; }
+.due li b { font-size: 13.5px; display: block; }
+.due li small { font-size: 12px; color: var(--ink-3); }
+.due li > span { font-weight: 600; font-size: 13.5px; white-space: nowrap; }
+.due p { margin: 6px 0 0; font-size: 12px; color: var(--ink-3); }
+.receipts .due-li { display: block; padding: 0; }

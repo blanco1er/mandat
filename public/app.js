@@ -1172,10 +1172,19 @@ function wrapupCard(w) {
   li.innerHTML = `<div class="wu-head"><span class="wu-check">${svg('check')}</span><div><b>${esc(t(w.headline))}</b><small>${esc(money || t('Nothing left to do'))}</small></div></div>
     <ol class="wu-lines">${(w.lines || []).map((l) => `<li><span class="wu-when">${esc(day(l.when))}</span><span class="wu-what">${esc(l.what)}${l.where ? ` <i>· ${esc(l.where)}</i>` : ''}</span></li>`).join('')}</ol>
     ${w.note ? `<p class="wu-note">${esc(w.note)}</p>` : ''}
+    ${balanceList(w.balances, w.due, w.currency)}
     ${w.reminders?.length ? `<p class="wu-rem">⏰ ${esc(t('{times} · on your phone', { times: w.reminders.map((r) => new Date(r.at).toLocaleString(locale(), { weekday: 'short', hour: '2-digit', minute: '2-digit' })).join(' · ') }))}</p>` : ''}
     <div class="wu-actions"><a class="pill-btn" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} ${t('Add all to Calendar')}</a><button type="button" class="wu-change">${t('Change something')}</button></div>`;
   li.querySelector('.wu-change').addEventListener('click', () => { const box = $('#sayText'); box.value = t('I would like to change '); syncComposer(); box.focus(); });
   add(li);
+}
+// Still to pay: each merchant, the deposit already paid, the balance and when. Set aside in the budget.
+function balanceList(list, due, cur) {
+  if (!list?.length) return '';
+  const day = (x) => (/^\d{4}-\d{2}-\d{2}/.test(x || '') ? new Date(x.slice(0, 10) + 'T12:00:00').toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' }) : '');
+  return `<div class="due"><div class="due-head"><b>${esc(t('Still to pay'))}</b><span>${esc(fmtC(due, cur))}</span></div>
+    <ul>${list.map((b) => `<li><div><b>${esc(b.merchant)}</b><small>${esc(b.deposit ? t('{deposit} deposit paid · balance {when}', { deposit: fmtC(b.deposit, cur), when: day(b.when) ? t('on site, {day}', { day: day(b.when) }) : t('on site') }) : t('Nothing paid yet'))}</small></div><span>${esc(fmtC(b.balance, cur))}</span></li>`).join('')}</ul>
+    <p>${esc(t('This amount is set aside in the budget.'))}</p></div>`;
 }
 // The mission's emoji replaces the brand mark in the top bar.
 function setTopEmoji(e) {
@@ -1428,6 +1437,7 @@ function envelope(e) {
       return `<li><div><b>${esc(x.merchant)}</b><small>${esc(shortLabel(x.merchant, x.label))}${ref ? ` · <span class="ref">${esc(ref)}</span>` : ''}</small></div><span class="chip ${cls}">${t(st)}</span><span class="r-amt">${fmt(x.amount - (x.refunded || 0))}</span></li>`;
     }).join('')
     : `<li class="none">${t('No payment yet in this mission.')}</li>`;
+  if (e.balances?.length) $('#receipts').insertAdjacentHTML('beforeend', `<li class="due-li">${balanceList(e.balances, e.due, e.currency)}</li>`);
 }
 
 // ---------- approval sheet: hold to approve ----------

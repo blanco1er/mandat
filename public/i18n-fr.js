@@ -607,4 +607,10 @@ export default {
   "Request sent · they usually answer within a minute": "Demande envoyée · réponse en général en moins d’une minute",
   "Tap the circle to turn the microphone on.": "Touchez le cercle pour activer le micro.",
   "{amount} committed": "{amount} engagés",
+  "Still to pay": "Reste à régler",
+  "{deposit} deposit paid · balance {when}": "Acompte de {deposit} payé · solde {when}",
+  "on site, {day}": "sur place, {day}",
+  "on site": "sur place",
+  "Nothing paid yet": "Rien de payé pour l’instant",
+  "This amount is set aside in the budget.": "Ce montant est mis de côté dans le budget.",
 };
