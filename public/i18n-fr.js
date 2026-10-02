@@ -543,4 +543,5 @@ export default {
   "Sign with": "Signer avec",
   "Change profile photo": "Changer la photo de profil",
   "Remove photo": "Retirer la photo",
+  "Let Mandat get to know you": "Laissez Mandat mieux vous connaître",
 };

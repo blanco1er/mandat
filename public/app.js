@@ -835,6 +835,7 @@ function handle({ type, data }) {
     case 'memory': return memoryStep(data);
     case 'budget_changed': return addStep(t('Budget changed · {from} → {to}', { from: fmtC(data.from, data.currency), to: fmtC(data.to, data.currency) }));
     case 'clash': return clashCard(data);
+    case 'suggest_profile': return profileCard(data);
     case 'busy': state.busy = data.on; if (!data.on) closeSteps(); typing(data.on); if (vm.on && !data.on && state.live) { vm.mute = false; vmAfterTurn(); } return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
     case 'tool': typing(state.busy); return toolStep(data);
     case 'places': return placesCard(data);
@@ -1051,6 +1052,14 @@ function memoryStep(m) {
   if (m.action === 'forgotten') return addStep(t('Updated my memory'), 'step mem');
   addStep(`${m.scope === 'mission' ? t('Noted for this mission') : t('Noted for next time')} · ${m.text}`, 'step mem');
   if (m.scope === 'global' && state.me) state.me.memory = [...(state.me.memory || []).filter((x) => x.id !== m.id), m];
+}
+// Mandat knows you too little for this errand: a short talk in Settings would help. Optional.
+function profileCard(d) {
+  const li = el('li', 'card suggest');
+  li.innerHTML = `<div class="sg-main"><b>${esc(t('Let Mandat get to know you'))}</b><small>${esc(d.reason || t('A few quick questions, so missions need fewer.'))}</small></div><div class="sg-actions"><button type="button" class="sg-later">${esc(t('Later'))}</button><button type="button" class="sg-go">${esc(t('Get to know me'))}</button></div>`;
+  li.querySelector('.sg-go').addEventListener('click', () => { li.remove(); ivOpen(); });
+  li.querySelector('.sg-later').addEventListener('click', () => li.remove());
+  add(li);
 }
 // A clash with something already planned (here or in another mission), with a way to look at it.
 const CLASH_TITLE = { overlap: 'Schedule clash', too_close: 'Tight timing', double_stay: 'Two stays on the same night', away: 'You may be away' };

@@ -1221,3 +1221,12 @@ body.iv-open { overflow: hidden; }
 .avatar-cam .i { width: 15px; height: 15px; }
 .avatar-lg.photo, .avatar-xl.photo { background-size: cover; background-position: center; color: transparent; }
 .link.small { font-size: 13.5px; margin: 2px 0 4px; }
+
+.card.suggest { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-color: rgba(10, 132, 255, 0.35); }
+.sg-main { display: flex; flex-direction: column; gap: 2px; }
+.sg-main b { font-size: 14.5px; }
+.sg-main small { font-size: 13px; color: var(--ink-2); line-height: 18px; }
+.sg-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.sg-actions button { height: 34px; padding: 0 14px; border-radius: 17px; font-size: 14px; font-weight: 600; }
+.sg-later { color: var(--ink-3); }
+.sg-go { background: var(--accent); color: #fff; }
