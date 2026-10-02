@@ -250,6 +250,19 @@ app.post('/api/me', api(async (req, res) => {
   return { user: publicUser(u) };
 }));
 
+// Profile photo (square, small), or none.
+app.post('/api/me/avatar', api(async (req, res) => {
+  const u = me(req, res);
+  if (req.body?.image === null) u.avatar = null;
+  else {
+    const [img] = saveImages(u, [req.body?.image]);
+    if (!img) throw new Error('Choose a photo.');
+    u.avatar = img.url;
+  }
+  saveUser(u);
+  return { user: publicUser(u) };
+}));
+
 // Getting to know you: one short question at a time; every lasting answer goes into memory.
 app.post('/api/me/interview', api(async (req, res) => {
   const u = me(req, res);

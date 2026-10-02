@@ -1476,10 +1476,18 @@ $('#csvBtn').addEventListener('click', () => ledger?.exportDataAsCsv({ fileName:
 
 function renderSettings() {
   const u = state.me;
-  $('#sPayer').textContent = u.paypal.payerName || u.profile.name || t('PayPal account');
-  $('#sPayerMail').textContent = u.paypal.payerEmail || (state.paypalMode === 'sandbox' ? '' : t('Demo account'));
+  const name = u.paypal.payerName || u.profile.name || t('PayPal account');
+  const mail = u.paypal.payerEmail || (state.paypalMode === 'sandbox' ? '' : t('Demo account'));
+  const signed = !!u.paypal.mandate;
+  $('#sPayer').textContent = name;
+  $('#sAccountSub').textContent = signed ? t('PayPal account · Mandate active') : t('PayPal account · No mandate');
+  $('#aName').textContent = name;
+  $('#aMail').textContent = mail;
   $('#sVerified').hidden = !u.paypal.verified;
-  $('#sMandate').textContent = u.paypal.mandate ? `${t('Active since {date}', { date: new Date(u.paypal.mandate.signedAt).toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }).replace(/^1 /, lang === 'fr' ? '1er ' : '1 ') })} · ${u.paypal.mandate.mode === 'sandbox' ? t('PayPal sandbox') : t('demo')}` : t('Not signed');
+  $('#aMandateState').textContent = signed ? t('Active') : t('No mandate');
+  $('#sMandate').textContent = signed ? `${t('Signed on {date}', { date: new Date(u.paypal.mandate.signedAt).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' }) })} · ${u.paypal.mandate.mode === 'sandbox' ? t('PayPal sandbox') : t('demo')}` : t('Sign it once to let Mandat book and pay for you.');
+  $('#sRevoke').hidden = !signed;
+  $('#aSign').hidden = signed;
   sAutonomy = u.rules.autonomy;
   setSeg('#sAutonomy', sAutonomy);
   $('#sAutonomyHelp').textContent = t(u.autonomyLevels[sAutonomy].help);
@@ -1494,7 +1502,15 @@ function renderSettings() {
   renderPrefs(u.profile);
   locState().then(locRender);
   $('#sVoice').checked = u.voice.on;
-  $('#sInit').textContent = (u.profile.name || u.paypal.payerName || t('You')).split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  const initials = (u.profile.name || u.paypal.payerName || t('You')).split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  // Your photo when you chose one, your initials otherwise.
+  for (const id of ['#sInit', '#aInit']) {
+    const box = $(id);
+    box.textContent = u.avatar ? '' : initials;
+    box.style.backgroundImage = u.avatar ? `url("${u.avatar}")` : '';
+    box.classList.toggle('photo', !!u.avatar);
+  }
+  $('#aPhotoRemove').hidden = !u.avatar;
   renderPush();
   setSeg('#sLang', chosenLang());
   $('#sKnows').textContent = u.knows || t('Nothing yet.');
@@ -1851,8 +1867,38 @@ $('#sForget').addEventListener('click', async () => {
 $('#sRevoke').addEventListener('click', async () => {
   if (!confirm(t('Revoke the PayPal mandate? Your agent will not be able to hold any deposit.'))) return;
   state.me = (await post('/api/me/mandate/revoke', {})).user;
-  mandateView();
+  renderSettings(); // stays on the Account page: signing again is your choice
 });
+// Account: one place for who you are, your PayPal account and the mandate.
+$('#accountOpen').addEventListener('click', () => { $('#account').hidden = false; document.body.classList.add('iv-open'); });
+const closeAccount = () => { $('#account').hidden = true; document.body.classList.remove('iv-open'); };
+$('#acctBack').addEventListener('click', closeAccount);
+// Profile photo: picked from the phone, cropped square, kept small.
+function squarePhoto(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const side = Math.min(img.width, img.height);
+      const c = document.createElement('canvas');
+      c.width = c.height = 320;
+      c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 320, 320);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL('image/jpeg', 0.86));
+    };
+    img.onerror = () => resolve(null);
+    img.src = URL.createObjectURL(file);
+  });
+}
+$('#aPhoto').addEventListener('click', () => pickPhotos(async ([file]) => {
+  const image = await squarePhoto(file);
+  if (!image) return;
+  try { state.me = (await post('/api/me/avatar', { image })).user; renderSettings(); } catch (err) { alert(err.message); }
+}, false));
+$('#aPhotoRemove').addEventListener('click', async () => {
+  state.me = (await post('/api/me/avatar', { image: null })).user;
+  renderSettings();
+});
+$('#aSign').addEventListener('click', () => { closeAccount(); mandateView(); });
 // Location: show the real state (on, asked when needed, blocked) and what the button does.
 async function locState() {
   try { return (await navigator.permissions.query({ name: 'geolocation' })).state; } catch { return 'prompt'; }
