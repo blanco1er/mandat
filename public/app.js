@@ -381,11 +381,11 @@ $('#cBudgetIn').addEventListener('input', () => {
 $('#cGo').addEventListener('click', (e) => {
   if ($('#compose').classList.contains('has-text')) return; // the form submits
   e.preventDefault();
-  if (state.listening) return rec?.stop();
+  if (state.listening) return state.dictStop ? state.dictStop() : rec?.stop();
   // Speak your mission: it is written in the box as you talk, starts when you stop, and the conversation goes on by voice.
   unlockSpeech();
   unlockAudio();
-  listen((t) => {
+  dictate((t) => {
     $('#cText').value = t;
     compose.voice = true;
     onCompose();
@@ -2484,6 +2484,64 @@ function wav16k(chunks, rate) {
   let bin = '';
   for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
   return btoa(bin);
+}
+// What you said, written down: the text, '' when nothing clear was heard, null when the service is off.
+async function sttText(chunks) {
+  const r = await fetch('/api/stt', { method: 'POST', headers: { 'Content-Type': 'application/json', ...HEADERS }, body: JSON.stringify({ audio: wav16k(chunks, mic.ctx.sampleRate) }) });
+  if (r.status === 503) { state.sttOn = false; return null; }
+  return ((await r.json()).text || '').trim();
+}
+// Dictating a new mission on the home screen: the same reliable recording as the conversation (iPhone's own
+// recognition hears nothing a second time once the app has played a sound). It stops by itself when you pause.
+function dictate(onText, button, onLive) {
+  if (!(state.sttOn && navigator.mediaDevices?.getUserMedia)) return listen(onText, button, onLive);
+  stopSpeaking();
+  micPrepare();
+  const d = { chunks: [], pre: [], talking: false, start: 0, last: 0, floor: 0.008, began: Date.now(), done: false };
+  let stream = null, src = null, node = null;
+  const stop = () => {
+    d.done = true;
+    try { node?.disconnect(); src?.disconnect(); } catch {}
+    stream?.getTracks().forEach((x) => x.stop());
+    state.listening = false;
+    state.dictStop = null;
+    button?.classList.remove('listening', 'thinking');
+  };
+  const finish = async () => {
+    const chunks = d.chunks, voiced = d.last - d.start;
+    stop();
+    if (voiced < 300) return;
+    button?.classList.add('thinking');
+    try {
+      const text = await sttText(chunks);
+      if (text === null) return listen(onText, button, onLive); // the service is off: the phone's recognition
+      if (text) onText(text);
+    } catch {} finally { button?.classList.remove('thinking'); }
+  };
+  state.dictStop = () => (d.talking ? finish() : stop()); // tap again: send now, or cancel
+  state.listening = true;
+  button?.classList.add('listening');
+  navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).then(async (st) => {
+    if (d.done) return st.getTracks().forEach((x) => x.stop());
+    stream = st;
+    await mic.ctx.resume?.().catch(() => {});
+    src = mic.ctx.createMediaStreamSource(st);
+    node = mic.ctx.createScriptProcessor(4096, 1, 1);
+    node.onaudioprocess = (e) => {
+      if (d.done) return;
+      const data = e.inputBuffer.getChannelData(0);
+      let sum = 0;
+      for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+      const rms = Math.sqrt(sum / data.length), now = Date.now();
+      if (rms > Math.max(0.012, d.floor * 3)) { if (!d.talking) { d.talking = true; d.start = now; d.chunks = d.pre.slice(); } d.last = now; }
+      else if (!d.talking) d.floor = d.floor * 0.95 + rms * 0.05;
+      const copy = new Float32Array(data);
+      if (d.talking) { d.chunks.push(copy); if (now - d.last > 1100 || now - d.start > 30000) finish(); }
+      else { d.pre.push(copy); if (d.pre.length > 3) d.pre.shift(); if (now - d.began > 10000) stop(); } // nothing said: give up quietly
+    };
+    src.connect(node);
+    node.connect(mic.ctx.destination);
+  }).catch(() => { stop(); listen(onText, button, onLive); });
 }
 async function micSend(chunks) {
   mic.sending = true;
