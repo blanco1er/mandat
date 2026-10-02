@@ -93,6 +93,11 @@
 
     <div class="idea-row" id="ideas" role="group" aria-label="Ideas to start from"></div>
 
+    <div class="push-ask" id="pushAsk" hidden>
+      <span class="push-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg></span>
+      <div class="grow"><b>Know when Mandat needs you</b><small>Approvals, answers from merchants, friends paying you back. Nothing else.</small></div>
+      <div class="push-actions"><button type="button" class="link" id="pushLater">Not now</button><button type="button" class="pill-btn" id="pushOn">Turn on</button></div>
+    </div>
     <div class="stopped-banner" id="stoppedBanner" hidden>Mandat is stopped — no payment can be made. <button id="resumeAll">Resume</button></div>
     <div class="m-search" id="mSearchWrap" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 0 1 5.2 10.4l4.4 4.4-1.4 1.4-4.4-4.4A6.5 6.5 0 1 1 10.5 4Zm0 2a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z"/></svg><input id="mSearch" placeholder="Search missions" aria-label="Search missions"></div>
     <div id="mGroups"></div>
@@ -170,6 +175,8 @@
     <div class="group">
       <div class="row"><div class="grow"><b>Location</b><small id="sLoc">Asked when a mission needs it</small></div><button class="link" id="sLocBtn">Allow</button></div>
       <div class="row"><div class="grow"><b>Spoken replies</b><small>Mandat answers out loud</small></div><label class="switch"><input type="checkbox" id="sVoice"><i></i></label></div>
+      <div class="row"><div class="grow"><b>Notifications</b><small id="sPushInfo">When a payment needs you, a merchant answers or a friend pays</small></div><label class="switch"><input type="checkbox" id="sPush"><i></i></label></div>
+      <div class="row" id="sPushTestRow" hidden><div class="grow"><small>Check that this device receives them</small></div><button class="link" id="sPushTest">Send a test</button></div>
     </div>
 
     <h2 class="group-title">What Mandat knows about you</h2>

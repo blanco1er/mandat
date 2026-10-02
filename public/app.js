@@ -36,6 +36,7 @@ async function boot() {
   history.replaceState(null, '', '/');
   if (!state.me.paypal.mandate) return p.get('mandate') === 'cancelled' ? mandateView() : show('welcome');
   renderHome(r.missions);
+  navigator.serviceWorker?.register('/sw.js').catch(() => {});
   const open = p.get('mission');
   if (open) openMission(open);
   else show('home');
@@ -239,6 +240,14 @@ function renderHome(missions) {
   $('#cRule').classList.remove('error');
   $('#mSearchWrap').hidden = missions.filter((m) => !m.archived).length < 6;
   drawGroups();
+  // What needs you: a dot on the Missions tab and a badge on the app icon.
+  const needs = missions.filter((m) => m.status === 'needs_you' && !m.archived).length;
+  $('#tabbar button[data-tab=home]').dataset.badge = needs || '';
+  if ('setAppBadge' in navigator) (needs ? navigator.setAppBadge(needs) : navigator.clearAppBadge()).catch(() => {});
+  // Offer notifications once there is something worth being told about.
+  let later = false;
+  try { later = localStorage.getItem('mandat.pushLater') === '1'; } catch {}
+  $('#pushAsk').hidden = !(missions.length && pushSupport() === 'ok' && Notification.permission === 'default' && !state.me.notifications && !later);
 }
 function drawGroups() {
   const q = $('#mSearch').value.trim().toLowerCase();
@@ -847,6 +856,7 @@ function renderSettings() {
   $('#pDiet').value = u.profile.diet;
   $('#pPrefs').value = u.profile.preferences;
   $('#sVoice').checked = u.voice.on;
+  renderPush();
   $('#sKnows').textContent = u.knows || 'Nothing yet.';
   renderPeople(u.profile.people);
 }
@@ -907,6 +917,66 @@ for (const [id, key] of [['#sApprove', 'approveAbove'], ['#sDaily', 'dailyCap'],
 $('#sStop').addEventListener('change', async () => {
   state.me = (await post('/api/me/stop', { stopped: $('#sStop').checked })).user;
 });
+// ---------- notifications ----------
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const installed = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+function pushSupport() {
+  if (isIOS && !installed) return 'install'; // iPhone: web notifications work once Mandat is on the Home Screen
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) return 'none';
+  return Notification.permission === 'denied' ? 'blocked' : 'ok';
+}
+const urlKey = (b64) => Uint8Array.from(atob((b64 + '='.repeat((4 - (b64.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+async function enablePush() {
+  if (pushSupport() !== 'ok') return renderPush();
+  if ((await Notification.requestPermission()) !== 'granted') return renderPush();
+  const reg = await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
+  const { key } = await get('/api/push/key');
+  const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlKey(key) }));
+  await post('/api/me/push', { subscription: sub.toJSON() });
+  state.me.notifications = 1;
+  $('#pushAsk').hidden = true;
+  renderPush();
+}
+async function disablePush() {
+  const reg = await navigator.serviceWorker.getRegistration('/sw.js');
+  const sub = await reg?.pushManager.getSubscription();
+  if (sub) {
+    await post('/api/me/push/off', { endpoint: sub.endpoint });
+    await sub.unsubscribe();
+  }
+  state.me.notifications = 0;
+  renderPush();
+}
+async function renderPush() {
+  const why = pushSupport();
+  const reg = why === 'ok' ? await navigator.serviceWorker.getRegistration('/sw.js') : null;
+  const on = !!(await reg?.pushManager.getSubscription()) && Notification.permission === 'granted';
+  $('#sPush').checked = on;
+  $('#sPush').disabled = why !== 'ok';
+  $('#sPushTestRow').hidden = !on;
+  $('#sPushInfo').textContent = why === 'install' ? 'On iPhone: Share → Add to Home Screen, then open Mandat from there to turn this on'
+    : why === 'blocked' ? 'Blocked for this site — allow notifications in your browser settings'
+    : why === 'none' ? 'This browser cannot receive notifications'
+    : on ? 'On for this device — only when something needs you' : 'When a payment needs you, a merchant answers or a friend pays';
+}
+$('#sPush').addEventListener('change', () => ($('#sPush').checked ? enablePush() : disablePush()).catch(() => renderPush()));
+$('#sPushTest').addEventListener('click', async () => {
+  await post('/api/me/push/test', {});
+  $('#sPushTest').textContent = 'Sent';
+  setTimeout(() => ($('#sPushTest').textContent = 'Send a test'), 2000);
+});
+$('#pushOn').addEventListener('click', () => enablePush().catch(() => {}));
+$('#pushLater').addEventListener('click', () => {
+  $('#pushAsk').hidden = true;
+  try { localStorage.setItem('mandat.pushLater', '1'); } catch {}
+});
+// A mission screen in the background is not "looking": drop the live stream so notifications can reach you.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && state.es) { state.es.close(); state.es = null; state.paused = state.mission; }
+  else if (!document.hidden && state.paused && state.paused === state.mission && !$('#live').hidden) { state.paused = null; openMission(state.mission); }
+});
+
 $('#sVoice').addEventListener('change', async () => {
   state.me = (await post('/api/me', { voice: { on: $('#sVoice').checked } })).user;
 });

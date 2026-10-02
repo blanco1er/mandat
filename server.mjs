@@ -3,11 +3,13 @@
 import express from 'express';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { createSession, userTurn, resolveApproval, resolveRequest, envelopeView, missionSummary } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
 import { geocode } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
+import * as Push from './lib/push.mjs';
 import { newUser, getUser, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
 const app = express();
@@ -33,8 +35,8 @@ function me(req, res) {
   return u;
 }
 function publicUser(u) {
-  const { paypal, ...rest } = u;
-  return { ...rest, paypal: { connected: paypal.connected, payerName: paypal.payerName, payerEmail: paypal.payerEmail, verified: paypal.verified, mandate: paypal.mandate ? { active: true, mode: paypal.mandate.mode, signedAt: paypal.mandate.signedAt } : null }, knows: agentBrief(u), autonomyLevels: AUTONOMY };
+  const { paypal, push, ...rest } = u;
+  return { ...rest, notifications: (push || []).length, paypal: { connected: paypal.connected, payerName: paypal.payerName, payerEmail: paypal.payerEmail, verified: paypal.verified, mandate: paypal.mandate ? { active: true, mode: paypal.mandate.mode, signedAt: paypal.mandate.signedAt } : null }, knows: agentBrief(u), autonomyLevels: AUTONOMY };
 }
 
 // ---------- missions in memory, persisted after every agent run ----------
@@ -69,7 +71,41 @@ function emitter(b) {
       if (b.log.length > 400) b.log.shift();
     }
     for (const res of b.clients) res.write(`data: ${JSON.stringify(evt)}\n\n`);
+    pushFor(b, evt);
   };
+}
+
+// ---------- notifications: only the moments that need the user, and only when they are not looking ----------
+const EUR = (v, s) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: s.envelope.currency || 'EUR' }).format(v);
+function needsCount(u) {
+  return u.missions.map(getMission).filter(Boolean).map((s) => missionSummary(live.get(s.id)?.s || s, { busy: !!live.get(s.id)?.running })).filter((m) => m.status === 'needs_you' && !m.archived).length;
+}
+async function pushTo(s, msg) {
+  const u = getUser(s.userId);
+  if (!u?.push?.length) return;
+  const changed = await Push.notify(u, { ...msg, url: `/?mission=${s.id}`, badge: needsCount(u) });
+  if (changed) saveUser(u);
+}
+function pushFor(b, { type, data }) {
+  if (b.clients.size) return; // they are looking at this mission right now
+  const s = b.s;
+  const title = s.title || 'Mandat';
+  if (type === 'approval' && data.status !== 'approved' && data.status !== 'declined') pushTo(s, { title, body: `Approve ${EUR(data.amount, s)} at ${data.merchant}? Tap to review.`, tag: 'ap-' + data.id });
+  else if (type === 'request' && data.status === 'accepted') pushTo(s, { title, body: `${data.merchant} accepted your booking${data.slot ? ' for ' + data.slot : ''}.`, tag: 'rq-' + data.id });
+  else if (type === 'request' && data.status === 'declined') pushTo(s, { title, body: `${data.merchant} can't take it. Mandat is looking for another option.`, tag: 'rq-' + data.id });
+  else if (type === 'share_paid') pushTo(s, { title, body: `${data.friend} paid their share: ${EUR(data.amount, s)}.`, tag: 'sh-' + data.invoiceId });
+}
+// After the agent's turn: a question for the user, or everything booked.
+function pushAfterRun(b) {
+  if (b.clients.size) return;
+  const m = missionSummary(b.s);
+  if (m.status === 'needs_you' && m.needs.startsWith('Answer') && b.s.lastAsked !== m.last) {
+    b.s.lastAsked = m.last;
+    pushTo(b.s, { title: b.s.title || 'Mandat', body: m.needs.replace(/^Answer: /, ''), tag: 'q-' + b.s.id });
+  } else if (m.status === 'done' && !b.s.doneNotified) {
+    b.s.doneNotified = true;
+    pushTo(b.s, { title: b.s.title || 'Mandat', body: `All booked${m.held ? ` · ${EUR(m.held, b.s)} held until each place confirms` : ''}.`, tag: 'done-' + b.s.id });
+  }
 }
 function run(b, fn) {
   const emit = emitter(b);
@@ -86,6 +122,7 @@ function run(b, fn) {
       emit('busy', { on: false });
       emit('envelope', envelopeView(b.s));
       emit('summary', missionSummary(b.s));
+      pushAfterRun(b);
       saveMission(b.s);
     }
   });
@@ -341,6 +378,29 @@ app.get('/api/missions/:id/shares', api(async (req, res) => {
   return { shares: b.s.shares.filter((sh) => sh.invoiceId).map(({ qr, ...sh }) => sh) };
 }));
 
+// Devices that receive notifications (one per browser / installed app).
+app.get('/api/push/key', (req, res) => res.json({ key: Push.publicKey() }));
+app.post('/api/me/push', api(async (req, res) => {
+  const u = me(req, res);
+  const sub = req.body?.subscription;
+  if (!sub?.endpoint || !/^https:\/\//.test(sub.endpoint) || !sub.keys?.p256dh || !sub.keys?.auth) throw new Error('Invalid subscription');
+  u.push = (u.push || []).filter((x) => x.endpoint !== sub.endpoint).concat({ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }, at: new Date().toISOString() }).slice(-5);
+  saveUser(u);
+  return { devices: u.push.length };
+}));
+app.post('/api/me/push/off', api(async (req, res) => {
+  const u = me(req, res);
+  u.push = (u.push || []).filter((x) => x.endpoint !== req.body?.endpoint);
+  saveUser(u);
+  return { devices: u.push.length };
+}));
+app.post('/api/me/push/test', api(async (req, res) => {
+  const u = me(req, res);
+  const changed = await Push.notify(u, { title: 'Mandat', body: 'Notifications are on. I will only ping you when something needs you.', url: '/', tag: 'test', badge: needsCount(u) });
+  if (changed) saveUser(u);
+  return { devices: (u.push || []).length };
+}));
+
 // Archive keeps the history; delete only when no money is held for the mission.
 app.post('/api/missions/:id/archive', api(async (req, res) => {
   const b = box(req.params.id, me(req, res));
@@ -424,6 +484,23 @@ app.post('/api/requests/:rid', api(async (req) => {
   }
   throw Object.assign(new Error('Unknown request'), { status: 404 });
 }));
+
+// Friends pay their invoices while the app is closed: check open invoices every 2 minutes (PayPal API, free).
+async function watchInvoices() {
+  for (const f of fs.readdirSync(path.resolve(process.env.MANDAT_DATA || 'data', 'missions'))) {
+    const s0 = getMission(f.replace(/\.json$/, ''));
+    if (!s0?.shares?.some((sh) => sh.invoiceId && !sh.error && sh.mode !== 'offline' && sh.status !== 'PAID' && Date.now() - Date.parse(sh.at || s0.createdAt) < 30 * 864e5)) continue;
+    const b = box(s0.id);
+    for (const sh of b.s.shares.filter((x) => x.invoiceId && !x.error && x.mode !== 'offline' && x.status !== 'PAID')) {
+      const status = await invoiceStatus(sh.invoiceId).catch(() => null);
+      if (!status || status === sh.status) continue;
+      sh.status = status;
+      if (status === 'PAID') emitter(b)('share_paid', { invoiceId: sh.invoiceId, friend: sh.friend, amount: sh.amount });
+      saveMission(b.s);
+    }
+  }
+}
+setInterval(() => watchInvoices().catch((e) => console.warn('[invoices]', e.message)), 120000);
 
 app.listen(PORT, () => {
   console.log(`Mandat on ${BASE()} (PayPal: ${PayPal.MODE})`);
