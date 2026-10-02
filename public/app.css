@@ -403,15 +403,6 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 
 /* Activity ledger */
 .view.wide { max-width: 980px; }
-.stat-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 18px 0 16px; }
-.tile { padding: 14px 16px; border-radius: var(--r-l); background: var(--card); border: 1px solid var(--card-line); box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 4px; }
-.tile small { font-size: 12px; color: var(--ink-3); }
-.tile b { font: 600 22px/28px -apple-system, "SF Pro Display", system-ui, sans-serif; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-.tile:nth-child(1) b { color: var(--spent); }
-.tile:nth-child(2) b { color: var(--held); }
-.tile:nth-child(3) b { color: var(--accent); }
-.tile:nth-child(4) b { color: var(--ok); }
-@media (max-width: 640px) { .stat-tiles { grid-template-columns: repeat(2, 1fr); } }
 .ask-bar { display: flex; align-items: center; gap: 8px; height: 48px; padding: 0 6px 0 14px; border-radius: 24px; background: var(--card); border: 1px solid var(--card-line); box-shadow: var(--shadow); }
 .ask-bar svg { width: 18px; height: 18px; fill: var(--ink-3); flex: none; }
 .ask-bar input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-size: 16px; }
@@ -431,9 +422,6 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 .ledger .chip { display: inline-block; line-height: 16px; }
 .led-none { color: var(--ink-3); font-size: 14px; }
 .ledger-empty { margin: 18px 4px; color: var(--ink-3); font-size: 15px; }
-.ledger-actions { display: flex; align-items: center; justify-content: space-between; margin: 12px 2px 110px; }
-.ledger-actions button { height: 36px; padding: 0 16px; border-radius: 18px; background: var(--card); border: 1px solid var(--card-line); color: var(--accent); font-weight: 600; font-size: 14px; }
-.ledger-actions small { color: var(--ink-3); font-size: 12px; }
 
 /* Home: greeting, one box to ask for anything, ideas, then missions by urgency */
 .eyebrow, .hello { color: var(--ink-2); font-size: 15px; font-weight: 600; margin: 6px 0 -6px; }
@@ -753,3 +741,65 @@ body.no-scroll { overflow: hidden; }
 .split-row .split-actions { display: flex; gap: 2px; margin: 0; }
 .split-row .split-actions button { width: 30px; height: 30px; padding: 0; border-radius: 15px; justify-content: center; background: var(--card); }
 .split-foot { margin: 8px 2px 0; }
+
+/* ===== Settings, the iOS way: slim rows, values on the right ===== */
+#settings .large-title, #activity .large-title { font-size: 28px; line-height: 34px; margin: 6px 0 14px; }
+.profile-card { display: flex; align-items: center; gap: 14px; padding: 14px 16px; margin-bottom: 10px; border-radius: 18px; background: var(--card); border: 1px solid var(--card-line); }
+.avatar-lg { width: 48px; height: 48px; border-radius: 24px; display: grid; place-items: center; font: 600 18px/1 -apple-system, system-ui, sans-serif; color: #fff; background: linear-gradient(135deg, #0a84ff, #7b61ff); flex: none; }
+.profile-card .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.profile-card b { font-size: 17px; }
+.profile-card small { font-size: 13px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.group-title { font-size: 12px; letter-spacing: 0.06em; margin: 22px 16px 6px; }
+.group { border-radius: 16px; box-shadow: none; padding: 0 14px; margin-bottom: 6px; }
+.group .row { min-height: 46px; padding: 7px 0; gap: 10px; }
+.group .row label { font-size: 15px; color: var(--ink); }
+.group .grow b { font-size: 15px; font-weight: 500; }
+.group .grow small, .hint { font-size: 12px; line-height: 16px; }
+.pp-mark { width: 28px; height: 28px; border-radius: 8px; font-size: 14px; flex: none; }
+.group .stepper { gap: 2px; }
+.group .stepper button { width: 28px; height: 28px; border-radius: 14px; font-size: 16px; }
+.group .stepper input { width: 58px; font-size: 15px; line-height: 20px; font-weight: 600; }
+.group .stepper .cur { font-size: 13px; line-height: 20px; margin-right: 2px; }
+.group .segmented.wide button { padding: 6px 4px; font-size: 13px; }
+.group .row.col { padding: 10px 0 8px; }
+.hint { margin: 6px 2px 0; }
+.switch { width: 46px; height: 28px; }
+.switch i::after { width: 24px; height: 24px; }
+.switch input:checked + i::after { transform: translateX(18px); }
+.field { min-height: 46px; }
+.field span { width: 42%; font-size: 15px; color: var(--ink); }
+.field input { font-size: 15px; color: var(--ink-2); }
+.field input::placeholder { color: var(--ink-3); }
+.person { min-height: 46px; }
+.person input { font-size: 15px; }
+.row-btn { display: block; width: 100%; min-height: 46px; text-align: left; font-size: 15px; color: var(--accent); background: none; }
+.row-btn.danger { color: var(--warn); }
+#people:not(:empty) + .row-btn { border-top: 0.5px solid var(--card-line); }
+.knows-box summary { list-style: none; display: flex; align-items: center; min-height: 46px; font-size: 15px; cursor: pointer; }
+.knows-box summary::-webkit-details-marker { display: none; }
+.knows-box summary::after { content: ""; margin-left: auto; width: 16px; height: 16px; background: currentColor; color: var(--ink-3); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 6 6 6-6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 6 6 6-6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; transition: transform 0.25s var(--spring); }
+.knows-box[open] summary::after { transform: rotate(90deg); }
+.knows { padding: 0 0 12px; font-size: 12.5px; line-height: 18px; }
+.settings-fine { margin: 10px 16px 0; font-size: 12px; color: var(--ink-3); }
+/* ===== Activity: one strip of numbers, a slim search, the ledger ===== */
+.page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.head-link { font-size: 15px; font-weight: 600; color: var(--accent); background: none; }
+.stat-strip { display: grid; grid-template-columns: repeat(4, 1fr); border-radius: 16px; background: var(--card); border: 1px solid var(--card-line); }
+.stat-strip div { padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.stat-strip div + div { border-left: 1px solid var(--card-line); }
+.stat-strip small { font-size: 11px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-strip b { font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-strip div:nth-child(1) b { color: var(--ink); }
+.stat-strip div:nth-child(2) b { color: var(--held); }
+.stat-strip div:nth-child(3) b { color: var(--accent); }
+.stat-strip div:nth-child(4) b { color: var(--ok); }
+@media (max-width: 480px) { .stat-strip div { padding: 9px 8px; } .stat-strip b { font-size: 14px; } }
+.ask-bar { height: 42px; margin-top: 10px; padding: 0 4px 0 12px; border-radius: 14px; box-shadow: none; }
+.ask-bar input { font-size: 15px; }
+.ask-bar button { width: 34px; height: 34px; padding: 0; border-radius: 11px; display: grid; place-items: center; }
+.ask-bar button svg { width: 18px; height: 18px; fill: #fff; }
+.ask-bar.busy button { animation: breathe 0.9s ease-in-out infinite; }
+.filter-chip { margin-top: 8px; }
+.ledger { margin-top: 10px; }
+.ledger-count { margin: 8px 4px 110px; font-size: 12px; color: var(--ink-3); }
+.ledger-count small { font-size: 12px; }

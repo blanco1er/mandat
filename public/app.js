@@ -1002,8 +1002,8 @@ function ledgerTheme(ag) {
     borderColor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)',
     rowHoverColor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
     wrapperBorderRadius: 16,
-    spacing: 7,
-    rowVerticalPaddingScale: 1.25,
+    spacing: 6,
+    rowVerticalPaddingScale: 0.9,
   });
 }
 const STATUS_CLS = { Held: 'wait', Paid: 'paid', 'Paid back': 'paid', Released: 'off', Refunded: 'part', 'Owed to you': 'wait', Failed: 'off' };
@@ -1046,6 +1046,8 @@ async function openActivity() {
       rowData: data.rows,
       getRowId: (p) => p.data.id,
       domLayout: 'autoHeight',
+      rowHeight: 46,
+      headerHeight: 38,
       animateRows: true,
       defaultColDef: { sortable: true, resizable: true, suppressHeaderMenuButton: false, floatingFilter: false },
       rowSelection: undefined,
@@ -1070,7 +1072,7 @@ $('#askForm').addEventListener('submit', async (e) => {
   const q = $('#askText').value.trim();
   if (!q || !ledger) return;
   $('#askBtn').disabled = true;
-  $('#askBtn').textContent = '…';
+  $('#askForm').classList.add('busy');
   try {
     const r = await post('/api/me/activity/ask', { q });
     ledger.setFilterModel(r.filterModel);
@@ -1082,7 +1084,7 @@ $('#askForm').addEventListener('submit', async (e) => {
     $('#filterChip').hidden = false;
   } finally {
     $('#askBtn').disabled = false;
-    $('#askBtn').textContent = 'Filter';
+    $('#askForm').classList.remove('busy');
   }
 });
 $('#filterClear').addEventListener('click', () => {
@@ -1114,6 +1116,7 @@ function renderSettings() {
   $('#pDiet').value = u.profile.diet;
   $('#pPrefs').value = u.profile.preferences;
   $('#sVoice').checked = u.voice.on;
+  $('#sInit').textContent = (u.profile.name || u.paypal.payerName || 'You').split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   renderPush();
   $('#sKnows').textContent = u.knows || 'Nothing yet.';
   renderPeople(u.profile.people);
