@@ -1069,7 +1069,7 @@ function optionCard(o) {
     const strip = li.querySelector('.pv-photos');
     if (strip && !strip.querySelector('img')) strip.outerHTML = plainCover(o);
   }));
-  const answer = (text) => { li.classList.add('answered'); if (vm.on) { try { vm.rec?.abort(); } catch {} vm.rec = null; vmSend(text); } else send(text); };
+  const answer = (text) => { li.classList.add('answered'); if (vm.on) vmAnswer(text); else send(text); };
   li.querySelector('.op-no').addEventListener('click', () => answer(t('I would like another option instead of {name}', { name: o.name })));
   state.cards['o:' + o.merchant_id] = li;
   if (old) old.replaceWith(li); else add(li);
@@ -1091,7 +1091,7 @@ function choicesRow({ choices }) {
   for (const c of choices) {
     const b = el('button', 'choice', c);
     b.type = 'button';
-    b.addEventListener('click', () => { clearChoices(); if (vm.on) { try { vm.rec?.abort(); } catch {} vm.rec = null; vmLiveDrop(); vmSend(c); } else send(c); });
+    b.addEventListener('click', () => { clearChoices(); if (vm.on) vmAnswer(c); else send(c); });
     li.append(b);
   }
   add(li);
@@ -2216,7 +2216,9 @@ function unlockSpeech() {
 // Safety net: whenever Mandat is neither working nor talking nor listening, the microphone comes back by itself.
 let vmIdle = 0;
 setInterval(() => {
-  if (!vm.on || vm.phase === 'paused' || state.busy || vm.rec || out.playing || vm.queue.length) { vmIdle = 0; return; }
+  if (!vm.on || vm.phase === 'paused') { vmIdle = 0; return; }
+  if (!vm.rec) vmRecStart();
+  if (vm.phase === 'listening' || state.busy || out.playing || vm.queue.length) { vmIdle = 0; return; }
   if (++vmIdle >= 2) { vmIdle = 0; vmListen(); }
 }, 800);
 function vmOpen({ listen = true } = {}) {
@@ -2237,11 +2239,14 @@ function vmOpen({ listen = true } = {}) {
   $('#call').hidden = false;
   $('#tray').hidden = true;
   document.body.classList.add('voice-on');
+  vmRecStart(); // during the tap: the one listening session of this conversation
   if (listen) vmListen(); else vmSet('thinking');
 }
 function vmClose() {
   vm.on = false;
   vm.awaiting = false;
+  clearTimeout(vm.commit);
+  vm.said = '';
   const r = vm.rec;
   vm.rec = null;
   try { r?.abort(); } catch {}
@@ -2255,35 +2260,74 @@ function vmClose() {
   $('#composer').hidden = !state.mission;
   orbState('idle');
 }
+// One listening session for the whole conversation, opened by your tap and kept until you end it. iPhone
+// gives a page the microphone sound reliably only this way: a session restarted after Mandat has spoken can
+// show the microphone on without hearing anything. While Mandat talks, what the microphone hears is ignored
+// (it would be Mandat itself); when you pause for a moment, what you said is sent.
+function vmRecStart() {
+  if (!vm.on || vm.rec || !SR) return;
+  const r = new SR();
+  vm.rec = r;
+  vm.base = vm.len = 0;
+  r.lang = lang === 'fr' ? 'fr-FR' : 'en-US';
+  r.interimResults = true;
+  r.continuous = true;
+  const started = Date.now();
+  r.onresult = (e) => {
+    vm.len = e.results.length;
+    if (vm.phase !== 'listening' || Date.now() < vm.deaf) { vm.base = e.results.length; return; }
+    const said = Array.from(e.results).slice(vm.base).map((x) => x[0].transcript).join(' ').trim();
+    if (!said) return;
+    vm.said = said;
+    vmLive(said);
+    if (!lvl.an) lvl.target = 0.5 + Math.random() * 0.4;
+    clearTimeout(vm.commit);
+    vm.commit = setTimeout(vmCommit, 1300); // a short pause: you are done
+  };
+  r.onerror = (e) => {
+    if (e.error === 'audio-capture' && lvl.stream) { vm.noMeter = true; meterOff(true); }
+    if (/not-allowed|service-not-allowed/.test(e.error)) { vm.blocked = true; vmSet('paused', t('The microphone is off for Mandat.')); }
+  };
+  r.onend = () => {
+    if (vm.rec !== r) return;
+    vm.rec = null;
+    if (vm.said && vm.phase === 'listening') vmCommit();
+    if (!vm.on || vm.blocked) return;
+    // The phone ends a session now and then: open the next one at once. Only one that keeps failing stops.
+    vm.fails = Date.now() - started < 1500 ? (vm.fails || 0) + 1 : 0;
+    if (vm.fails >= 5) return vmSet('paused', t('The microphone is not answering. Tap the circle.'));
+    setTimeout(vmRecStart, vm.fails ? 500 : 80);
+  };
+  try { r.start(); } catch { vm.rec = null; }
+}
+function vmCommit() {
+  clearTimeout(vm.commit);
+  const said = (vm.said || '').trim();
+  vm.said = '';
+  vm.base = vm.len;
+  if (said && vm.phase === 'listening') vmSend(said);
+}
+// Your turn: Mandat stops talking and listens (the end of its own voice is not taken for yours).
 function vmListen() {
   if (!vm.on) return;
   stopSpeaking();
   vm.queue = [];
-  const r = new SR();
-  vm.rec = r;
-  r.lang = lang === 'fr' ? 'fr-FR' : 'en-US';
-  r.interimResults = true;
-  r.continuous = false; // one sentence at a time: a short silence sends it
-  let said = '';
-  r.onresult = (e) => { said = Array.from(e.results).map((x) => x[0].transcript).join(' '); vmLive(said); if (!lvl.an) lvl.target = 0.5 + Math.random() * 0.4; };
-  r.onerror = (e) => {
-    if (e.error === 'audio-capture' && lvl.stream && !vm.noMeter) { vm.noMeter = true; meterOff(); vm.rec = null; return setTimeout(vmListen, 150); }
-    if (/not-allowed|service-not-allowed/.test(e.error)) { vm.rec = null; vmSet('paused', t('The microphone is off for Mandat.')); } };
-  const started = Date.now();
-  r.onend = () => {
-    if (!vm.on || vm.rec !== r) return;
-    vm.rec = null;
-    if (said.trim()) { vm.quiet = 0; return vmSend(said.trim()); }
-    vmLiveDrop();
-    // Silence is not the end of the conversation: listen again, without a tap. Only a microphone that keeps
-    // failing at once (refused, or taken by another app) stops, with a clear word on screen.
-    vm.quiet = Date.now() - started < 600 ? vm.quiet + 1 : 0;
-    if (vm.quiet >= 6) return vmSet('paused', t('The microphone is not answering. Tap the circle.'));
-    setTimeout(() => { if (vm.on && !vm.rec && vm.phase === 'listening' && !state.busy && !out.playing) vmListen(); }, vm.quiet ? 400 : 120);
-  };
-  audioSession('play-and-record');
+  clearTimeout(vm.commit);
+  vm.said = '';
+  vm.base = vm.len || 0;
+  vm.deaf = Date.now() + 400;
+  vm.blocked = false;
+  vm.fails = 0;
   vmSet('listening');
-  try { r.start(); } catch { vm.rec = null; vmSet('paused'); }
+  if (!vm.rec) vmRecStart();
+}
+// A tapped answer in a voice conversation counts as said out loud.
+function vmAnswer(text) {
+  clearTimeout(vm.commit);
+  vm.said = '';
+  vm.base = vm.len || 0;
+  vmLiveDrop();
+  vmSend(text);
 }
 function vmSend(text) {
   vm.awaiting = true;
@@ -2383,7 +2427,6 @@ async function vmNext() {
   const fallback = () => { if (finished) return; out.audio.onplaying = out.audio.onended = out.audio.onerror = null; vmSet('speaking'); speak(v.text, { force: true, onend: done, onword: () => { lvl.target = 0.55 + Math.random() * 0.45; } }); };
   let guard = 0;
   if (!v.url) return fallback();
-  audioSession('playback');
   out.env = v.env;
   out.audio.onplaying = () => { clearTimeout(guard); vmSet('speaking'); }; // "speaking" only once sound really comes out
   out.audio.onended = done;
@@ -2395,11 +2438,11 @@ async function vmNext() {
 // The agent has finished and nothing is left to say: listen again.
 function vmAfterTurn() {
   if (!state.busy) vm.awaiting = false;
-  if (!vm.on || state.busy || vm.queue.length || out.playing || vm.rec) return;
+  if (!vm.on || state.busy || vm.queue.length || out.playing || vm.phase === 'listening') return;
   if (vm.phase === 'speaking' || vm.phase === 'thinking') vmListen();
 }
 $('#callOrb').addEventListener('click', () => {
-  if (vm.phase === 'listening') { try { vm.rec?.stop(); } catch {} return; } // done talking: send now
+  if (vm.phase === 'listening') { if (!vm.rec) vmRecStart(); return vmCommit(); } // done talking: send now
   // Cut in: silence the voice, and the rest of this reply if it is still being written; then listen.
   vm.mute = !!state.busy;
   vm.queue = [];

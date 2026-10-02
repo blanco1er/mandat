@@ -67,9 +67,10 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
   border: 1px solid var(--glass-line);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), var(--shadow);
   position: relative;
+  isolation: isolate; /* the highlight below stays under the text, never over it */
 }
 .glass::before {
-  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
   background: radial-gradient(120% 80% at 20% 0%, rgba(255, 255, 255, 0.45), transparent 55%);
   mix-blend-mode: soft-light;
 }
