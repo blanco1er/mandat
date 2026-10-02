@@ -73,7 +73,9 @@ function allowance(u, kind = 'turns') {
   if (kind === 'turns') usage.global++;
   usage.users.set(u.id, mine);
 }
-app.use(express.static(path.resolve('public'), { extensions: ['html'] }));
+// The app's own files are always checked with the server before a stored copy is used: an app installed on
+// the home screen must never keep running last week's code.
+app.use(express.static(path.resolve('public'), { extensions: ['html'], setHeaders: (res, file) => { if (/\.(html|js|css|json)$/.test(file)) res.setHeader('Cache-Control', 'no-cache'); } }));
 // The budget reader is shared with the app, so both understand "40 € each for 4" the same way.
 app.get('/budget.mjs', (req, res) => res.type('text/javascript').sendFile(path.resolve('lib/budget.mjs')));
 
@@ -243,7 +245,9 @@ const api = (h) => async (req, res) => {
   }
 };
 
-app.get('/api/health', (req, res) => res.json({ ok: true, paypal: PayPal.MODE }));
+// The build the server runs: the app compares it with its own and reloads when a newer one is live.
+const BUILD = (process.env.RENDER_GIT_COMMIT || '').slice(0, 12) || String(Date.now());
+app.get('/api/health', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ok: true, paypal: PayPal.MODE, build: BUILD }); });
 
 app.get('/api/me', api(async (req, res) => {
   const u = me(req, res);

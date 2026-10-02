@@ -2254,6 +2254,19 @@ function vmLiveDrop() { vm.liveLi?.remove(); vm.liveLi = null; }
 function unlockSpeech() {
   try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch {}
 }
+// A newer version is live (an app on the home screen is resumed, never reloaded, by iPhone): reload when the
+// app comes back to the screen, never in the middle of a voice conversation.
+let buildSeen = '';
+async function checkBuild() {
+  try {
+    const { build } = await fetch('/api/health', { cache: 'no-store' }).then((r) => r.json());
+    if (!buildSeen) buildSeen = build;
+    else if (build && build !== buildSeen && !vm.on) location.reload();
+  } catch {}
+}
+checkBuild();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkBuild(); });
+addEventListener('pageshow', (e) => { if (e.persisted) checkBuild(); });
 // Safety net: whenever Mandat is neither working nor talking nor listening, the microphone comes back by itself.
 let vmIdle = 0;
 setInterval(() => {
