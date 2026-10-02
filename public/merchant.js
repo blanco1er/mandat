@@ -48,7 +48,7 @@ function card(x, m) {
   const el = document.createElement('article');
   el.className = 'req-card';
   el.innerHTML = `<div class="req-top"><b>${esc(x.customer)}</b><time>${when(x.createdAt)}</time></div>
-    <div class="req-via">Booked by their Mandat agent · paid with PayPal</div>
+    <div class="req-via">Sent by their Mandat agent · pays with PayPal</div>
     ${x.slot ? `<span class="req-when">🕒 ${esc(x.slot)}</span>` : ''}
     <ul class="req-lines">${x.items.map((i) => `<li><span>${i.qty}× ${esc(i.label)}</span><span>${fmt(i.qty * i.unit_price)}</span></li>`).join('')}<li class="total"><span>Total</span><span>${fmt(x.total)}</span></li></ul>
     ${x.note ? `<p class="req-note">“${esc(x.note)}”</p>` : ''}

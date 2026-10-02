@@ -460,7 +460,7 @@ app.get('/api/merchants/:mid/requests', api(async (req) => {
     if (r.merchant_id !== m.id) continue;
     const { sessionId, inbox, ...pub } = r;
     const pay = r.paymentId ? s.envelope.entries.find((e) => e.id === r.paymentId) : null;
-    out.push({ ...pub, customer: String(r.customer || 'A Mandat customer').split(' ')[0], deposit_state: pay?.state || null, deposit_held: pay?.amount || 0 });
+    out.push({ ...pub, customer: r.customer ? String(r.customer).split(' ')[0] : 'A Mandat customer', deposit_state: pay?.state || null, deposit_held: pay?.amount || 0 });
   }
   return { merchant: { id: m.id, name: m.name, category: m.category, city: m.city, deposit: m.deposit }, requests: out.sort((a, b) => b.createdAt.localeCompare(a.createdAt)) };
 }));

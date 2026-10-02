@@ -600,3 +600,16 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 .ledger .led-name small { font-size: 11px; color: var(--ink-3); }
 
 @media (max-width: 720px) { .ledger .ag-cell, .ledger .ag-header-cell { padding-left: 9px; padding-right: 9px; } }
+
+/* Welcome: everything on one screen */
+#welcome { padding-top: 12px; }
+#welcome .hero-orb { width: 84px; height: 84px; margin: 6px auto 18px; }
+#welcome .large-title { margin: 0 0 10px; }
+#welcome .lede { margin: 0 auto 22px; max-width: 30em; font-size: 16px; line-height: 23px; }
+.points { list-style: none; margin: 0 0 24px; padding: 6px 16px; border-radius: 22px; background: var(--card); border: 1px solid var(--card-line); box-shadow: var(--shadow); }
+.points li { display: flex; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--card-line); }
+.points li:last-child { border-bottom: 0; }
+.points b { font-size: 15px; display: block; }
+.points small { font-size: 13px; line-height: 18px; color: var(--ink-3); }
+.pt-ic { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; background: rgba(10, 132, 255, 0.12); flex: none; }
+.pt-ic svg { width: 19px; height: 19px; fill: var(--accent); }
