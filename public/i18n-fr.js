@@ -592,4 +592,7 @@ export default {
   "{n} review": "{n} avis",
   "{n} reviews": "{n} avis",
   "Photo: {source}": "Photo : {source}",
+  "I can hear you…": "Je vous entends…",
+  "One moment…": "Un instant…",
+  "Sorry, I did not catch that. Say it again?": "Pardon, je n’ai pas compris. Vous pouvez répéter ?",
 };

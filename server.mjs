@@ -13,6 +13,7 @@ import { ics, planEvents, validTz, localToUtc } from './lib/calendar.mjs';
 import { KINDS, remember, forget, memoryBrief, missionsBrief } from './lib/memory.mjs';
 import { persist } from './lib/store.mjs';
 import { synthesize, ttsEnabled } from './lib/tts.mjs';
+import { transcribe, sttEnabled } from './lib/stt.mjs';
 import { emojiFor, isEmoji } from './lib/emoji.mjs';
 import { budgetFromText } from './lib/budget.mjs';
 import * as Push from './lib/push.mjs';
@@ -826,6 +827,16 @@ app.post('/api/tts', async (req, res) => {
     const u = me(req, res);
     const mp3 = await synthesize(req.body?.text, reqLang(req) === 'fr' ? 'fr' : 'en', u.id);
     res.set({ 'Content-Type': 'audio/mpeg', 'Cache-Control': 'private, max-age=3600' }).send(mp3);
+  } catch (e) {
+    res.status(e.status || 500).json({ error: e.message });
+  }
+});
+// What you said in a voice conversation, written down (see lib/stt.mjs).
+app.get('/api/stt', (req, res) => res.json({ on: sttEnabled() }));
+app.post('/api/stt', async (req, res) => {
+  try {
+    const u = me(req, res);
+    res.json({ text: await transcribe(req.body?.audio, reqLang(req) === 'fr' ? 'fr' : 'en', u.id) });
   } catch (e) {
     res.status(e.status || 500).json({ error: e.message });
   }

@@ -71,9 +71,10 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
 }
 .glass::before {
   content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: -1;
-  background: radial-gradient(120% 80% at 20% 0%, rgba(255, 255, 255, 0.45), transparent 55%);
-  mix-blend-mode: soft-light;
+  /* a plain highlight: no blend mode, which made iPhone render the bar's text as a soft image */
+  background: radial-gradient(120% 80% at 20% 0%, rgba(255, 255, 255, 0.16), transparent 55%);
 }
+.topbar.has-budget::before { display: none; }
 @media (prefers-reduced-transparency: reduce) {
   .glass { background: var(--card); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }

@@ -2271,8 +2271,8 @@ addEventListener('pageshow', (e) => { if (e.persisted) checkBuild(); });
 let vmIdle = 0;
 setInterval(() => {
   if (!vm.on || vm.phase === 'paused') { vmIdle = 0; return; }
-  if (!vm.rec) vmRecStart();
-  if (vm.phase === 'listening' || state.busy || out.playing || vm.queue.length) { vmIdle = 0; return; }
+  if (vm.mode !== 'rec' && !vm.rec) vmRecStart();
+  if (vm.phase === 'listening' || mic.sending || state.busy || out.playing || vm.queue.length) { vmIdle = 0; return; }
   if (++vmIdle >= 2) { vmIdle = 0; vmListen(); }
 }, 800);
 function vmOpen({ listen = true } = {}) {
@@ -2293,7 +2293,9 @@ function vmOpen({ listen = true } = {}) {
   $('#call').hidden = false;
   $('#tray').hidden = true;
   document.body.classList.add('voice-on');
-  vmRecStart(); // during the tap: the one listening session of this conversation
+  vm.mode = state.sttOn && navigator.mediaDevices?.getUserMedia ? 'rec' : 'sr';
+  if (vm.mode === 'rec') { vm.noMeter = true; micPrepare(); micStart(); }
+  else vmRecStart(); // during the tap: the one listening session of this conversation
   if (listen) vmListen(); else vmSet('thinking');
 }
 function vmClose() {
@@ -2304,6 +2306,7 @@ function vmClose() {
   const r = vm.rec;
   vm.rec = null;
   try { r?.abort(); } catch {}
+  micStop();
   vm.queue = [];
   stopSpeaking();
   vmLiveDrop();
@@ -2373,8 +2376,114 @@ function vmListen() {
   vm.blocked = false;
   vm.fails = 0;
   vmSet('listening');
-  if (!vm.rec) vmRecStart();
+  if (vm.mode !== 'rec' && !vm.rec) vmRecStart();
 }
+// ---------- listening by recording (the reliable way on iPhone) ----------
+// The microphone stays open for the whole conversation; the app hears when you start and stop talking,
+// and sends what you said (a small 16 kHz WAV) to be written down. Mandat's own voice is never recorded:
+// recording happens only on your turn.
+const mic = { ctx: null, stream: null, src: null, node: null, chunks: [], pre: [], talking: false, start: 0, last: 0, floor: 0.008, sending: false };
+fetch('/api/stt').then((r) => r.json()).then((j) => { state.sttOn = !!j.on; }).catch(() => {});
+function micPrepare() { // during the tap: iPhone only lets a page start sound processing from a tap
+  try { mic.ctx ||= new (window.AudioContext || window.webkitAudioContext)(); mic.ctx.resume?.(); } catch {}
+}
+async function micStart() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (!vm.on || vm.mode !== 'rec') { stream.getTracks().forEach((x) => x.stop()); return; }
+    mic.stream = stream;
+    await mic.ctx.resume?.().catch(() => {});
+    mic.src = mic.ctx.createMediaStreamSource(stream);
+    mic.node = mic.ctx.createScriptProcessor(4096, 1, 1);
+    mic.node.onaudioprocess = (e) => micFrame(e.inputBuffer.getChannelData(0));
+    mic.src.connect(mic.node);
+    mic.node.connect(mic.ctx.destination); // silent output: it only has to run
+  } catch {
+    vm.mode = 'sr'; // no microphone this way: the phone's own recognition
+    vmRecStart();
+  }
+}
+function micStop() {
+  try { mic.node?.disconnect(); mic.src?.disconnect(); } catch {}
+  mic.stream?.getTracks().forEach((x) => x.stop());
+  Object.assign(mic, { stream: null, src: null, node: null, chunks: [], pre: [], talking: false });
+}
+function micFrame(data) {
+  let sum = 0;
+  for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
+  const rms = Math.sqrt(sum / data.length);
+  const now = Date.now();
+  if (vm.phase !== 'listening' || now < vm.deaf || mic.sending) { mic.talking = false; mic.chunks = []; mic.pre = []; return; }
+  lvl.target = Math.min(1, rms * 14);
+  const loud = rms > Math.max(0.012, mic.floor * 3);
+  if (loud) {
+    if (!mic.talking) { mic.talking = true; mic.start = now; mic.chunks = mic.pre.slice(); vmSet('listening', t('I can hear you…')); }
+    mic.last = now;
+  } else if (!mic.talking) mic.floor = mic.floor * 0.95 + rms * 0.05; // learn the room's quiet
+  const copy = new Float32Array(data);
+  if (mic.talking) {
+    mic.chunks.push(copy);
+    // a pause of about a second, or a long sentence: you are done
+    if (now - mic.last > 950 || now - mic.start > 30000) micEnd();
+  } else {
+    mic.pre.push(copy); // a quarter of a second before you start, so the first word is not cut
+    if (mic.pre.length > 3) mic.pre.shift();
+  }
+}
+function micEnd() {
+  const chunks = mic.chunks;
+  const voiced = mic.last - mic.start;
+  mic.talking = false;
+  mic.chunks = [];
+  mic.pre = [];
+  if (voiced < 300) return vmSet('listening'); // a cough, a door: not a sentence
+  micSend(chunks);
+}
+function wav16k(chunks, rate) {
+  const len = chunks.reduce((n, c) => n + c.length, 0);
+  const all = new Float32Array(len);
+  let o = 0;
+  for (const c of chunks) { all.set(c, o); o += c.length; }
+  const ratio = rate / 16000;
+  const n = Math.floor(len / ratio);
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const str = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, 16000, true); v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    let sum = 0, cnt = 0; // average the samples that fall into this one
+    for (let k = Math.floor(i * ratio); k < Math.min(len, Math.floor((i + 1) * ratio)); k++) { sum += all[k]; cnt++; }
+    const x = Math.max(-1, Math.min(1, cnt ? sum / cnt : 0));
+    v.setInt16(44 + i * 2, x < 0 ? x * 0x8000 : x * 0x7fff, true);
+  }
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+async function micSend(chunks) {
+  mic.sending = true;
+  vmSet('thinking', t('One moment…'));
+  try {
+    const r = await fetch('/api/stt', { method: 'POST', headers: { 'Content-Type': 'application/json', ...HEADERS }, body: JSON.stringify({ audio: wav16k(chunks, mic.ctx.sampleRate) }) });
+    if (r.status === 503) { // writing speech down is off: the phone's recognition from now on
+      state.sttOn = false;
+      micStop();
+      vm.mode = 'sr';
+      vmRecStart();
+      return vmListen();
+    }
+    const { text } = await r.json();
+    if (text && vm.on) return vmSend(text);
+    vmSet('listening', t('Sorry, I did not catch that. Say it again?'));
+  } catch {
+    vmSet('listening', t('Sorry, I did not catch that. Say it again?'));
+  } finally {
+    mic.sending = false;
+  }
+}
+
 // A tapped answer in a voice conversation counts as said out loud.
 function vmAnswer(text) {
   clearTimeout(vm.commit);
@@ -2496,7 +2605,7 @@ function vmAfterTurn() {
   if (vm.phase === 'speaking' || vm.phase === 'thinking') vmListen();
 }
 $('#callOrb').addEventListener('click', () => {
-  if (vm.phase === 'listening') { if (!vm.rec) vmRecStart(); return vmCommit(); } // done talking: send now
+  if (vm.phase === 'listening') { if (vm.mode === 'rec') { if (mic.talking) micEnd(); return; } if (!vm.rec) vmRecStart(); return vmCommit(); } // done talking: send now
   // Cut in: silence the voice, and the rest of this reply if it is still being written; then listen.
   vm.mute = !!state.busy;
   vm.queue = [];
