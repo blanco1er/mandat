@@ -51,18 +51,19 @@ const reqLang = (req) => langOf(req.get('X-Lang'));
 // Short burst limit per IP on every write.
 const bursts = new Map();
 app.use('/api', (req, res, next) => {
-  if (req.method === 'GET') return next();
+  // the voice (one request per sentence) and the transcription have their own daily caps: never counted here
+  if (req.method === 'GET' || req.path === '/tts' || req.path === '/stt') return next();
   const ip = req.ip || 'unknown';
   const now = Date.now();
   const b = bursts.get(ip)?.filter((t) => now - t < 60000) || [];
-  if (b.length >= Number(process.env.MANDAT_WRITES_PER_MINUTE || 40)) return res.status(429).json({ error: 'Too many requests — wait a minute and try again.' });
+  if (b.length >= Number(process.env.MANDAT_WRITES_PER_MINUTE || 90)) return res.status(429).json({ error: tr(reqLang(req), 'Too many requests at once. Wait a few seconds and try again.') });
   b.push(now);
   bursts.set(ip, b);
   if (bursts.size > 5000) bursts.clear();
   next();
 });
 // Daily AI allowance: per person and for the whole app (each agent turn or ledger question counts once).
-const LIMITS = { turns: Number(process.env.MANDAT_TURNS_PER_USER_DAY || 80), missions: Number(process.env.MANDAT_MISSIONS_PER_USER_DAY || 15), global: Number(process.env.MANDAT_TURNS_PER_DAY || 3000) };
+const LIMITS = { turns: Number(process.env.MANDAT_TURNS_PER_USER_DAY || 150), missions: Number(process.env.MANDAT_MISSIONS_PER_USER_DAY || 30), global: Number(process.env.MANDAT_TURNS_PER_DAY || 3000) };
 let usage = { day: '', global: 0, users: new Map() };
 function allowance(u, kind = 'turns') {
   const day = new Date().toISOString().slice(0, 10);
