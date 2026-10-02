@@ -1256,3 +1256,31 @@ body.iv-open { overflow: hidden; }
 .kn-empty b { font-size: 19px; }
 .kn-empty p { color: var(--ink-3); font-size: 15px; margin: 6px 0 20px; }
 .kn-go { background: var(--accent); color: #fff; }
+
+/* An option to decide on: the card a concierge would show */
+.card.option .op-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.card.option .op-price { font-weight: 700; font-size: 15px; white-space: nowrap; }
+.card.option .op-what { margin: 7px 0 2px; font-size: 14px; line-height: 19px; }
+.card.option .op-hl { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.card.option .op-hl li { font-size: 13px; color: var(--ink-2); padding-left: 14px; position: relative; }
+.card.option .op-hl li::before { content: ''; position: absolute; left: 3px; top: 7px; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+.card.option .op-cond { margin: 6px 0 0; font-size: 12px; color: var(--ink-3); }
+.card.option .op-actions button { height: 32px; padding: 0 14px; border-radius: 16px; font-size: 13px; font-weight: 600; }
+.card.option .op-no { background: var(--chip, rgba(120, 120, 128, 0.14)); color: var(--ink); }
+.card.option.answered .op-actions button { opacity: 0.45; pointer-events: none; }
+/* Ready answers under a question */
+.feed > li.choices { display: flex; flex-wrap: wrap; gap: 7px; padding: 2px 0 4px; }
+.choice { height: 34px; padding: 0 14px; border-radius: 17px; border: 1px solid var(--card-line); background: var(--card); color: var(--accent); font-size: 14px; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.choice:active { transform: scale(0.97); }
+/* Where it is, on the deposit and approval cards */
+.pay-photo { width: 100%; height: 120px; object-fit: cover; border-radius: 12px; margin-bottom: 6px; cursor: zoom-in; }
+.pay-addr a { color: var(--accent); text-decoration: none; font-size: 13px; }
+.ap-addr { display: block; color: var(--ink-3); }
+
+/* Your face at the top of Missions */
+.me-btn { padding: 0; overflow: hidden; }
+.me-av { width: 36px; height: 36px; border-radius: 18px; display: grid; place-items: center; font: 600 14px/1 -apple-system, system-ui, sans-serif; color: #fff; background: linear-gradient(135deg, #5e9bff, #3a6bf0) center / cover no-repeat; }
+.me-av.photo { background-size: cover; background-position: center; }
+
+.card.option .op-route { margin: 6px 0 0; font-size: 13px; color: var(--ink-2); }
+.card.option a.uber { background: #000; color: #fff; }

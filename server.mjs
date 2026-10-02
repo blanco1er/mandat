@@ -170,7 +170,7 @@ async function pushTo(s, msg) {
 }
 function pushFor(b, { type, data }) {
   if (b.clients.size && type !== 'wrapup') return; // they are looking at this mission right now (the recap always goes to the phone)
-  if (!['approval', 'request', 'collected', 'wrapup', 'share_paid'].includes(type)) return;
+  if (!['approval', 'request', 'collected', 'wrapup', 'share_paid', 'notify'].includes(type)) return;
   const s = b.s;
   const title = s.title || 'Mandat';
   const L = langFor(s);
@@ -186,6 +186,7 @@ function pushFor(b, { type, data }) {
     const when = time ? tr(L, '{date} at {time}', { date: d, time }) : d;
     pushTo(s, { title: '✓ ' + data.headline, body: `${first ? `${first.what} · ${when}. ` : ''}${data.reminders?.length ? trn(L, data.reminders.length, '{n} reminder planned.', '{n} reminders planned.') + ' ' : ''}${tr(L, 'Tell me if you want to change anything.')}`, tag: 'done-' + s.id });
   }
+  else if (type === 'notify') pushTo(s, { title, body: data.text, tag: 'nt-' + s.id + '-' + Date.now() });
   else if (type === 'share_paid') pushTo(s, { title, body: tr(L, '{friend} paid their share: {amount}.', { friend: data.friend, amount: EUR(data.amount, s, L) }), tag: 'sh-' + data.invoiceId });
 }
 // When everything is booked: make sure reminders exist and the "All set" recap is on screen and on the phone.

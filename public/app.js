@@ -4,9 +4,9 @@ import { budgetFromText } from '/budget.mjs';
 import { createSmoke } from '/smoke.js'; // same reader as the server: "700 €", "40 € each for 4", "budget 250"…
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
-const state = { me: null, mission: null, es: null, currency: 'EUR', speaking: false, listening: false, cards: {}, verified: {}, photo: null, voiceTurn: false, live: false };
+const state = { me: null, mission: null, es: null, currency: 'EUR', speaking: false, listening: false, cards: {}, places: {}, verified: {}, photo: null, voiceTurn: false, live: false };
 const fmt = (v) => new Intl.NumberFormat(locale(), { style: 'currency', currency: state.currency, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
-const PLURAL = { bakery: 'bakeries', florist: 'florists', restaurant: 'restaurants', hotel: 'hotels', bar: 'bars', cafe: 'cafés', hairdresser: 'hair salons', cinema: 'cinemas' };
+const PLURAL = { bakery: 'bakeries', florist: 'florists', restaurant: 'restaurants', hotel: 'hotels', bar: 'bars', cafe: 'cafés', hairdresser: 'hair salons', cinema: 'cinemas', train: 'trains', activity: 'activities', repair: 'repair shops', venue: 'venues', catering: 'caterers', entertainment: 'DJs and photographers', decoration: 'decorators', ride: 'taxis and private drivers' };
 const many = (c) => t(PLURAL[c] || c + 's');
 
 // ---------- routing ----------
@@ -25,7 +25,7 @@ function show(view) {
   $('#topbar').classList.remove('expanded');
   $('#topSub').hidden = view !== 'live';
   $('#stopMission').hidden = view !== 'live';
-  $('#newMission').hidden = view !== 'home';
+  $('#topMe').hidden = view !== 'home';
   $('.brand-mark').hidden = view === 'live';
   // The bar says where you are: the tab's name next to the mark (the app's name is already on the icon).
   const TAB_TITLE = { home: 'Missions', activity: 'Activity', settings: 'Settings' };
@@ -458,10 +458,18 @@ function ruleText() {
   if (!compose.budget) return t('No budget? Say one in your message, or Mandat stays under your daily limit ({limit}).', { limit: fmtC(state.me.rules.dailyCap) });
   return lvl === 'autopilot' ? t('Autopilot · books and holds deposits on its own, inside this budget.') : lvl === 'careful' ? t('Careful · asks you before every payment.') : t('Balanced · asks you before any payment over {amount}.', { amount: fmtC(state.me.rules.approveAbove) });
 }
-$('#newMission').addEventListener('click', () => {
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  setTimeout(() => $('#cText').focus(), 250);
-});
+// Your face at the top of Missions: a shortcut to your account (also in Settings).
+$('#topMe').addEventListener('click', () => { renderSettings(); $('#account').hidden = false; document.body.classList.add('iv-open'); });
+function paintMe(u) {
+  const initials = (u.profile.name || u.paypal.payerName || t('You')).split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+  // Your photo when you chose one, your initials otherwise.
+  for (const id of ['#sInit', '#aInit', '#topInit']) {
+    const box = $(id);
+    box.textContent = u.avatar ? '' : initials;
+    box.style.backgroundImage = u.avatar ? `url("${u.avatar}")` : '';
+    box.classList.toggle('photo', !!u.avatar);
+  }
+}
 
 // Missions: three tabs — what needs you, what is moving, what is done — newest activity first.
 const MTABS = {
@@ -643,6 +651,7 @@ function closeMenu() { $('#rowMenu').hidden = true; }
 async function refreshHome() {
   const r = await get('/api/me');
   state.me = r.user;
+  paintMe(r.user);
   renderHome(r.missions);
 }
 const TABS = { home: () => refreshHome(), activity: () => openActivity(), settings: () => renderSettings() };
@@ -692,7 +701,7 @@ typeHint();
 async function openMission(id) {
   if (state.es) state.es.close();
   stopWatchingShares();
-  Object.assign(state, { mission: id, cards: {}, verified: {}, live: false, busy: false, streamLi: null, shareRows: {} });
+  Object.assign(state, { mission: id, cards: {}, places: {}, verified: {}, live: false, busy: false, streamLi: null, shareRows: {} });
   $('#newPill').hidden = true;
   $('#feed').innerHTML = '';
   const r = await get(`/api/missions/${id}`);
@@ -797,6 +806,7 @@ function handle({ type, data }) {
   switch (type) {
     case 'user': {
       vmLiveDrop();
+      clearChoices();
       // Your message: the photos first (as real thumbnails), then the words.
       const imgs = data.images || [];
       const li = el('li', 'say user' + (imgs.length ? ' with-images' : '') + (!data.text ? ' images-only' : ''));
@@ -848,6 +858,9 @@ function handle({ type, data }) {
     case 'tool': typing(state.busy); return toolStep(data);
     case 'places': return placesCard(data);
     case 'preview': return previewCard(data);
+    case 'option': return optionCard(data);
+    case 'notify': return addStep(t('Sent to your phone · {text}', { text: data.text }), 'step mem');
+    case 'choices': return choicesRow(data);
     case 'reminder': return reminderCard(data);
     case 'wrapup': return wrapupCard(data);
     case 'reminder_due': {
@@ -858,9 +871,9 @@ function handle({ type, data }) {
     case 'verified': return verifiedMark(data);
     case 'negotiation': return negotiation(data);
     case 'request': return requestCard(data);
-    case 'approval': approvalCard(data); return state.live && openSheet(data); // history replay: show the card, don't pop the sheet
+    case 'approval': if (data.place) state.places[data.merchant] = data.place; approvalCard(data); return state.live && openSheet(data); // history replay: show the card, don't pop the sheet
     case 'approval_resolved': approvalCard({ id: data.id, status: data.approved ? 'approved' : 'declined' }); return pending?.id === data.id && closeSheet();
-    case 'payment': return paymentCard(data);
+    case 'payment': if (data.place) state.places[data.entry.merchant] = data.place; return paymentCard(data);
     case 'envelope': return envelope(data);
     case 'plan': return planCard(data);
     case 'shares': return sharesCard(data);
@@ -1030,6 +1043,60 @@ function previewCard(v) {
   }));
   add(li);
 }
+// What Mandat booked, as a concierge would show it: photos, address, map, price, what is included, conditions.
+function optionCard(o) {
+  state.places[o.name] = { address: o.address, photo: o.photos?.[0]?.url || '' };
+  // One card per business: shown again, it is updated where it is.
+  const old = state.cards['o:' + o.merchant_id];
+  const li = el('li', 'card preview option');
+  const photos = o.photos || [];
+  const maps = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent([o.address || o.name, o.city].filter(Boolean).join(', '));
+  const stars = o.rating ? `★ ${Number(o.rating).toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 })}` : '';
+  li.innerHTML = `${photos.length ? `<div class="pv-photos">${photos.map((p) => `<img class="zoomable" src="${esc(p.url)}" alt="${esc(o.name)}" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>` : plainCover(o)}
+    <div class="pv-body">
+      <div class="op-top"><b>${esc(o.name)}</b><span class="op-price">${esc(fmtC(o.price, o.currency))}</span></div>
+      <small>${[stars, o.area].filter(Boolean).map(esc).join(' · ')}</small>
+      ${o.address ? `<small>${esc(o.address)}</small>` : ''}
+      <p class="op-what">${esc(o.what)}</p>
+      ${o.highlights?.length ? `<ul class="op-hl">${o.highlights.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
+      ${o.conditions || o.deposit ? `<p class="op-cond">${esc([o.deposit ? t('{amount} held now, the rest after', { amount: fmtC(o.deposit, o.currency) }) : '', o.conditions].filter(Boolean).join(' · '))}</p>` : ''}
+      ${o.category === 'ride' && (o.from || o.to) ? `<p class="op-route">${esc([o.from, o.to].filter(Boolean).join(' → '))}${o.when ? ` · ${esc(o.when.slice(11) || o.when)}` : ''}</p>` : ''}
+      <div class="pv-actions op-actions">${o.category === 'ride' && o.to ? `<a class="pill-btn uber" href="${esc(uberLink(o))}" target="_blank" rel="noopener">${t('Open in Uber')}</a>` : `<a class="pill-btn" href="${esc(maps)}" target="_blank" rel="noopener">${t('Map')}</a>`}<button type="button" class="op-no">${t('Change it')}</button></div>
+      ${photos.length ? `<p class="pv-src">${esc(t('Ambience photos · {credit}', { credit: photos[0].credit || 'Openverse' }))}</p>` : ''}
+    </div>`;
+  li.querySelectorAll('.pv-photos img').forEach((im) => im.addEventListener('error', () => {
+    im.remove();
+    const strip = li.querySelector('.pv-photos');
+    if (strip && !strip.querySelector('img')) strip.outerHTML = plainCover(o);
+  }));
+  const answer = (text) => { li.classList.add('answered'); send(text, [], { voice: vm.on }); };
+  li.querySelector('.op-no').addEventListener('click', () => answer(t('I would like another option instead of {name}', { name: o.name })));
+  state.cards['o:' + o.merchant_id] = li;
+  if (old) old.replaceWith(li); else add(li);
+}
+// No photo yet: a calm cover with the kind of place, never a dead link.
+const COVER = { hotel: '🛏️', restaurant: '🍽️', venue: '🥂', catering: '🥂', entertainment: '🎶', decoration: '🎈', bakery: '🎂', florist: '💐', ride: '🚕', train: '🚆', activity: '🎟️', repair: '🔧' };
+const plainCover = (o) => `<div class="pv-none op-cover"><span>${COVER[o.category] || '📍'}</span><small>${esc(o.area || o.city || '')}</small></div>`;
+// Uber opens with the route already filled in; the user confirms there.
+function uberLink(o) {
+  const q = new URLSearchParams({ action: 'setPickup', client_id: 'mandat' });
+  if (o.from) q.set('pickup[formatted_address]', o.from); else q.set('pickup', 'my_location');
+  q.set('dropoff[formatted_address]', o.to);
+  return 'https://m.uber.com/ul/?' + q.toString();
+}
+// Ready answers under a question: one tap answers; you can always type or say something else.
+function choicesRow({ choices }) {
+  clearChoices();
+  const li = state.cards.choices = el('li', 'choices');
+  for (const c of choices) {
+    const b = el('button', 'choice', c);
+    b.type = 'button';
+    b.addEventListener('click', () => { clearChoices(); send(c, [], { voice: vm.on }); });
+    li.append(b);
+  }
+  add(li);
+}
+function clearChoices() { state.cards.choices?.remove(); state.cards.choices = null; }
 // "All set": the whole result at a glance, the money, the reminders — and an easy way to change anything.
 function wrapupCard(w) {
   state.cards.wrap?.remove();
@@ -1143,8 +1210,9 @@ function paymentCard({ kind, entry, mode, why, reason }) {
   const [icon, title, sub] = kind === 'hold' ? ['lock', t('Held with PayPal'), t('Not charged until the merchant confirms')]
     : kind === 'capture' ? ['check', t('Paid with PayPal'), why ? t(why) + ' · ' + t('deposit captured') : t('Merchant confirmed · deposit captured')]
     : ['undo', t('Refunded with PayPal'), reason || t('Back to your PayPal')];
+  const where = state.places[entry.merchant] || {};
   li.innerHTML = `<header><span class="lock">${svg(icon)}</span><div class="pay-main"><b>${esc(entry.merchant)}</b><small>${title}</small></div><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span></header>
-    <div class="pay-detail"><p>${esc(shortLabel(entry.merchant, entry.label))}</p><p class="why">${esc(sub)} · ${mode === 'sandbox' ? t('PayPal sandbox') : mode ? t('PayPal (demo)') : 'PayPal'}</p></div>`;
+    <div class="pay-detail">${where.photo ? `<img class="pay-photo zoomable" src="${esc(where.photo)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<p>${esc(shortLabel(entry.merchant, entry.label))}</p>${where.address ? `<p class="pay-addr"><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(where.address)}" target="_blank" rel="noopener">${esc(where.address)}</a></p>` : ''}<p class="why">${esc(sub)} · ${mode === 'sandbox' ? t('PayPal sandbox') : mode ? t('PayPal (demo)') : 'PayPal'}</p></div>`;
   fold(li);
   if (isNew) add(li);
 }
@@ -1331,7 +1399,7 @@ function approvalCard(a) {
   card.data = d;
   const open = d.status === 'pending' || !d.status;
   card.className = 'card approve ' + (open ? 'open' : d.status);
-  card.innerHTML = `<span class="pp-mini">PayPal</span><div class="ap-main"><b>${esc(t(open ? 'Approve {amount}' : d.status === 'approved' ? 'Approved {amount}' : 'Declined {amount}', { amount: fmt(d.amount) }))}</b><small>${esc(d.merchant)} · ${esc(shortLabel(d.merchant, d.label))}</small></div>${open ? `<button type="button" class="pill-btn">${t('Review')}</button>` : `<span class="chip ${d.status === 'approved' ? 'paid' : 'off'}">${d.status === 'approved' ? t('Approved') : t('Declined')}</span>`}`;
+  card.innerHTML = `<span class="pp-mini">PayPal</span><div class="ap-main"><b>${esc(t(open ? 'Approve {amount}' : d.status === 'approved' ? 'Approved {amount}' : 'Declined {amount}', { amount: fmt(d.amount) }))}</b><small>${esc(d.merchant)} · ${esc(shortLabel(d.merchant, d.label))}</small>${(state.places[d.merchant] || {}).address ? `<small class="ap-addr">${esc(state.places[d.merchant].address)}</small>` : ''}</div>${open ? `<button type="button" class="pill-btn">${t('Review')}</button>` : `<span class="chip ${d.status === 'approved' ? 'paid' : 'off'}">${d.status === 'approved' ? t('Approved') : t('Declined')}</span>`}`;
   if (open) card.querySelector('button').addEventListener('click', () => openSheet(d));
 }
 $('#scrim').addEventListener('click', closeSheet);
@@ -1521,14 +1589,7 @@ function renderSettings() {
   renderPrefs(u.profile);
   locState().then(locRender);
   $('#sVoice').checked = u.voice.on;
-  const initials = (u.profile.name || u.paypal.payerName || t('You')).split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
-  // Your photo when you chose one, your initials otherwise.
-  for (const id of ['#sInit', '#aInit']) {
-    const box = $(id);
-    box.textContent = u.avatar ? '' : initials;
-    box.style.backgroundImage = u.avatar ? `url("${u.avatar}")` : '';
-    box.classList.toggle('photo', !!u.avatar);
-  }
+  paintMe(u);
   $('#aPhotoRemove').hidden = !u.avatar;
   renderPush();
   setSeg('#sLang', chosenLang());
@@ -2201,12 +2262,18 @@ function vmListen() {
   r.onresult = (e) => { said = Array.from(e.results).map((x) => x[0].transcript).join(' '); vmLive(said); if (!lvl.an) lvl.target = 0.5 + Math.random() * 0.4; };
   r.onerror = (e) => {
     if (e.error === 'audio-capture' && lvl.stream && !vm.noMeter) { vm.noMeter = true; meterOff(); vm.rec = null; return setTimeout(vmListen, 150); }
-    if (/not-allowed|service-not-allowed|audio-capture/.test(e.error)) { vm.rec = null; vmSet('paused', t('The microphone is off for Mandat.')); } };
+    if (/not-allowed|service-not-allowed/.test(e.error)) { vm.rec = null; vmSet('paused', t('The microphone is off for Mandat.')); } };
+  const started = Date.now();
   r.onend = () => {
     if (!vm.on || vm.rec !== r) return;
     vm.rec = null;
-    if (said.trim()) { vm.quiet = 0; vmSend(said.trim()); }
-    else { vmLiveDrop(); if (++vm.quiet < 3) vmListen(); else vmSet('paused'); } // a pause is not the end of the conversation
+    if (said.trim()) { vm.quiet = 0; return vmSend(said.trim()); }
+    vmLiveDrop();
+    // Silence is not the end of the conversation: listen again, without a tap. Only a microphone that keeps
+    // failing at once (refused, or taken by another app) stops, with a clear word on screen.
+    vm.quiet = Date.now() - started < 600 ? vm.quiet + 1 : 0;
+    if (vm.quiet >= 6) return vmSet('paused', t('The microphone is not answering. Tap the circle.'));
+    setTimeout(() => { if (vm.on && !vm.rec && vm.phase === 'listening' && !state.busy && !out.playing) vmListen(); }, vm.quiet ? 400 : 120);
   };
   audioSession('play-and-record');
   vmSet('listening');
@@ -2429,12 +2496,14 @@ function keepBottom() {
 function streamText(t) {
   if (!state.streamLi) {
     typing(false);
+    state.streamRaw = '';
     state.streamLi = el('li', 'say streaming');
     state.streamLi.append(el('p', 'say-text', ''));
     add(state.streamLi);
   }
   const follow = nearBottom();
-  state.streamLi.firstChild.textContent += t;
+  state.streamRaw = (state.streamRaw || '') + t;
+  state.streamLi.firstChild.textContent = state.streamRaw.split(/\n?\s*>>/)[0];
   if (follow) window.scrollTo({ top: document.documentElement.scrollHeight });
 }
 $('#newPill').addEventListener('click', () => {
