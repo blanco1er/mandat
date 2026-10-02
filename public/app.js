@@ -1069,7 +1069,7 @@ function optionCard(o) {
     const strip = li.querySelector('.pv-photos');
     if (strip && !strip.querySelector('img')) strip.outerHTML = plainCover(o);
   }));
-  const answer = (text) => { li.classList.add('answered'); send(text, [], { voice: vm.on }); };
+  const answer = (text) => { li.classList.add('answered'); if (vm.on) { try { vm.rec?.abort(); } catch {} vm.rec = null; vmSend(text); } else send(text); };
   li.querySelector('.op-no').addEventListener('click', () => answer(t('I would like another option instead of {name}', { name: o.name })));
   state.cards['o:' + o.merchant_id] = li;
   if (old) old.replaceWith(li); else add(li);
@@ -1091,7 +1091,7 @@ function choicesRow({ choices }) {
   for (const c of choices) {
     const b = el('button', 'choice', c);
     b.type = 'button';
-    b.addEventListener('click', () => { clearChoices(); send(c, [], { voice: vm.on }); });
+    b.addEventListener('click', () => { clearChoices(); if (vm.on) { try { vm.rec?.abort(); } catch {} vm.rec = null; vmLiveDrop(); vmSend(c); } else send(c); });
     li.append(b);
   }
   add(li);
@@ -2213,6 +2213,12 @@ function vmLiveDrop() { vm.liveLi?.remove(); vm.liveLi = null; }
 function unlockSpeech() {
   try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch {}
 }
+// Safety net: whenever Mandat is neither working nor talking nor listening, the microphone comes back by itself.
+let vmIdle = 0;
+setInterval(() => {
+  if (!vm.on || vm.phase === 'paused' || state.busy || vm.rec || out.playing || vm.queue.length) { vmIdle = 0; return; }
+  if (++vmIdle >= 2) { vmIdle = 0; vmListen(); }
+}, 800);
 function vmOpen({ listen = true } = {}) {
   if (!SR) return alert(t('Voice input is not supported in this browser. Type instead.'));
   unlockSpeech();
@@ -2389,7 +2395,7 @@ async function vmNext() {
 // The agent has finished and nothing is left to say: listen again.
 function vmAfterTurn() {
   if (!state.busy) vm.awaiting = false;
-  if (!vm.on || state.busy || vm.queue.length || out.playing || speechSynthesis.speaking || vm.rec) return;
+  if (!vm.on || state.busy || vm.queue.length || out.playing || vm.rec) return;
   if (vm.phase === 'speaking' || vm.phase === 'thinking') vmListen();
 }
 $('#callOrb').addEventListener('click', () => {
