@@ -384,7 +384,7 @@ $('#cGo').addEventListener('click', (e) => {
   if (state.listening) return state.dictStop ? state.dictStop() : rec?.stop();
   // Speak your mission: it is written in the box as you talk, starts when you stop, and the conversation goes on by voice.
   unlockSpeech();
-  unlockAudio();
+  unlockSound();
   dictate((t) => {
     $('#cText').value = t;
     compose.voice = true;
@@ -2249,7 +2249,8 @@ function meterLoop() {
     for (const x of lvl.data) sum += (x - 128) * (x - 128);
     lvl.target = Math.min(1, Math.sqrt(sum / lvl.data.length) / 28);
   } else if (vm.phase === 'speaking' && out.env && out.playing) {
-    lvl.target = out.env[Math.floor(out.audio.currentTime * 30)] || 0; // the real loudness of the words being said
+    const at = out.src && mic.ctx ? mic.ctx.currentTime - out.t0 : out.audio.currentTime;
+    lvl.target = out.env[Math.floor(at * 30)] || 0; // the real loudness of the words being said
   } else if (vm.phase === 'thinking') lvl.target = 0.15;
   else if (vm.phase === 'listening' && !lvl.an) lvl.target *= 0.9;
   lvl.v += (lvl.target - lvl.v) * 0.2;
@@ -2270,6 +2271,7 @@ function vmLive(text) {
 function vmLiveDrop() { vm.liveLi?.remove(); vm.liveLi = null; }
 // iOS lets a page talk only after a tap: an empty utterance during the tap unlocks speech for the conversation.
 function unlockSpeech() {
+  if (state.sttOn && navigator.mediaDevices?.getUserMedia) return; // recording mode: nothing may take the sound away from the microphone
   try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch {}
 }
 // The keyboard: iPhone keeps fixed bars at the bottom of the page, behind or far above the keyboard.
@@ -2308,14 +2310,25 @@ addEventListener('pageshow', (e) => { if (e.persisted) checkBuild(); });
 let vmIdle = 0;
 setInterval(() => {
   if (!vm.on || vm.phase === 'paused') { vmIdle = 0; return; }
+  // The microphone went quiet on your turn (iPhone suspended the sound engine): wake it, then reopen it.
+  if (vm.mode === 'rec' && vm.phase === 'listening' && mic.stream && !mic.sending) {
+    const gap = Date.now() - (mic.lastFrame || Date.now());
+    if (gap > 2000) mic.ctx?.resume?.().catch(() => {});
+    if (gap > 5000 && !mic.restarting) {
+      mic.restarting = true;
+      micStop();
+      mic.lastFrame = Date.now();
+      micStart().finally(() => { mic.restarting = false; });
+    }
+  }
   if (vm.mode !== 'rec' && !vm.rec) vmRecStart();
   if (vm.phase === 'listening' || mic.sending || state.busy || out.playing || vm.queue.length) { vmIdle = 0; return; }
   if (++vmIdle >= 2) { vmIdle = 0; vmListen(); }
 }, 800);
 function vmOpen({ listen = true } = {}) {
-  if (!SR) return alert(t('Voice input is not supported in this browser. Type instead.'));
+  if (!SR && !(state.sttOn && navigator.mediaDevices?.getUserMedia)) return alert(t('Voice input is not supported in this browser. Type instead.'));
   unlockSpeech();
-  unlockAudio();
+  unlockSound();
   meterOn();
   // Real smoke on the GPU when the phone can; the soft glow otherwise.
   vm.smoke ||= createSmoke($('#smokeCanvas'), () => ({ lvl: lvl.v, phase: vm.phase, dark: matchMedia('(prefers-color-scheme: dark)').matches }));
@@ -2446,6 +2459,7 @@ function micStop() {
   Object.assign(mic, { stream: null, src: null, node: null, chunks: [], pre: [], talking: false });
 }
 function micFrame(data) {
+  mic.lastFrame = Date.now();
   let sum = 0;
   for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
   const rms = Math.sqrt(sum / data.length);
@@ -2665,13 +2679,19 @@ async function fetchVoice(text) {
       if (r.status === 503) { out.neural = false; return { text }; } // not set up, or the daily allowance is used
       if (!r.ok) continue;
       const blob = await r.blob();
-      return { url: URL.createObjectURL(blob), text, env: await loudness(blob) };
+      return { url: URL.createObjectURL(blob), bytes: await blob.arrayBuffer(), text, env: await loudness(blob) };
     } catch {}
   }
   return { text };
 }
 // iPhone lets a page play sound only after a tap: the tap that opens the conversation plays a silent clip,
 // and the same audio element then carries every reply.
+// Recording mode: the shared sound engine is woken by the tap (the old audio player must stay silent, or
+// iPhone suspends the microphone). Phone recognition mode: the audio player is unlocked as before.
+function unlockSound() {
+  if (state.sttOn && navigator.mediaDevices?.getUserMedia) micPrepare();
+  else unlockAudio();
+}
 function unlockAudio() {
   try {
     out.audio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
@@ -2705,6 +2725,24 @@ async function vmNext() {
   let guard = 0;
   if (!v.url) return fallback();
   out.env = v.env;
+  // Listening by recording: the voice plays through the same sound engine as the microphone (unlocked by your
+  // tap). A separate audio player makes iPhone suspend that engine, and the microphone goes deaf.
+  if (vm.mode === 'rec' && mic.ctx && v.bytes) {
+    try {
+      await mic.ctx.resume?.().catch(() => {});
+      const buf = await mic.ctx.decodeAudioData(v.bytes.slice(0));
+      if (!vm.on || vm.mute) { out.playing = false; return; }
+      const src = mic.ctx.createBufferSource();
+      src.buffer = buf;
+      src.connect(mic.ctx.destination);
+      src.onended = done;
+      out.src = src;
+      out.t0 = mic.ctx.currentTime;
+      src.start();
+      vmSet('speaking');
+      return;
+    } catch { out.src = null; } // could not decode: the audio player below
+  }
   out.audio.onplaying = () => { clearTimeout(guard); vmSet('speaking'); }; // "speaking" only once sound really comes out
   out.audio.onended = done;
   out.audio.onerror = fallback;
@@ -2719,13 +2757,14 @@ function vmAfterTurn() {
   if (vm.phase === 'speaking' || vm.phase === 'thinking') vmListen();
 }
 $('#callOrb').addEventListener('click', () => {
+  if (vm.mode === 'rec') { micPrepare(); if (!mic.stream) micStart(); } // a tap always wakes the sound engine
   if (vm.phase === 'listening') { if (vm.mode === 'rec') { if (mic.talking) micEnd(); return; } if (!vm.rec) vmRecStart(); return vmCommit(); } // done talking: send now
   // Cut in: silence the voice, and the rest of this reply if it is still being written; then listen.
   vm.mute = !!state.busy;
   vm.queue = [];
   stopSpeaking();
   unlockSpeech();
-  unlockAudio();
+  unlockSound();
   vmListen();
 });
 $('#callEnd').addEventListener('click', vmClose);
@@ -2763,6 +2802,8 @@ function speak(text, { force = false, onend, onword } = {}) {
 function stopSpeaking() {
   if (window.speechSynthesis) speechSynthesis.cancel();
   try { out.audio.pause(); out.audio.onended = out.audio.onplaying = out.audio.onerror = null; } catch {}
+  try { if (out.src) { out.src.onended = null; out.src.stop(); } } catch {}
+  out.src = null;
   out.playing = false;
   $$('.msg-actions .on').forEach((x) => { x.classList.remove('on'); x.innerHTML = svg('listen'); });
   state.speaking = false;
