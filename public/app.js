@@ -573,9 +573,21 @@ function shareChip(chip, status, mode) {
   chip.textContent = text;
   chip.className = 'chip ' + cls;
 }
-function sharesCard({ label, per, links }) {
+function splitDetails(b) {
+  if (!b) return '';
+  const when = b.date ? new Date(b.date + 'T12:00:00').toLocaleDateString('en', { day: 'numeric', month: 'short' }) : '';
+  const payer = b.people.find((p) => p.payer);
+  return `<details class="split-how"><summary>How it was split</summary>
+    <p class="split-paid">${esc(payer?.name || 'You')} paid <b>${fmt(b.total)}</b>${b.where ? ` at ${esc(b.where)}` : ''}${when ? ` · ${when}` : ''}</p>
+    ${b.items?.length ? `<ul class="split-lines">${b.items.map((i) => `<li><span>${esc(i.name)}</span><span>${fmt(i.total)}</span></li>`).join('')}</ul>` : ''}
+    <ul class="split-lines people">${b.people.map((p) => `<li><span>${esc(p.name)}${p.payer ? ' <em>paid</em>' : ''}</span><span>${fmt(p.amount)}</span></li>`).join('')}</ul>
+    <p class="split-note">${b.equal ? `Split equally between ${b.people.length} people.` : 'Unequal split, as you asked.'}${b.rounding ? ` ${esc(b.rounding.name)} covers the extra ${fmt(b.rounding.amount)} from rounding.` : ''} Each invoice lists these lines and the person's own part.</p>
+  </details>`;
+}
+function sharesCard({ label, per, links, breakdown }) {
   const li = el('li', 'card split');
-  li.innerHTML = `<header><span class="avatar" style="background:#7b61ff">👥</span><div><b>Split with PayPal invoices</b><small>${esc(label)} · ${fmt(per)} each</small></div></header><ul class="split-list"></ul>
+  li.innerHTML = `<header><span class="avatar" style="background:#7b61ff">👥</span><div><b>Split with PayPal invoices</b><small>${esc(label)} · ${breakdown ? fmt(breakdown.total) + ' total' : fmt(per) + ' each'}</small></div></header>
+    ${splitDetails(breakdown)}<ul class="split-list"></ul>
     <p class="split-foot">No app needed to pay: from PayPal's email, the link, or the QR code.</p>`;
   const ul = li.querySelector('.split-list');
   for (const l of links) {

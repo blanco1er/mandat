@@ -530,3 +530,17 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 /* In a mission: the composer is a solid material, and the conversation fades out before reaching it. */
 .composer.glass { background: var(--card); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); }
 .bottom-fade { position: fixed; left: 0; right: 0; bottom: 0; height: 140px; z-index: 15; pointer-events: none; background: linear-gradient(to top, var(--bg) 40%, transparent); }
+
+/* Split: how it was computed */
+.split-how { margin: 12px 0 0; border-radius: 14px; background: var(--card-line); padding: 0 12px; }
+.split-how summary { list-style: none; cursor: pointer; padding: 11px 0; font-size: 14px; font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+.split-how summary::-webkit-details-marker { display: none; }
+.split-how summary::after { content: "›"; margin-left: auto; color: var(--ink-3); transition: transform 0.25s var(--smooth); }
+.split-how[open] summary::after { transform: rotate(90deg); }
+.split-paid { margin: 0 0 8px; font-size: 14px; color: var(--ink-2); }
+.split-lines { list-style: none; margin: 0 0 8px; padding: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+.split-lines li { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--card-line); }
+.split-lines li:last-child { border-bottom: 0; }
+.split-lines.people li span:last-child { font-weight: 600; }
+.split-lines em { font-style: normal; font-size: 11px; font-weight: 600; color: var(--ok); margin-left: 4px; }
+.split-note { margin: 0 0 12px; font-size: 12px; color: var(--ink-3); line-height: 17px; }
