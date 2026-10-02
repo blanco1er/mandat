@@ -7,13 +7,23 @@ export const LANGS = { en: 'English', fr: 'Français' };
 const TABLES = { fr: FR };
 const KEY = 'mandat_lang';
 
+// Automatic: French when French is among the phone's languages, or when the phone is in a French-speaking
+// country (its time zone or region): an English phone in France gets French. English everywhere else.
+const FR_REGIONS = new Set('FR BE LU MC CH SN CI CM ML BF NE TG BJ GA CG CD MG GN TD CF DJ KM HT MA DZ TN RE GP MQ GF YT NC PF PM BL MF WF'.split(' '));
+const FR_ZONES = /^(Europe\/(Paris|Brussels|Luxembourg|Monaco)|Africa\/(Dakar|Abidjan|Douala|Bamako|Ouagadougou|Niamey|Lome|Porto-Novo|Libreville|Brazzaville|Kinshasa|Lubumbashi|Conakry|Ndjamena|Bangui|Djibouti|Casablanca|Algiers|Tunis)|Indian\/(Antananarivo|Reunion|Mayotte|Comoro)|America\/(Guadeloupe|Martinique|Cayenne|Port-au-Prince)|Pacific\/(Noumea|Tahiti))$/;
+export function autoLang(languages = navigator.languages?.length ? navigator.languages : [navigator.language || 'en'], zone = Intl.DateTimeFormat().resolvedOptions().timeZone || '') {
+  const list = [...languages].map(String);
+  if (list.some((l) => /^fr(\b|[-_])/i.test(l))) return 'fr';
+  const region = /^[a-z]{2,3}[-_](?:[A-Za-z]{4}[-_])?([A-Za-z]{2})\b/i.exec(list[0] || '')?.[1]?.toUpperCase();
+  // The country decides: the phone's clock or its region is in a French-speaking country.
+  return FR_ZONES.test(zone) || (region && FR_REGIONS.has(region)) ? 'fr' : 'en';
+}
 function pick() {
   try {
     const saved = localStorage.getItem(KEY);
     if (saved === 'en' || saved === 'fr') return saved;
   } catch {}
-  const nav = (navigator.languages?.[0] || navigator.language || 'en').toLowerCase();
-  return nav.startsWith('fr') ? 'fr' : 'en';
+  return autoLang();
 }
 export const lang = pick();
 export const locale = () => (lang === 'fr' ? 'fr-FR' : 'en-GB');

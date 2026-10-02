@@ -86,7 +86,10 @@ async function boot() {
   renderHome(r.missions);
   navigator.serviceWorker?.register('/sw.js').catch(() => {});
   const open = p.get('mission');
+  let back = null;
+  try { back = JSON.parse(sessionStorage.getItem('mandat_return') || 'null'); sessionStorage.removeItem('mandat_return'); } catch {}
   if (open) openMission(open);
+  else if (back?.view === 'settings') { TABS.settings(); show('settings'); requestAnimationFrame(() => scrollTo({ top: back.y || 0 })); }
   else show('home');
 }
 
@@ -1476,7 +1479,12 @@ $('#sLocBtn').addEventListener('click', async () => {
   $('#sLoc').textContent = l ? t('Allowed, used to search around you') : t('Not allowed, your usual address is used');
 });
 // Interface language: Auto follows the phone; changing it reloads the app.
-segmented('#sLang', (v) => { if (v !== chosenLang()) setLang(v); });
+// Changing the language reloads the app; it comes back to Settings, at the same place.
+segmented('#sLang', (v) => {
+  if (v === chosenLang()) return;
+  try { sessionStorage.setItem('mandat_return', JSON.stringify({ view: 'settings', y: scrollY })); } catch {}
+  setLang(v);
+});
 
 // ---------- photos ----------
 function pickPhoto(onReady) {
