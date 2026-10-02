@@ -1,7 +1,8 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" translate="no">
 <head>
   <meta charset="utf-8">
+  <meta name="google" content="notranslate">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f4f1ec" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0b0c10" media="(prefers-color-scheme: dark)">
@@ -99,14 +100,28 @@
 
     <div class="idea-row" id="ideas" role="group" aria-label="Ideas to start from"></div>
 
-    <div class="push-ask" id="pushAsk" hidden>
-      <span class="push-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg></span>
-      <div class="grow"><b>Know when Mandat needs you</b><small>Approvals, answers from merchants, friends paying you back. Nothing else.</small></div>
-      <div class="push-actions"><button type="button" class="link" id="pushLater">Not now</button><button type="button" class="pill-btn" id="pushOn">Turn on</button></div>
-    </div>
     <div class="stopped-banner" id="stoppedBanner" hidden>Mandat is stopped — no payment can be made. <button id="resumeAll">Resume</button></div>
-    <div class="m-search" id="mSearchWrap" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 0 1 5.2 10.4l4.4 4.4-1.4 1.4-4.4-4.4A6.5 6.5 0 1 1 10.5 4Zm0 2a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z"/></svg><input id="mSearch" placeholder="Search missions" aria-label="Search missions"></div>
-    <div id="mGroups"></div>
+
+    <!-- Your missions: three discreet tabs (tap or swipe), one compact list -->
+    <section class="m-panel" aria-label="Your missions">
+      <div class="m-tabs-wrap" id="mTabsWrap">
+        <div class="m-tabs" id="mTabs" role="tablist">
+          <button role="tab" data-t="needs" aria-selected="false">Needs you <span class="n"></span></button>
+          <button role="tab" data-t="progress" aria-selected="false">In progress <span class="n"></span></button>
+          <button role="tab" data-t="done" aria-selected="false">Done <span class="n"></span></button>
+          <i class="m-tabs-pill" aria-hidden="true"></i>
+        </div>
+        <button type="button" class="m-find" id="mFind" aria-label="Search missions"><svg viewBox="0 0 24 24"><path d="M10.5 4a6.5 6.5 0 0 1 5.2 10.4l4.4 4.4-1.4 1.4-4.4-4.4A6.5 6.5 0 1 1 10.5 4Zm0 2a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z"/></svg></button>
+      </div>
+      <div class="m-search" id="mSearchWrap" hidden><input id="mSearch" placeholder="Search all missions" aria-label="Search missions"><button type="button" id="mSearchX" aria-label="Close search">Cancel</button></div>
+      <div class="push-ask" id="pushAsk" hidden>
+        <svg class="push-bell" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z"/></svg>
+        <span class="grow">Get a ping when Mandat needs you</span>
+        <button type="button" class="link" id="pushOn">Turn on</button>
+        <button type="button" class="push-x" id="pushLater" aria-label="Not now">✕</button>
+      </div>
+      <div class="m-list" id="mList" role="tabpanel"></div>
+    </section>
   </main>
   <div class="row-menu" id="rowMenu" role="menu" hidden></div>
 

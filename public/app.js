@@ -24,6 +24,7 @@ function show(view) {
   if (view !== 'live') $('#topTitle').textContent = 'Mandat';
   $$('#tabbar button').forEach((b) => b.toggleAttribute('aria-current', b.dataset.tab === view));
   window.scrollTo({ top: 0 });
+  if (view === 'home') requestAnimationFrame(placePill);
 }
 
 history.scrollRestoration = 'manual'; // every screen opens at its top
@@ -216,13 +217,13 @@ $('#newMission').addEventListener('click', () => {
   setTimeout(() => $('#cText').focus(), 250);
 });
 
-// Missions, grouped by urgency; the newest activity first inside each group.
-const GROUPS = [
-  { key: 'needs', title: 'Needs you', match: (m) => m.status === 'needs_you' },
-  { key: 'progress', title: 'In progress', match: (m) => ['working', 'waiting', 'idle', 'new'].includes(m.status) },
-  { key: 'booked', title: 'Booked', match: (m) => m.status === 'done' },
-  { key: 'paused', title: 'Paused', match: (m) => m.status === 'stopped' },
-];
+// Missions: three tabs — what needs you, what is moving, what is done — newest activity first.
+const MTABS = {
+  needs: { match: (m) => m.status === 'needs_you', empty: 'Nothing needs you right now.' },
+  progress: { match: (m) => ['working', 'waiting', 'idle', 'new'].includes(m.status), empty: 'No mission in progress. Ask for something above.' },
+  done: { match: (m) => m.status === 'done' || m.status === 'stopped', empty: 'Finished missions land here.' },
+};
+const TAB_ORDER = ['needs', 'progress', 'done'];
 const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto', style: 'short' }); // the interface is in English: no mixed languages
 function ago(t) {
   const s = (Date.now() - t) / 1000;
@@ -238,45 +239,77 @@ function renderHome(missions) {
   $('#stoppedBanner').hidden = !state.me.frozen;
   $('#cRule').textContent = ruleText();
   $('#cRule').classList.remove('error');
-  $('#mSearchWrap').hidden = missions.filter((m) => !m.archived).length < 6;
-  drawGroups();
+  const live = missions.filter((m) => !m.archived);
+  const counts = Object.fromEntries(TAB_ORDER.map((t) => [t, live.filter(MTABS[t].match).length]));
+  for (const b of $$('#mTabs button')) b.querySelector('.n').textContent = counts[b.dataset.t] || '';
+  // Land where it matters: what needs you first, otherwise what is moving.
+  if (!state.mtab || (state.mtab === 'needs' && !counts.needs && !state.mtabChosen)) state.mtab = counts.needs ? 'needs' : counts.progress ? 'progress' : live.length ? 'done' : 'progress';
+  $('#mFind').hidden = missions.length < 5;
+  drawList();
   // What needs you: a dot on the Missions tab and a badge on the app icon.
-  const needs = missions.filter((m) => m.status === 'needs_you' && !m.archived).length;
-  $('#tabbar button[data-tab=home]').dataset.badge = needs || '';
-  if ('setAppBadge' in navigator) (needs ? navigator.setAppBadge(needs) : navigator.clearAppBadge()).catch(() => {});
+  $('#tabbar button[data-tab=home]').dataset.badge = counts.needs || '';
+  if ('setAppBadge' in navigator) (counts.needs ? navigator.setAppBadge(counts.needs) : navigator.clearAppBadge()).catch(() => {});
   // Offer notifications once there is something worth being told about.
   let later = false;
   try { later = localStorage.getItem('mandat.pushLater') === '1'; } catch {}
   $('#pushAsk').hidden = !(missions.length && pushSupport() === 'ok' && Notification.permission === 'default' && !state.me.notifications && !later);
 }
-function drawGroups() {
+function setTab(t, { by } = {}) {
+  if (!MTABS[t] || t === state.mtab) return;
+  const dir = TAB_ORDER.indexOf(t) > TAB_ORDER.indexOf(state.mtab) ? 1 : -1;
+  state.mtab = t;
+  state.mtabChosen = true;
+  drawList(by === 'swipe' ? dir : 0);
+}
+function drawList(slide = 0) {
   const q = $('#mSearch').value.trim().toLowerCase();
-  const list = (state.missions || []).filter((m) => !q || (m.title + ' ' + m.last + ' ' + m.needs).toLowerCase().includes(q)).sort((a, b) => b.lastAt - a.lastAt);
-  const root = $('#mGroups');
-  root.innerHTML = '';
-  for (const g of GROUPS) {
-    const ms = list.filter((m) => !m.archived && g.match(m));
-    if (ms.length) root.append(group(g.title, ms, g.key));
+  const all = (state.missions || []).slice().sort((a, b) => b.lastAt - a.lastAt);
+  // Tab pill follows the selected tab.
+  for (const b of $$('#mTabs button')) b.setAttribute('aria-selected', String(!q && b.dataset.t === state.mtab));
+  placePill();
+  const list = $('#mList');
+  list.innerHTML = '';
+  list.classList.remove('slide-l', 'slide-r');
+  if (slide) { void list.offsetWidth; list.classList.add(slide > 0 ? 'slide-l' : 'slide-r'); }
+  const shown = q ? all.filter((m) => (m.title + ' ' + m.last + ' ' + m.needs).toLowerCase().includes(q)) : all.filter((m) => !m.archived && MTABS[state.mtab].match(m));
+  if (shown.length) list.append(rows(shown));
+  else list.append(el('p', 'm-empty', q ? 'No mission matches.' : MTABS[state.mtab].empty));
+  // Archived missions sit, folded, at the bottom of "Done".
+  const archived = all.filter((m) => m.archived);
+  if (!q && state.mtab === 'done' && archived.length) {
+    const t = el('button', 'm-archived-toggle', `${state.showArchived ? 'Hide' : 'Show'} archived (${archived.length})`);
+    t.type = 'button';
+    t.addEventListener('click', () => { state.showArchived = !state.showArchived; drawList(); });
+    list.append(t);
+    if (state.showArchived) list.append(rows(archived, true));
   }
-  const archived = list.filter((m) => m.archived);
-  if (archived.length) {
-    const sec = group(`Archived`, archived, 'archived');
-    sec.classList.toggle('closed', !state.showArchived && !q);
-    sec.querySelector('h2').append(el('span', 'count', String(archived.length)));
-    sec.querySelector('h2').addEventListener('click', () => { state.showArchived = !state.showArchived; sec.classList.toggle('closed'); });
-    root.append(sec);
-  }
-  if (q && !list.length) root.append(el('p', 'm-none', 'No mission matches.'));
 }
-$('#mSearch').addEventListener('input', drawGroups);
-function group(title, ms, key) {
-  const sec = el('section', 'm-group ' + key);
-  sec.append(el('h2', 'section-title', title));
-  const ol = el('ol', 'missions');
+function placePill() {
+  const sel = $(`#mTabs button[data-t=${state.mtab}]`);
+  if (!sel?.offsetWidth) return;
+  $('.m-tabs-pill').style.cssText = $('#mSearch').value ? 'opacity:0' : `width:${sel.offsetWidth}px;transform:translateX(${sel.offsetLeft - 4}px)`;
+}
+addEventListener('resize', placePill, { passive: true });
+function rows(ms, faded) {
+  const ol = el('ol', 'm-rows' + (faded ? ' faded' : ''));
   for (const m of ms) ol.append(missionRow(m));
-  sec.append(ol);
-  return sec;
+  return ol;
 }
+for (const b of $$('#mTabs button')) b.addEventListener('click', () => setTab(b.dataset.t));
+$('#mFind').addEventListener('click', () => { $('#mSearchWrap').hidden = false; $('#mTabsWrap').hidden = true; $('#mSearch').focus(); });
+$('#mSearchX').addEventListener('click', () => { $('#mSearch').value = ''; $('#mSearchWrap').hidden = true; $('#mTabsWrap').hidden = false; drawList(); });
+$('#mSearch').addEventListener('input', () => drawList());
+// Swipe the list left or right to change tab, like a native segmented view.
+(() => {
+  let x0 = 0, y0 = 0, t0 = 0;
+  $('#mList').addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now(); }, { passive: true });
+  $('#mList').addEventListener('touchend', (e) => {
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+    if (Math.abs(dx) < 60 || Math.abs(dy) > 45 || Date.now() - t0 > 700 || $('#mSearch').value) return;
+    const i = TAB_ORDER.indexOf(state.mtab) + (dx < 0 ? 1 : -1);
+    if (TAB_ORDER[i]) setTab(TAB_ORDER[i], { by: 'swipe' });
+  }, { passive: true });
+})();
 const cleanTitle = (t) => String(t || 'Mission').replace(/[\s,;:.\-–]+$/, '');
 function missionLine(m) {
   if (m.status === 'needs_you') return ['needs', m.needs || 'Waiting for you'];
@@ -286,16 +319,15 @@ function missionLine(m) {
   if (m.status === 'stopped') return ['quiet', 'Paused — no payment can be made'];
   return ['quiet', m.last || 'Starting…'];
 }
+// One compact row per mission: icon · title · what is going on · when · money left.
 function missionRow(m) {
-  const li = el('li', 'mission');
+  const li = el('li', 'm-row');
   li.dataset.id = m.id;
-  const used = m.total ? Math.min(1, (m.spent + m.held) / m.total) : 0;
   const [cls, line] = missionLine(m);
-  li.innerHTML = `<span class="emoji">${esc(m.emoji)}</span>
-    <div class="info"><div class="t-row"><b>${esc(cleanTitle(m.title))}</b><time>${ago(m.lastAt)}</time></div>
-      <p class="m-line ${cls}">${esc(line)}</p>
-      <div class="m-money"><span class="m-bar"><i style="width:${used * 100}%"></i></span>${fmtC(m.remaining, m.currency)} left of ${fmtC(m.total, m.currency)}${m.progress ? ` · ${m.progress.done}/${m.progress.of} booked` : ''}</div></div>
-    <button type="button" class="m-more" aria-label="More for ${esc(m.title)}" aria-haspopup="menu">•••</button>`;
+  li.innerHTML = `<span class="m-ic">${esc(m.emoji)}</span>
+    <div class="m-txt"><div class="m-l1"><b>${esc(cleanTitle(m.title))}</b><time>${ago(m.lastAt)}</time></div>
+      <div class="m-l2"><span class="m-line ${cls}">${esc(line)}</span><span class="m-left">${fmtC(m.remaining, m.currency)} left</span></div></div>
+    <button type="button" class="m-more" aria-label="More for ${esc(m.title)}" aria-haspopup="menu"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>`;
   li.addEventListener('click', (e) => { if (!e.target.closest('.m-more')) openMission(m.id); });
   li.querySelector('.m-more').addEventListener('click', (e) => rowMenu(e.currentTarget, m));
   return li;
