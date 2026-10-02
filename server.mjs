@@ -195,7 +195,7 @@ function pushFor(b, { type, data }) {
 }
 // When everything is booked: make sure reminders exist and the "All set" recap is on screen and on the phone.
 function closeLoop(b, emit) {
-  if (b.s.closed || missionSummary(b.s).status !== 'done') return;
+  if (b.s.closed || missionSummary(b.s).status !== 'done' || b.s.review?.missing?.length) return; // never 'all set' with an essential missing
   const tz = getUser(b.s.userId)?.tz || 'UTC';
   for (const r of autoReminders(b.s, tz)) emit('reminder', r);
   b.s.wrapped = wrapCard(b.s);
