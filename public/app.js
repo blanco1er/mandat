@@ -789,10 +789,10 @@ function handle({ type, data }) {
       if (state.streamLi) { done.classList.add('settled'); state.streamLi.replaceWith(done); state.streamLi = null; keepBottom(); }
       else add(done);
       typing(state.busy);
-      if (vm.on) return state.live && vmFinal(data.text);
+      if (vm.on) return state.live && !data.step && vmFinal(data.text);
       return state.live && state.voiceTurn && speak(plain(data.text));
     }
-    case 'say_delta': if (vm.on && state.live) vmFeed(data.t); return streamText(data.t);
+    case 'say_delta': return streamText(data.t); // written live; in a voice conversation only the final reply is spoken
     case 'say_reset': if (vm.on) vmReset(); state.streamLi?.remove(); state.streamLi = null; return typing(state.busy);
     case 'ready':
       state.live = true;
@@ -1829,7 +1829,7 @@ $('#orb').addEventListener('click', () => {
   vmOpen();
 });
 // ---------- voice conversation: you talk, it answers, it listens again; tap the circle to cut in ----------
-const vm = { on: false, phase: 'idle', rec: null, queue: [], buf: '', used: 0, quiet: 0, mute: false, liveLi: null, noMeter: false };
+const vm = { on: false, phase: 'idle', rec: null, queue: [], buf: '', used: 0, quiet: 0, mute: false, liveLi: null, noMeter: false, voiceOff: false };
 const VM_STATE = { listening: 'Listening…', thinking: 'Thinking…', speaking: 'Speaking. Tap to interrupt.', paused: 'Tap the circle to talk.' };
 function vmSet(phase, text) {
   vm.phase = phase;
@@ -1902,6 +1902,7 @@ function vmOpen({ listen = true } = {}) {
   vm.smoke?.start();
   vm.on = true;
   vm.mute = false;
+  vmVoice(state.me?.voice?.on === false);
   state.voiceTurn = false;
   $('#composer').hidden = true;
   $('#call').hidden = false;
@@ -1963,13 +1964,18 @@ function vmFeed(chunk) {
   vmSay(m[0]);
   vmFeed('');
 }
+// Speak the reply, briefly: the first sentences only (about 260 characters); the screen holds the rest.
 function vmFinal(text) {
-  if (!vm.mute) {
-    const rest = vm.buf && text.startsWith(vm.buf.slice(0, vm.used)) ? text.slice(vm.used) : vm.used ? '' : text;
-    if (rest.trim()) vmSay(rest);
-  }
   vm.buf = '';
   vm.used = 0;
+  if (vm.mute || vm.voiceOff) return;
+  const sentences = plain(text).replace(/\n+/g, ' ').match(/[^.!?…]+[.!?…]+["»”)]*\s*|[^.!?…]+$/g) || [];
+  let said = '';
+  for (const x of sentences) {
+    if (said && (said + x).length > 260) break;
+    said += x;
+  }
+  for (const x of said.match(/[^.!?…]+[.!?…]+["»”)]*\s*|[^.!?…]+$/g) || []) vmSay(x);
 }
 function vmReset() { vm.buf = ''; vm.used = 0; }
 // The voice: a human-sounding neural voice from the server, sentence by sentence (the next one is fetched
@@ -2041,6 +2047,14 @@ $('#callOrb').addEventListener('click', () => {
   vmListen();
 });
 $('#callEnd').addEventListener('click', vmClose);
+// Mandat's voice is optional: off, the replies are only written, and it still listens again after each one.
+function vmVoice(off) {
+  vm.voiceOff = off;
+  $('#callMute').setAttribute('aria-pressed', String(off));
+  $('#callMute').classList.toggle('muted', off);
+  if (off) { vm.queue = []; stopSpeaking(); if (vm.phase === 'speaking') vmAfterTurn(); }
+}
+$('#callMute').addEventListener('click', () => vmVoice(!vm.voiceOff));
 
 function syncComposer() {
   const has = (!!$('#sayText').value.trim() || state.attach.length > 0) && !state.listening;

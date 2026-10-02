@@ -1146,3 +1146,11 @@ body.voice-on #feed { padding-bottom: 120px; }
 body.smoke-gl-on .smoke-gl { display: block; }
 body.smoke-gl-on .smoke { display: none; }
 .voicebar { height: calc(240px + env(safe-area-inset-bottom)); }
+.vb-right { justify-self: end; display: flex; align-items: center; gap: 8px; }
+.vb-end { justify-self: auto; }
+.vb-mute { width: 36px; height: 36px; border-radius: 18px; display: grid; place-items: center; background: var(--card); border: 1px solid var(--card-line); color: var(--ink); }
+.vb-mute .i { width: 18px; height: 18px; }
+.vb-mute .off { display: none; }
+.vb-mute.muted { color: var(--ink-3); }
+.vb-mute.muted .on { display: none; }
+.vb-mute.muted .off { display: inline; }

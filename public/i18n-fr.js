@@ -520,4 +520,5 @@ export default {
   "End": "Terminer",
   "Talk or interrupt": "Parler ou interrompre",
   "Voice conversation": "Conversation vocale",
+  "Mandat's voice": "Voix de Mandat",
 };
