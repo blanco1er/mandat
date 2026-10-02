@@ -811,18 +811,19 @@ function ledgerTheme(ag) {
 const STATUS_CLS = { Held: 'wait', Paid: 'paid', 'Paid back': 'paid', Released: 'off', Refunded: 'part', 'Owed to you': 'wait', Failed: 'off' };
 function ledgerColumns(narrow) {
   return [
-    { field: 'at', headerName: 'When', filter: 'agDateColumnFilter', sort: 'desc', width: 112, minWidth: 96,
+    { field: 'at', headerName: 'When', filter: 'agDateColumnFilter', sort: 'desc', width: 112, minWidth: 96, hide: narrow,
       valueGetter: (p) => (p.data?.at ? new Date(p.data.at) : null),
       valueFormatter: (p) => (p.value ? p.value.toLocaleDateString('en', { day: 'numeric', month: 'short' }) + ' · ' + p.value.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''),
       filterParams: { comparator: (d, v) => { const x = new Date(v); x.setHours(0, 0, 0, 0); return x < d ? -1 : x > d ? 1 : 0; } } },
     { field: 'who', headerName: narrow ? 'Who' : 'Merchant / friend', filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110,
-      cellRenderer: (p) => (p.data ? `<span class="led-who"><span class="led-emoji">${p.data.kind === 'Share' ? '👥' : esc(p.data.emoji)}</span>${esc(p.value)}</span>` : esc(p.value)) },
+      // On a phone the date sits under the name, so three columns are enough: who, status, amount.
+      cellRenderer: (p) => (p.data ? `<span class="led-who"><span class="led-emoji">${p.data.kind === 'Share' ? '👥' : esc(p.data.emoji)}</span><span class="led-name">${esc(p.value)}${innerWidth < 720 && p.data.at ? `<small>${new Date(p.data.at).toLocaleDateString('en', { day: 'numeric', month: 'short' })}</small>` : ''}</span></span>` : esc(p.value)) },
     { field: 'mission', headerName: 'Mission', filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110, hide: narrow },
     { field: 'what', headerName: 'What', filter: 'agTextColumnFilter', flex: 1.4, minWidth: 110, hide: narrow },
     { field: 'kind', headerName: 'Type', filter: 'agTextColumnFilter', width: 100, hide: narrow },
-    { field: 'status', headerName: 'Status', filter: 'agTextColumnFilter', width: 128, minWidth: 104,
-      cellRenderer: (p) => (p.value ? `<span class="chip ${STATUS_CLS[p.value] || 'off'}">${esc(p.value)}</span>` : '') },
-    { field: 'amount', headerName: 'Amount', filter: 'agNumberColumnFilter', type: 'rightAligned', width: 112, minWidth: 92,
+    { field: 'status', headerName: 'Status', filter: 'agTextColumnFilter', width: narrow ? 84 : 128, minWidth: 76,
+      cellRenderer: (p) => (p.value ? `<span class="chip ${STATUS_CLS[p.value] || 'off'}">${esc(narrow ? { 'Owed to you': 'Owed', 'Paid back': 'Back' }[p.value] || p.value : p.value)}</span>` : '') },
+    { field: 'amount', headerName: 'Amount', filter: 'agNumberColumnFilter', type: 'rightAligned', width: narrow ? 92 : 112, minWidth: 84,
       valueFormatter: (p) => (p.value ? (p.value > 0 ? '+' : '−') + fmt(Math.abs(p.value)) : p.data?.owed ? fmt(p.data.owed) : '—'),
       // A cellClass function replaces the rightAligned type's class, so keep it explicitly.
       cellClass: (p) => ['ag-right-aligned-cell', p.value > 0 ? 'led-in' : p.value < 0 ? 'led-out' : 'led-zero'] },
@@ -861,7 +862,7 @@ async function openActivity() {
     let wasNarrow = narrow;
     addEventListener('resize', () => {
       const n = innerWidth < 720;
-      if (n !== wasNarrow) { wasNarrow = n; ledger.setColumnsVisible(['mission', 'what', 'kind', 'ref'], !n); }
+      if (n !== wasNarrow) { wasNarrow = n; ledger.setGridOption('columnDefs', ledgerColumns(n)); }
     }, { passive: true });
   } else ledger.setGridOption('rowData', data.rows);
 }

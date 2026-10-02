@@ -427,7 +427,7 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 .filter-chip button { width: 22px; height: 22px; border-radius: 11px; color: var(--accent); font-size: 12px; }
 .ledger { margin-top: 14px; }
 .ledger .led-who { display: inline-flex; align-items: center; gap: 8px; }
-.ledger .led-emoji { width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; background: var(--card-line); font-size: 13px; }
+.ledger .led-emoji { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--card-line); font-size: 14px; line-height: 1; flex: none; }
 .ledger .led-in { color: var(--ok); font-weight: 600; font-variant-numeric: tabular-nums; }
 .ledger .led-out { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
 .ledger .led-zero { color: var(--ink-3); font-variant-numeric: tabular-nums; }
@@ -595,3 +595,8 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 .pay-what { font-size: 13px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card.pay .why { font-size: 12px; color: var(--ink-3); }
 .card.pay .why i { font-style: normal; text-transform: uppercase; letter-spacing: 0.04em; font-size: 10px; font-weight: 700; }
+
+.ledger .led-name { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ledger .led-name small { font-size: 11px; color: var(--ink-3); }
+
+@media (max-width: 720px) { .ledger .ag-cell, .ledger .ag-header-cell { padding-left: 9px; padding-right: 9px; } }
