@@ -93,6 +93,7 @@ async function boot() {
   const open = p.get('mission');
   let back = null;
   try { back = JSON.parse(sessionStorage.getItem('mandat_return') || 'null'); sessionStorage.removeItem('mandat_return'); } catch {}
+  restorePending();
   if (open) openMission(open);
   else if (back?.view === 'settings') { TABS.settings(); show('settings'); requestAnimationFrame(() => scrollTo({ top: back.y || 0 })); }
   else show('home');
@@ -101,7 +102,8 @@ async function boot() {
 // ---------- mandate (signing it is also the PayPal sign-in) ----------
 $('#start').addEventListener('click', () => mandateView());
 let mAutonomy = 'balanced';
-function mandateView() {
+function mandateView({ why = false } = {}) {
+  $('#mandateWhy').hidden = !why;
   $('#mCap').value = state.me.rules.monthlyCap;
   setSeg('#mAutonomy', state.me.rules.autonomy);
   mAutonomy = state.me.rules.autonomy;
@@ -175,10 +177,27 @@ async function obSave(i) {
   if (i === 2) profile.preferences = obPicked('#obLikes', '#obLikesMore');
   if (Object.keys(profile).length) state.me = (await post('/api/me', { profile })).user;
 }
+// A mission written before signing the mandate comes back in the box, ready to send.
+function restorePending() {
+  let text = '';
+  try { text = localStorage.getItem('mandat_pending') || ''; localStorage.removeItem('mandat_pending'); } catch {}
+  if (!text) return;
+  $('#cText').value = text;
+  onCompose();
+}
+// Back from the background: if the account changed on the server (demo reset), start again cleanly.
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !state.me?.paypal?.mandate) return;
+  try {
+    const r = await get('/api/me');
+    if (!r.user.paypal.mandate) { state.me = r.user; show('welcome'); }
+  } catch {}
+});
 async function obFinish() {
   state.me = (await post('/api/me', { onboarded: true })).user;
   const r = await get('/api/me');
   renderHome(r.missions);
+  restorePending();
   show('home');
 }
 $('#obNext').addEventListener('click', async () => {
@@ -372,6 +391,12 @@ $('#compose').addEventListener('submit', async (e) => {
     resetCompose();
     openMission(r.id);
   } catch (err) {
+    if (err.code === 'mandate_required') {
+      // No signed mandate (new account, or the demo server was reset): go straight to signing, keep what was written.
+      try { localStorage.setItem('mandat_pending', intent); } catch {}
+      try { state.me = (await get('/api/me')).user; } catch {}
+      return mandateView({ why: true });
+    }
     $('#cRule').textContent = err.message;
     $('#cRule').classList.add('error');
   } finally {
@@ -1985,7 +2010,7 @@ async function get(url) {
 async function post(url, body) {
   const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...HEADERS }, body: JSON.stringify(body) });
   const j = await r.json();
-  if (!r.ok) throw new Error(j.error || t('Request failed'));
+  if (!r.ok) throw Object.assign(new Error(j.error || t('Request failed')), { code: j.code });
   return j;
 }
 

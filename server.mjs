@@ -207,7 +207,7 @@ const api = (h) => async (req, res) => {
   try {
     res.json(await h(req, res));
   } catch (e) {
-    res.status(e.status || 400).json({ error: tr(reqLang(req), e.message) }); // fixed messages are translated as they are
+    res.status(e.status || 400).json({ error: tr(reqLang(req), e.message), ...(e.code ? { code: e.code } : {}) }); // fixed messages are translated as they are
   }
 };
 
@@ -384,7 +384,7 @@ app.post('/api/me/activity/ask', api(async (req, res) => {
 // ---------- missions ----------
 app.post('/api/missions', api(async (req, res) => {
   const u = me(req, res);
-  if (!u.paypal.mandate) throw new Error('Sign the PayPal mandate first.');
+  if (!u.paypal.mandate) throw Object.assign(new Error('Sign the PayPal mandate first.'), { status: 409, code: 'mandate_required' });
   if (u.frozen) throw new Error('Mandat is stopped. Resume it in Settings.');
   const { intent = '', budget, location = null } = req.body || {};
   const emoji = isEmoji(req.body?.emoji) ? req.body.emoji.trim() : emojiFor(intent);

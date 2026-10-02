@@ -1085,3 +1085,4 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
 .ob-back { width: 32px; height: 32px; margin-left: -8px; display: grid; place-items: center; color: var(--ink); border-radius: 16px; transition: opacity 0.2s; }
 .ob-back .i { width: 22px; height: 22px; stroke-width: 2.2; }
 .ob-back.off { opacity: 0; pointer-events: none; }
+.mandate-why { margin: -4px 0 18px; padding: 12px 14px; border-radius: 14px; background: rgba(10, 132, 255, 0.1); color: var(--ink); font-size: 14.5px; line-height: 20px; }

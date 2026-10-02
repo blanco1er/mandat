@@ -508,4 +508,5 @@ export default {
   "Treat myself": "Me faire plaisir",
   "Free cancellation": "Annulation gratuite",
   "Not allowed: type your usual address below": "Refusée : saisissez votre adresse habituelle ci-dessous",
+  "To start a mission, Mandat needs your OK with PayPal once. What you wrote is kept for after.": "Pour lancer une mission, Mandat a besoin de votre accord PayPal, une seule fois. Ce que vous avez écrit est gardé pour après.",
 };
