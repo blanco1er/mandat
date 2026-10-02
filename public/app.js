@@ -565,21 +565,54 @@ function requestCard(r) {
     ${r.inbox && (r.status === 'pending' || r.status === 'accepted') ? `<a class="inbox-link" href="${esc(r.inbox)}" target="_blank" rel="noopener">See it from ${esc(r.merchant)}'s side (demo inbox) ↗</a>` : ''}`;
 }
 // Money moments: held (reserved, not charged), paid (merchant confirmed), refunded.
+// One card per payment, updated in place: held → paid (→ refunded).
 function paymentCard({ kind, entry, mode, why, reason }) {
-  const li = el('li', 'card pay ' + kind + (kind === 'capture' ? ' captured' : ''));
+  let li = state.cards['p:' + entry.id];
+  const isNew = !li;
+  if (isNew) li = state.cards['p:' + entry.id] = el('li', 'card pay');
+  li.className = 'card pay ' + kind + (kind === 'capture' ? ' captured' : '');
   const [icon, title, sub] = kind === 'hold' ? ['🔒', 'Held with PayPal', 'Not charged until the merchant confirms']
-    : kind === 'capture' ? ['✓', 'Paid with PayPal', why || 'Merchant confirmed']
+    : kind === 'capture' ? ['✓', 'Paid with PayPal', why ? why + ' · deposit captured' : 'Merchant confirmed · deposit captured']
     : ['↩︎', 'Refunded with PayPal', reason || 'Back to your PayPal'];
-  li.innerHTML = `<span class="lock">${icon}</span><div><b>${title}</b><small>${esc(entry.merchant)} · ${esc(entry.label)}</small><small class="why">${esc(sub)}</small><span class="mode">${mode === 'sandbox' ? 'PayPal sandbox' : 'demo'}</span></div><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span>`;
-  add(li);
+  const what = String(entry.label || '').replace(new RegExp('^' + entry.merchant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[—–:-]\\s*'), '');
+  li.innerHTML = `<span class="lock">${icon}</span><div><b>${title}</b><small>${esc(entry.merchant)} · ${esc(what)}</small><small class="why">${esc(sub)}</small><span class="mode">${mode === 'sandbox' ? 'PayPal sandbox' : 'demo'}</span></div><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span>`;
+  if (isNew) add(li);
 }
+// The plan as a day-by-day timeline, with the running total against the mission budget.
+const KIND = { transport: '🚆', stay: '🛏️', activity: '🎟️', food: '🍽️', other: '•' };
+const PLAN_STATUS = { idea: ['Idea', 'off'], searching: ['Searching', 'off'], negotiating: ['Negotiating', 'part'], requested: ['Requested', 'part'], awaiting_approval: ['Needs you', 'wait'], held: ['Held', 'wait'], confirmed: ['Booked', 'paid'], cancelled: ['Cancelled', 'off'] };
 function planCard({ items }) {
   let card = state.cards.plan;
   if (!card) card = state.cards.plan = el('li', 'card plan');
-  card.innerHTML = `<header><span class="avatar" style="background:var(--accent)">✦</span><div><b>Your plan</b><small>Updated live</small></div></header><ol>${items
-    .map((i) => `<li><span>${esc(i.what)}${i.merchant ? ` · <span style="color:var(--ink-3)">${esc(i.merchant)}</span>` : ''}${i.when ? ` · ${esc(i.when)}` : ''}</span><em class="${i.status}">${i.status.replace('_', ' ')}</em></li>`)
-    .join('')}</ol>`;
-  add(card);
+  const day = (w) => (/^\d{4}-\d{2}-\d{2}/.test(w || '') ? w.slice(0, 10) : '');
+  const sorted = items.map((it, i) => ({ ...it, i, d: day(it.when) })).sort((x, y) => (x.d && y.d ? x.d.localeCompare(y.d) || (x.when || '').localeCompare(y.when || '') : x.d ? -1 : y.d ? 1 : x.i - y.i));
+  const first = sorted.find((x) => x.d)?.d;
+  const groups = [];
+  for (const it of sorted) {
+    const key = it.d || 'later';
+    if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, items: [] });
+    groups[groups.length - 1].items.push(it);
+  }
+  const label = (d) => {
+    if (d === 'later') return 'To schedule';
+    const dt = new Date(d + 'T12:00:00');
+    const n = first ? Math.round((dt - new Date(first + 'T12:00:00')) / 864e5) + 1 : 0;
+    return `${dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}${n > 0 && groups.length > 1 ? ` · Day ${n}` : ''}`;
+  };
+  const planned = items.filter((i) => i.status !== 'cancelled' && i.total > 0).reduce((t, i) => t + i.total, 0);
+  const budget = state.envTotal || 0;
+  const multiDay = groups.filter((g) => g.key !== 'later').length > 1;
+  card.innerHTML = `<header><span class="avatar" style="background:var(--accent)">✦</span><div><b>${multiDay ? 'Your trip, day by day' : 'Your plan'}</b><small>${items.length} item${items.length > 1 ? 's' : ''} · updated live</small></div></header>
+    <div class="timeline">${groups.map((g) => `<section class="tl-day"><h3>${label(g.key)}</h3>${g.items.map((it) => {
+      const [st, cls] = PLAN_STATUS[it.status] || [it.status, 'off'];
+      const time = /\d{2}:\d{2}/.test(it.when || '') ? it.when.match(/\d{2}:\d{2}/)[0] : !it.d && it.when ? it.when : '';
+      return `<div class="tl-item ${it.status === 'cancelled' ? 'off' : ''}"><span class="tl-ic">${KIND[it.kind] || (/(train|flight|bus|→)/i.test(it.what) ? '🚆' : /(night|hostel|hotel|room|stay)/i.test(it.what) ? '🛏️' : '•')}</span>
+        <div class="tl-main"><b>${esc(it.what)}${it.nights ? ` · ${it.nights} night${it.nights > 1 ? 's' : ''}` : ''}</b><small>${[it.merchant, time].filter(Boolean).map(esc).join(' · ')}</small></div>
+        <div class="tl-side">${it.total ? `<span class="tl-amt">${fmt(it.total)}</span>` : ''}<span class="chip ${cls}">${st}</span></div></div>`;
+    }).join('')}</section>`).join('')}</div>
+    ${planned ? `<div class="tl-total"><span>Planned ${fmt(planned)}${budget ? ` of ${fmt(budget)}` : ''}</span>${budget ? `<span class="${planned > budget ? 'over' : ''}">${planned > budget ? 'Over by ' + fmt(planned - budget) : fmt(budget - planned) + ' left for food & extras'}</span>` : ''}</div>
+    <div class="tl-bar"><i style="width:${budget ? Math.min(100, (100 * planned) / budget) : 0}%"></i></div>` : ''}`;
+  if (!card.isConnected) add(card);
 }
 // Split bill: one real PayPal invoice per friend — emailed by PayPal, plus a pay link and a QR code.
 const SHARE_STATUS = { PAID: ['Paid', 'paid'], PARTIALLY_PAID: ['Part paid', 'part'], CANCELLED: ['Cancelled', 'off'], REFUNDED: ['Refunded', 'off'] };
@@ -664,6 +697,7 @@ function stopWatchingShares() {
 }
 function envelope(e) {
   state.currency = e.currency;
+  state.envTotal = e.total;
   $('#envSpent').textContent = fmt(e.spent);
   $('#envHeld').textContent = fmt(e.held);
   $('#envLeft').textContent = fmt(e.remaining);
