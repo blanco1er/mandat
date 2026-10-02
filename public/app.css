@@ -1340,3 +1340,8 @@ body.on-welcome .top-fade { display: none; }
 .tp-info { display: flex; flex-direction: column; gap: 1px; margin-top: 8px; }
 .tp-info b { font-size: 15px; }
 .tp-info small { font-size: 12.5px; color: var(--ink-3); }
+
+/* Keyboard open: the message bar sits right on top of it and follows it, never behind it */
+.composer { transform: translate(-50%, calc(-1 * var(--kb, 0px))); }
+body.kb-open .composer { bottom: 8px; transition: none; }
+body.kb-open .bottom-fade { display: none; }

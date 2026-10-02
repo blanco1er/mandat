@@ -595,4 +595,8 @@ export default {
   "I can hear you…": "Je vous entends…",
   "One moment…": "Un instant…",
   "Sorry, I did not catch that. Say it again?": "Pardon, je n’ai pas compris. Vous pouvez répéter ?",
+  "Checking how to get to {place}": "Je regarde comment aller à {place}",
+  "Comparing the best {places} in {city}": "Je compare les meilleurs {places} à {city}",
+  "museums": "musées",
+  "attractions": "sites à voir",
 };

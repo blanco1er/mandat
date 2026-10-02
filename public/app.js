@@ -906,6 +906,8 @@ function handle({ type, data }) {
 const TOOL_LABEL = {
   show_place_preview: (a) => t('Looking up {name}', { name: a.name }),
   check_schedule: () => t('Checking your schedule'),
+  estimate_trip: (a) => t('Checking how to get to {place}', { place: a.to }),
+  find_top_places: (a) => t('Comparing the best {places} in {city}', { places: many(a.category), city: a.city }),
   find_real_places: (a) => t('Looking for real {places} nearby', { places: many(a.category) }),
   find_network_merchants: (a) => t('Checking {places} I can book and pay', { places: many(a.category) }),
   cancel_hold: () => t('Releasing a hold'),
@@ -2253,6 +2255,19 @@ function vmLiveDrop() { vm.liveLi?.remove(); vm.liveLi = null; }
 // iOS lets a page talk only after a tap: an empty utterance during the tap unlocks speech for the conversation.
 function unlockSpeech() {
   try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch {}
+}
+// The keyboard: iPhone keeps fixed bars at the bottom of the page, behind or far above the keyboard.
+// The visible area tells where the keyboard starts; the message bar is moved to sit just on top of it.
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const fitKeyboard = () => {
+    const kb = Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop));
+    document.documentElement.style.setProperty('--kb', (kb > 80 ? kb : 0) + 'px');
+    document.body.classList.toggle('kb-open', kb > 80);
+  };
+  vv.addEventListener('resize', fitKeyboard);
+  vv.addEventListener('scroll', fitKeyboard);
+  fitKeyboard();
 }
 // A newer version is live (an app on the home screen is resumed, never reloaded, by iPhone): reload when the
 // app comes back to the screen, never in the middle of a voice conversation.
