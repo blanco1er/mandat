@@ -136,6 +136,7 @@ Open `http://localhost:8790`.
 | `DEEPSEEK_FAST_MODEL`, `DEEPSEEK_SMART_MODEL` | no | Override the default and fallback models. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | no | Web Push keys. If absent, a key pair is generated once and saved to a private (mode 600) file. |
 | `MANDAT_DATA` | no | Data directory, defaults to `./data` (gitignored). |
+| `MANDAT_TURNS_PER_USER_DAY`, `MANDAT_MISSIONS_PER_USER_DAY`, `MANDAT_TURNS_PER_DAY`, `MANDAT_WRITES_PER_MINUTE` | no | Public-demo guards (defaults 80, 15, 3000, 40): daily AI allowance per person and for the whole app, plus a per-IP burst limit on writes. They keep the AI bill bounded while judges test the hosted demo. |
 | `MANDAT_NETWORK_SECRET` | no | Signing key of the demo merchant network. Random at each start if absent. |
 
 Local alternative to environment variables: `PAYPAL_KEY_FILE` and `DEEPSEEK_KEY_FILE` can point to JSON files (`{"client_id","client_secret"}` and `{"api_key"}`). The server refuses to read them unless they are `chmod 600`.

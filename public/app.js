@@ -390,7 +390,7 @@ $('#photoBtn').addEventListener('click', () => pickPhoto((url) => {
 function send(text, image) {
   stopSpeaking();
   state.last = { text, image };
-  return post(`/api/missions/${state.mission}/messages`, { text, image });
+  return post(`/api/missions/${state.mission}/messages`, { text, image }).catch((e) => add(el('li', 'step error', e.message)));
 }
 
 function handle({ type, data }) {

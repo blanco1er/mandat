@@ -18,7 +18,36 @@ const PORT = Number(process.env.PORT || 8790);
 const BASE = () => process.env.PUBLIC_URL || `http://localhost:${PORT}`;
 const live = new Map(); // missionId -> { s, clients:Set, busy:Promise, log:[] }
 
-app.use(express.json({ limit: '8mb' })); // photos arrive as data URLs
+app.set('trust proxy', 1); // behind Render / a tunnel: the client IP is in X-Forwarded-For
+app.use(express.json({ limit: '3mb' })); // photos arrive as data URLs, resized to 1280 px by the app
+
+// ---------- protections for a public demo (keeps the AI bill bounded until judging ends) ----------
+// Short burst limit per IP on every write.
+const bursts = new Map();
+app.use('/api', (req, res, next) => {
+  if (req.method === 'GET') return next();
+  const ip = req.ip || 'unknown';
+  const now = Date.now();
+  const b = bursts.get(ip)?.filter((t) => now - t < 60000) || [];
+  if (b.length >= Number(process.env.MANDAT_WRITES_PER_MINUTE || 40)) return res.status(429).json({ error: 'Too many requests — wait a minute and try again.' });
+  b.push(now);
+  bursts.set(ip, b);
+  if (bursts.size > 5000) bursts.clear();
+  next();
+});
+// Daily AI allowance: per person and for the whole app (each agent turn or ledger question counts once).
+const LIMITS = { turns: Number(process.env.MANDAT_TURNS_PER_USER_DAY || 80), missions: Number(process.env.MANDAT_MISSIONS_PER_USER_DAY || 15), global: Number(process.env.MANDAT_TURNS_PER_DAY || 3000) };
+let usage = { day: '', global: 0, users: new Map() };
+function allowance(u, kind = 'turns') {
+  const day = new Date().toISOString().slice(0, 10);
+  if (usage.day !== day) usage = { day, global: 0, users: new Map() };
+  const mine = usage.users.get(u.id) || { turns: 0, missions: 0 };
+  if (usage.global >= LIMITS.global) throw Object.assign(new Error('Mandat has reached its daily demo limit. Please come back tomorrow.'), { status: 429 });
+  if (mine[kind] >= LIMITS[kind]) throw Object.assign(new Error(kind === 'missions' ? `That's ${LIMITS.missions} new missions today — the demo limit. Continue an existing one, or come back tomorrow.` : 'You reached today\'s demo limit for the AI. It resets at midnight (UTC).'), { status: 429 });
+  mine[kind]++;
+  if (kind === 'turns') usage.global++;
+  usage.users.set(u.id, mine);
+}
 app.use(express.static(path.resolve('public'), { extensions: ['html'] }));
 
 // ---------- account (cookie) ----------
@@ -262,8 +291,9 @@ app.get('/api/me/activity', api(async (req, res) => {
   };
 }));
 // "Refunds in October", "what Sam still owes"… → an AG Grid filter model, in one small call.
-app.post('/api/me/activity/ask', api(async (req) => {
+app.post('/api/me/activity/ask', api(async (req, res) => {
   const q = String(req.body?.q || '').trim().slice(0, 200);
+  allowance(me(req, res));
   if (!q) throw new Error('Ask something');
   const today = new Date().toISOString().slice(0, 10);
   const { message } = await chat({
@@ -284,6 +314,8 @@ app.post('/api/missions', api(async (req, res) => {
   if (u.frozen) throw new Error('Mandat is stopped. Resume it in Settings.');
   const { intent = '', budget, emoji = '✦', location = null, image = null } = req.body || {};
   if (!(budget > 0 && budget <= 5000)) throw new Error('Budget must be between 1 and 5000.');
+  allowance(u, 'missions');
+  allowance(u, 'turns');
   const used = monthCommitted(u, u.missions.map(getMission));
   if (used + budget > u.rules.monthlyCap) throw new Error(`This would exceed your monthly cap (${u.rules.monthlyCap} €, ${used} € already planned).`);
   const s = createSession({ budget, approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });
@@ -335,6 +367,7 @@ app.post('/api/missions/:id/messages', api(async (req, res) => {
   const text = String(req.body?.text || '').trim().slice(0, 1200);
   const image = typeof req.body?.image === 'string' && req.body.image.startsWith('data:image/') ? req.body.image : null;
   if (!text && !image) throw new Error('Empty message');
+  allowance(u);
   emitter(b)('user', { text, image: !!image });
   run(b, (emit) => userTurn(b.s, text, emit, { image }));
   return { queued: true };
@@ -416,7 +449,9 @@ app.post('/api/missions/:id/stop', api(async (req, res) => {
 }));
 
 app.post('/api/missions/:id/approvals/:aid', api(async (req, res) => {
-  const b = box(req.params.id, me(req, res));
+  const u = me(req, res);
+  const b = box(req.params.id, u);
+  allowance(u);
   run(b, (emit) => resolveApproval(b.s, req.params.aid, !!req.body?.approved, emit));
   return { queued: true };
 }));
