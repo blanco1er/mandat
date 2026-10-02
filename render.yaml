@@ -1,7 +1,7 @@
 # Render Blueprint for the Mandat hackathon demo (free web service).
 # Secrets marked "sync: false" are asked for once in the Render dashboard and are never stored in this repo.
 # The public URL comes from Render (RENDER_EXTERNAL_URL); Web Push keys are generated at start.
-# Note: the free plan's disk is ephemeral; data/ (users, missions, OSM cache) resets on every redeploy.
+# The free plan's disk is ephemeral: data/ is mirrored to Cloudflare R2 (lib/store.mjs) and restored at start.
 services:
   - type: web
     name: mandat
@@ -9,7 +9,7 @@ services:
     plan: free
     region: frankfurt
     buildCommand: npm ci
-    startCommand: node server.mjs
+    startCommand: node start.mjs
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
@@ -22,6 +22,13 @@ services:
       - key: PAYPAL_CLIENT_SECRET
         sync: false
       - key: GOOGLE_PLACES_KEY
+        sync: false
+      # Durable data (accounts, missions, photos, push keys) in a Cloudflare R2 bucket named mandat-data.
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
         sync: false
       - key: VAPID_SUBJECT
         value: mailto:hello@mandat.app

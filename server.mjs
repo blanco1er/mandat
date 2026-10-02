@@ -11,6 +11,7 @@ import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
 import { ics, planEvents, validTz, localToUtc } from './lib/calendar.mjs';
 import { KINDS } from './lib/memory.mjs';
+import { persist } from './lib/store.mjs';
 import { emojiFor, isEmoji } from './lib/emoji.mjs';
 import { budgetFromText } from './lib/budget.mjs';
 import * as Push from './lib/push.mjs';
@@ -488,6 +489,7 @@ function saveImages(u, list) {
     const name = crypto.randomBytes(9).toString('hex') + '.' + (m[1] === 'jpeg' ? 'jpg' : m[1]);
     fs.mkdirSync(path.join(MEDIA, u.id), { recursive: true });
     fs.writeFileSync(path.join(MEDIA, u.id, name), buf);
+    persist(path.join(MEDIA, u.id, name));
     out.push({ url: `/api/media/${u.id}/${name}`, data: d });
   }
   return out;
