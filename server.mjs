@@ -17,7 +17,7 @@ import { budgetFromText } from './lib/budget.mjs';
 import * as Push from './lib/push.mjs';
 import { tr, trn, langOf, money } from './lib/i18n-server.mjs';
 import { merchant, checkInbox } from './lib/merchants.mjs';
-import { newUser, getUser, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
+import { newUser, getUser, userWithSetup, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
 const app = express();
 const PORT = Number(process.env.PORT || 8790);
@@ -304,8 +304,11 @@ app.post('/api/me/mandate', api(async (req, res) => {
 
 app.get('/mandate/return', async (req, res) => {
   try {
-    const u = me(req, res);
-    const tokenId = String(req.query.approval_token_id || u.pendingSetup || '');
+    const here = me(req, res);
+    const tokenId = String(req.query.approval_token_id || here.pendingSetup || '');
+    // Usually the same browser; from the installed app, PayPal ran in a Safari window with other cookies.
+    const u = here.pendingSetup === tokenId ? here : userWithSetup(tokenId) || here;
+    const elsewhere = u.id !== here.id;
     const m = await PayPal.activateMandate(tokenId);
     const { payerName, payerId, ...mandate } = m;
     u.paypal.mandate = { ...mandate, signedAt: new Date().toISOString() };
@@ -317,7 +320,14 @@ app.get('/mandate/return', async (req, res) => {
     if (!u.profile.email && m.payer) u.profile.email = m.payer;
     delete u.pendingSetup;
     saveUser(u);
-    res.redirect('/?mandate=active');
+    if (!elsewhere) return res.redirect('/?mandate=active');
+    // Signed in a window over the app: say it is done; the app notices on its own.
+    const fr = /^fr/i.test(req.get('accept-language') || '');
+    res.type('html').send(`<!doctype html><html lang="${fr ? 'fr' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mandat</title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f1ec;color:#111216;font:17px/1.4 -apple-system,system-ui,sans-serif;text-align:center}@media(prefers-color-scheme:dark){body{background:#0b0c10;color:#f5f5f7}}main{padding:32px}b{display:block;font-size:24px;margin:14px 0 6px}p{margin:0;opacity:.7}svg{width:56px;height:56px}</style></head>
+<body><main><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#19a463"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<b>${fr ? 'Mandat est signé' : 'Mandate signed'}</b><p>${fr ? 'Vous pouvez fermer cette fenêtre et revenir à l’appli.' : 'You can close this window and go back to the app.'}</p></main>
+<script>setTimeout(function(){try{window.close()}catch(e){}},1200)</script></body></html>`);
   } catch (e) {
     res.status(400).send('Mandate activation failed: ' + e.message);
   }

@@ -115,10 +115,34 @@ segmented('#mAutonomy', (v) => {
   $('#mAutonomyHelp').textContent = t(state.me.autonomyLevels[v].help);
 });
 $('#signMandate').addEventListener('click', async () => {
+  // Installed on the Home Screen, PayPal opens in a Safari window over the app (its password and passkey
+  // suggestions work there); the app notices the signature by itself. In a browser, the page simply goes to PayPal.
+  const win = installed ? window.open('', '_blank') : null;
   await post('/api/me', { rules: { autonomy: mAutonomy, monthlyCap: Number($('#mCap').value) } });
   const setup = await post('/api/me/mandate', {});
-  location.href = setup.approveUrl;
+  if (!win) { location.href = setup.approveUrl; return; }
+  win.location.href = setup.approveUrl;
+  $('#signMandate').disabled = true;
+  $('#demoNote').textContent = t('Finish on PayPal. Mandat notices the signature by itself.');
+  watchMandate();
 });
+let mandateTimer;
+function watchMandate() {
+  clearInterval(mandateTimer);
+  const check = async () => {
+    try {
+      const r = await get('/api/me');
+      if (!r.user.paypal.mandate) return;
+      clearInterval(mandateTimer);
+      document.removeEventListener('visibilitychange', onBack);
+      $('#signMandate').disabled = false;
+      boot(); // signed: first run, or straight to the missions
+    } catch {}
+  };
+  const onBack = () => { if (document.visibilityState === 'visible') check(); };
+  document.addEventListener('visibilitychange', onBack);
+  mandateTimer = setInterval(check, 2500);
+}
 
 // ---------- first run: where, what to avoid, what you like, notifications ----------
 // One catalogue for the first run and for Settings: people tap, they do not type.
