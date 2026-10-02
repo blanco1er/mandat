@@ -599,4 +599,7 @@ export default {
   "Comparing the best {places} in {city}": "Je compare les meilleurs {places} à {city}",
   "museums": "musées",
   "attractions": "sites à voir",
+  "Monthly limit: {cap}": "Plafond mensuel : {cap}",
+  "{used} already planned this month · this plan needs {need}": "{used} déjà prévus ce mois-ci · ce projet demande {need}",
+  "Change the limit": "Modifier le plafond",
 };

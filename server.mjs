@@ -558,9 +558,9 @@ app.post('/api/missions', api(async (req, res) => {
   const source = req.body?.budgetSource === 'pill' && budget > 0 ? 'pill' : said ? 'words' : budget > 0 ? 'suggested' : 'limit';
   const total = source === 'pill' || source === 'suggested' ? Math.round(budget) : source === 'words' ? said.amount : Math.min(u.rules.dailyCap || 300, Math.max(0, u.rules.monthlyCap - used));
   const L = reqLang(req);
-  if (source === 'limit' && total < 1) throw new Error(tr(L, 'Your monthly limit ({cap}) is already planned. Raise it in Settings, or say a budget.', { cap: money(L, u.rules.monthlyCap) }));
-  if (!(total > 0 && total <= 5000)) throw new Error('A mission budget goes from 1 to 5,000 €.');
-  if (used + total > u.rules.monthlyCap) throw new Error(tr(L, 'This would exceed your monthly limit ({cap}, {used} already planned).', { cap: money(L, u.rules.monthlyCap), used: money(L, used) }));
+  if (source === 'limit' && total < 1) throw Object.assign(new Error(tr(L, 'Your monthly limit ({cap}) is already planned. Raise it in Settings, or say a budget.', { cap: money(L, u.rules.monthlyCap) })), { status: 400, code: 'monthly_limit' });
+  if (!(total > 0 && total <= 20000)) throw new Error('A mission budget goes from 1 to 20,000 €.');
+  if (used + total > u.rules.monthlyCap) throw Object.assign(new Error(tr(L, 'This would exceed your monthly limit ({cap}, {used} already planned).', { cap: money(L, u.rules.monthlyCap), used: money(L, used) })), { status: 400, code: 'monthly_limit' });
   allowance(u, 'missions');
   allowance(u, 'turns');
   const s = createSession({ budget: total, approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.get('X-Lang') || req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });

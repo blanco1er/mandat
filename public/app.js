@@ -442,6 +442,7 @@ $('#compose').addEventListener('submit', async (e) => {
     }
     $('#cRule').textContent = err.message;
     $('#cRule').classList.add('error');
+    if (err.code === 'monthly_limit') { const b = el('button', 'link limit-link', t('Change the limit')); b.type = 'button'; b.addEventListener('click', openLimits); $('#cRule').append(' ', b); }
   } finally {
     $('#compose').classList.remove('sending');
     onCompose();
@@ -875,6 +876,7 @@ function handle({ type, data }) {
     case 'places': return placesCard(data);
     case 'preview': return previewCard(data);
     case 'option': return optionCard(data);
+    case 'limit': return limitCard(data);
     case 'top_places': return topCard(data);
     case 'notify': return addStep(t('Sent to your phone · {text}', { text: data.text }), 'step mem');
     case 'choices': return choicesRow(data);
@@ -1128,6 +1130,18 @@ function uberLink(o) {
   if (o.from) q.set('pickup[formatted_address]', o.from); else q.set('pickup', 'my_location');
   q.set('dropoff[formatted_address]', o.to);
   return 'https://m.uber.com/ul/?' + q.toString();
+}
+// A limit the user set stops a plan: say it, and offer the way to change it (Settings opens only on a tap).
+function limitCard(d) {
+  const li = el('li', 'card limit');
+  li.innerHTML = `<div class="lm-main"><b>${esc(t('Monthly limit: {cap}', { cap: fmtC(d.cap, d.currency) }))}</b><small>${esc(t('{used} already planned this month · this plan needs {need}', { used: fmtC(d.used, d.currency), need: fmtC(d.need, d.currency) }))}</small></div><button type="button" class="pill-btn">${t('Change the limit')}</button>`;
+  li.querySelector('button').addEventListener('click', openLimits);
+  add(li);
+}
+function openLimits() {
+  TABS.settings();
+  show('settings');
+  requestAnimationFrame(() => { const i = $('#sMonthly'); i?.scrollIntoView({ block: 'center' }); i?.closest('.row')?.classList.add('flash'); setTimeout(() => i?.closest('.row')?.classList.remove('flash'), 1600); });
 }
 // Ready answers under a question: one tap answers; you can always type or say something else.
 function choicesRow({ choices }) {
@@ -2493,13 +2507,29 @@ async function sttText(chunks) {
 }
 // Dictating a new mission on the home screen: the same reliable recording as the conversation (iPhone's own
 // recognition hears nothing a second time once the app has played a sound). It stops by itself when you pause.
+// The smoke of the voice conversation, also behind the first words you say on the home screen.
+let homeSmoke = null;
+function homeSmokeOn(read) {
+  homeSmoke ||= createSmoke($('#homeSmoke'), () => homeSmoke.read());
+  if (!homeSmoke) return;
+  homeSmoke.read = read;
+  $('#homeSmoke').classList.add('on');
+  homeSmoke.start();
+}
+function homeSmokeOff() {
+  $('#homeSmoke').classList.remove('on');
+  setTimeout(() => { if (!$('#homeSmoke').classList.contains('on')) homeSmoke?.stop(); }, 600);
+}
 function dictate(onText, button, onLive) {
   if (!(state.sttOn && navigator.mediaDevices?.getUserMedia)) return listen(onText, button, onLive);
   stopSpeaking();
   micPrepare();
-  const d = { chunks: [], pre: [], talking: false, start: 0, last: 0, floor: 0.008, began: Date.now(), done: false };
+  const d = { chunks: [], pre: [], talking: false, start: 0, last: 0, floor: 0.008, began: Date.now(), done: false, lvl: 0, phase: 'listening' };
+  const dark = () => matchMedia('(prefers-color-scheme: dark)').matches;
+  if (button?.id === 'cGo') homeSmokeOn(() => ({ lvl: d.lvl, phase: d.phase, dark: dark() }));
   let stream = null, src = null, node = null;
-  const stop = () => {
+  const stop = (keepSmoke) => {
+    if (!keepSmoke) homeSmokeOff();
     d.done = true;
     try { node?.disconnect(); src?.disconnect(); } catch {}
     stream?.getTracks().forEach((x) => x.stop());
@@ -2509,14 +2539,16 @@ function dictate(onText, button, onLive) {
   };
   const finish = async () => {
     const chunks = d.chunks, voiced = d.last - d.start;
-    stop();
-    if (voiced < 300) return;
+    d.phase = 'thinking';
+    d.lvl = 0.15;
+    stop(true);
+    if (voiced < 300) return homeSmokeOff();
     button?.classList.add('thinking');
     try {
       const text = await sttText(chunks);
       if (text === null) return listen(onText, button, onLive); // the service is off: the phone's recognition
       if (text) onText(text);
-    } catch {} finally { button?.classList.remove('thinking'); }
+    } catch {} finally { button?.classList.remove('thinking'); homeSmokeOff(); }
   };
   state.dictStop = () => (d.talking ? finish() : stop()); // tap again: send now, or cancel
   state.listening = true;
@@ -2533,6 +2565,7 @@ function dictate(onText, button, onLive) {
       let sum = 0;
       for (let i = 0; i < data.length; i++) sum += data[i] * data[i];
       const rms = Math.sqrt(sum / data.length), now = Date.now();
+      d.lvl = d.lvl * 0.6 + Math.min(1, rms * 14) * 0.4; // the smoke breathes with your voice
       if (rms > Math.max(0.012, d.floor * 3)) { if (!d.talking) { d.talking = true; d.start = now; d.chunks = d.pre.slice(); } d.last = now; }
       else if (!d.talking) d.floor = d.floor * 0.95 + rms * 0.05;
       const copy = new Float32Array(data);

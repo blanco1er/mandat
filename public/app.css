@@ -1350,3 +1350,18 @@ body.kb-open .bottom-fade { display: none; }
 html.on-live, html.on-live body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 html.on-live #live { position: fixed; inset: 0; max-width: none; margin: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
   padding: calc(env(safe-area-inset-top) + var(--top-h, 60px) + 28px) max(20px, calc((100% - 580px) / 2)) calc(env(safe-area-inset-bottom) + 24px); }
+
+/* A limit card: what blocks, and the way to change it */
+.card.limit { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.lm-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.lm-main b { font-size: 15px; }
+.lm-main small { font-size: 12.5px; color: var(--ink-3); }
+.card.limit .pill-btn { height: 32px; padding: 0 14px; font-size: 13px; white-space: nowrap; }
+.limit-link { font-size: inherit; font-weight: 600; color: var(--accent); }
+.row.flash { animation: rowFlash 1.6s ease; }
+@keyframes rowFlash { 0%, 100% { background: transparent; } 20%, 60% { background: rgba(10, 132, 255, 0.12); } }
+
+/* The voice smoke behind your first words on the home screen */
+.home-smoke { position: fixed; left: 0; right: 0; bottom: 0; width: 100%; height: calc(300px + env(safe-area-inset-bottom)); z-index: 4; pointer-events: none; opacity: 0; transition: opacity 0.6s ease;
+  -webkit-mask-image: linear-gradient(to top, #000 45%, transparent 100%); mask-image: linear-gradient(to top, #000 45%, transparent 100%); }
+.home-smoke.on { opacity: 1; }
