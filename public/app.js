@@ -119,7 +119,15 @@ $('#signMandate').addEventListener('click', async () => {
 });
 
 // ---------- first run: where, what to avoid, what you like, notifications ----------
-const OB_DIET = ['Vegetarian', 'Vegan', 'Halal', 'Kosher', 'Gluten-free', 'No pork', 'No alcohol', 'Nut allergy', 'Lactose-free', 'Seafood allergy'];
+// One catalogue for the first run and for Settings: people tap, they do not type.
+const DIET = ['Vegetarian', 'Vegan', 'Pescatarian', 'Halal', 'Kosher', 'No pork', 'No alcohol', 'Gluten-free', 'Lactose-free', 'Nut allergy', 'Peanut allergy', 'Seafood allergy', 'Egg allergy', 'Soy allergy'];
+const TASTES = [
+  { title: 'Atmosphere', items: ['Quiet places', 'Lively places', 'Terraces', 'Rooftops', 'Cosy', 'Romantic', 'Family-friendly', 'Good music'] },
+  { title: 'Food', items: ['Local spots', 'Fine dining', 'Street food', 'French', 'Italian', 'Japanese', 'Lebanese', 'Indian', 'Mexican', 'Brunch', 'Early dinners', 'Late dinners'] },
+  { title: 'Travel', items: ['Trains over planes', 'Central hotels', 'Boutique hotels', 'Hostels', 'Window seat', 'Walking distance'] },
+  { title: 'Budget', items: ['Good value', 'Treat myself', 'Free cancellation'] },
+];
+const OB_DIET = DIET.slice(0, 10);
 const OB_LIKES = ['Quiet places', 'Terraces', 'Local spots', 'Fine dining', 'Good value', 'Italian', 'Japanese', 'Trains over planes', 'Central hotels', 'Early dinners'];
 let obStep = 0;
 function obChips(box, labels, saved) {
@@ -1370,9 +1378,7 @@ function renderSettings() {
   $('#pName').value = u.profile.name;
   $('#pEmail').value = u.profile.email;
   $('#pPhone').value = u.profile.phone;
-  $('#pHome').value = u.profile.home?.label || '';
-  $('#pDiet').value = u.profile.diet;
-  $('#pPrefs').value = u.profile.preferences;
+  renderPrefs(u.profile);
   $('#sVoice').checked = u.voice.on;
   $('#sInit').textContent = (u.profile.name || u.paypal.payerName || t('You')).split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
   renderPush();
@@ -1415,17 +1421,15 @@ $('#memAdd').addEventListener('submit', async (e) => {
     setTimeout(() => inp.setCustomValidity(''), 3000);
   }
 });
+// Your people: the agent reads this list, so "split it with Sam" reaches Sam's PayPal inbox without asking again.
 function renderPeople(people) {
   const g = $('#people');
   g.innerHTML = '';
-  if (!people.length) g.innerHTML = `<div class="person"><span style="color:var(--ink-3);font-size:15px">${t('Nobody yet')}</span></div>`;
+  if (!people.length) g.append(el('p', 'people-empty', t('Nobody yet. Add the friends you often share a bill with.')));
   people.forEach((p, i) => {
-    const row = el('div', 'person');
-    row.innerHTML = `<input value="${esc(p.name)}" placeholder="${esc(t('Name'))}" data-k="name"><input value="${esc(p.contact)}" placeholder="${esc(t('Email or phone'))}" data-k="contact"><button aria-label="${esc(t('Remove'))}">−</button>`;
-    row.querySelectorAll('input').forEach((inp) => inp.addEventListener('change', () => {
-      people[i][inp.dataset.k] = inp.value;
-      saveProfile({ people });
-    }));
+    const row = el('div', 'person-row');
+    const initials = p.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+    row.innerHTML = `<span class="p-av">${esc(initials)}</span><div class="grow"><b>${esc(p.name)}</b><small>${esc(p.email || t('No email yet'))}</small></div><button type="button" aria-label="${esc(t('Remove'))}">${svg('close')}</button>`;
     row.querySelector('button').addEventListener('click', () => {
       people.splice(i, 1);
       saveProfile({ people });
@@ -1435,10 +1439,143 @@ function renderPeople(people) {
   });
 }
 $('#addPerson').addEventListener('click', () => {
-  const people = state.me.profile.people;
-  people.push({ name: t('New person'), contact: '' });
+  $('#personAdd').hidden = false;
+  $('#addPerson').hidden = true;
+  $('#paName').focus();
+});
+$('#personAdd').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const name = $('#paName').value.trim();
+  const email = $('#paEmail').value.trim();
+  if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+  const people = state.me.profile.people.filter((p) => p.name.toLowerCase() !== name.toLowerCase());
+  people.push({ name, email });
+  state.me.profile.people = people;
   renderPeople(people);
   saveProfile({ people });
+  $('#personAdd').reset();
+  $('#personAdd').hidden = true;
+  $('#addPerson').hidden = false;
+});
+
+// ---------- Preferences: rows that unfold; tap chips, search, or use your location ----------
+const fold1 = (id, open) => { const d = $(id); const on = open ?? !d.classList.contains('open'); d.classList.toggle('open', on); d.querySelector('.disc-row').setAttribute('aria-expanded', String(on)); };
+$$('.disc-row').forEach((b) => b.addEventListener('click', () => fold1('#' + b.parentElement.id)));
+const splitList = (s) => String(s || '').split(/\s*[,;]\s*/).map((x) => x.trim()).filter(Boolean);
+const foldText = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const shortAddr = (label) => label.split(',').slice(0, 2).join(',').trim();
+// A chip picker: catalogue chips (translated) plus the person's own words; returns the chosen list.
+function chipPicker(box, groups, saved, onChange, filter = '') {
+  const chosen = new Set(splitList(saved));
+  const known = new Set(groups.flatMap((g) => g.items.map((x) => t(x))));
+  const own = [...chosen].filter((x) => !known.has(x));
+  const all = (own.length ? [{ title: 'Yours', items: own, raw: true }] : []).concat(groups);
+  const q = foldText(filter.trim());
+  box.innerHTML = '';
+  let shown = 0;
+  for (const g of all) {
+    const items = g.items.map((x) => (g.raw ? x : t(x))).filter((x) => !q || foldText(x).includes(q));
+    if (!items.length) continue;
+    if (groups.length > 1 || g.raw) box.append(el('p', 'chips-title', t(g.title)));
+    const wrap = el('div', 'chips');
+    for (const label of items) {
+      const b = el('button', 'ob-chip' + (chosen.has(label) ? ' on' : ''), label);
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(chosen.has(label)));
+      b.addEventListener('click', () => {
+        if (chosen.has(label)) chosen.delete(label); else chosen.add(label);
+        b.classList.toggle('on', chosen.has(label));
+        b.setAttribute('aria-pressed', String(chosen.has(label)));
+        onChange([...chosen]);
+      });
+      wrap.append(b);
+      shown++;
+    }
+    box.append(wrap);
+  }
+  if (q && !shown) {
+    const add = el('button', 'ob-chip add', t('Add “{x}”', { x: filter.trim() }));
+    add.type = 'button';
+    add.addEventListener('click', () => { chosen.add(filter.trim()); onChange([...chosen], true); });
+    box.append(add);
+  }
+}
+let prefTimer;
+const savePref = (key, list) => {
+  state.me.profile[key] = list.join(', ');
+  prefSummary(state.me.profile);
+  clearTimeout(prefTimer);
+  prefTimer = setTimeout(() => saveProfile({ [key]: state.me.profile[key] }), 500);
+};
+function prefSummary(p) {
+  $('#vHome').textContent = p.home?.label ? shortAddr(p.home.label) : t('Not set');
+  const d = splitList(p.diet);
+  $('#vDiet').textContent = d.length ? d.join(', ') : t('None');
+  const l = splitList(p.preferences);
+  $('#vLikes').textContent = l.length ? l.join(', ') : t('None yet');
+}
+function renderPrefs(p) {
+  prefSummary(p);
+  $('#pHome').value = '';
+  $('#pHomeList').innerHTML = '';
+  chipPicker($('#pDietChips'), [{ title: 'Diet', items: DIET }], p.diet, (list) => savePref('diet', list));
+  drawTastes();
+}
+function drawTastes() {
+  chipPicker($('#pLikesChips'), TASTES, state.me.profile.preferences, (list, added) => {
+    savePref('preferences', list);
+    if (added) { $('#pLikesFind').value = ''; drawTastes(); }
+  }, $('#pLikesFind').value);
+}
+$('#pLikesFind').addEventListener('input', drawTastes);
+$('#pDietMore').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !e.target.value.trim()) return;
+  e.preventDefault();
+  const list = splitList(state.me.profile.diet).concat(e.target.value.trim());
+  e.target.value = '';
+  savePref('diet', list);
+  chipPicker($('#pDietChips'), [{ title: 'Diet', items: DIET }], state.me.profile.diet, (l) => savePref('diet', l));
+});
+// Usual address: your current position (turned into an address), or a search with suggestions.
+async function setHome(home) {
+  state.me.profile.home = home;
+  prefSummary(state.me.profile);
+  $('#pHome').value = '';
+  $('#pHomeList').innerHTML = '';
+  await saveProfile({ home });
+}
+$('#pLocate').addEventListener('click', async () => {
+  const b = $('#pLocate span');
+  b.textContent = t('Locating…');
+  const l = await locate();
+  if (!l) { b.textContent = t('Location not allowed: search your address below'); return; }
+  let label = t('My location');
+  try { label = (await get(`/api/geo/reverse?lat=${l.lat}&lon=${l.lon}`)).label || label; } catch {}
+  await setHome({ label, lat: l.lat, lon: l.lon });
+  b.textContent = t('Use my current location');
+});
+let addrTimer;
+$('#pHome').addEventListener('input', (e) => {
+  clearTimeout(addrTimer);
+  const q = e.target.value.trim();
+  if (q.length < 3) { $('#pHomeList').innerHTML = ''; return; }
+  addrTimer = setTimeout(async () => {
+    let hits = [];
+    try { hits = await get('/api/geo/search?q=' + encodeURIComponent(q)); } catch {}
+    if ($('#pHome').value.trim() !== q) return;
+    const list = $('#pHomeList');
+    list.innerHTML = '';
+    for (const h of hits) {
+      const li = el('li');
+      li.innerHTML = `${svg('pin')}<span><b>${esc(h.title)}</b><small>${esc(h.sub)}</small></span>`;
+      li.addEventListener('click', () => setHome({ label: h.label, lat: h.lat, lon: h.lon }));
+      list.append(li);
+    }
+    if (!hits.length) list.append(el('li', 'none', t('No address found. Press Enter to keep what you typed.')));
+  }, 450);
+});
+$('#pHome').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.value.trim()) { e.preventDefault(); setHome({ label: e.target.value.trim() }); }
 });
 async function saveProfile(profile) {
   state.me = (await post('/api/me', { profile })).user;
@@ -1447,19 +1584,9 @@ async function saveProfile(profile) {
 async function saveRules(rules) {
   state.me = (await post('/api/me', { rules })).user;
 }
-for (const [id, key] of [['#pName', 'name'], ['#pEmail', 'email'], ['#pPhone', 'phone'], ['#pDiet', 'diet'], ['#pPrefs', 'preferences']]) {
+for (const [id, key] of [['#pName', 'name'], ['#pEmail', 'email'], ['#pPhone', 'phone']]) {
   $(id).addEventListener('change', () => saveProfile({ [key]: $(id).value }));
 }
-$('#pHome').addEventListener('change', async () => {
-  const q = $('#pHome').value.trim();
-  if (!q) return saveProfile({ home: null });
-  try {
-    const g = await get('/api/geocode?q=' + encodeURIComponent(q));
-    saveProfile({ home: { label: q, lat: g.lat, lon: g.lon } });
-  } catch {
-    saveProfile({ home: { label: q } });
-  }
-});
 segmented('#sAutonomy', (v) => {
   sAutonomy = v;
   $('#sAutonomyHelp').textContent = t(state.me.autonomyLevels[v].help);
@@ -1765,6 +1892,7 @@ const ICON = {
   lock: '<rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
   undo: '<path d="M9 7 5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-2"/>',
   bell: '<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  pin: '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/>',
   route: '<circle cx="6.5" cy="17.5" r="2"/><circle cx="17.5" cy="6.5" r="2"/><path d="M8.5 17.5h6a3 3 0 0 0 0-6h-5a3 3 0 0 1 0-6h6"/>',
   cal: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4M12 13v5M9.5 15.5h5"/>',
   qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/>',

@@ -1031,3 +1031,50 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
 .ob-bottom { margin-top: auto; padding-top: 24px; }
 .ob-next { width: 100%; height: 54px; border-radius: 27px; background: var(--ink); color: var(--bg); font-size: 17px; font-weight: 600; transition: transform 0.25s var(--spring); }
 .ob-next:active { transform: scale(0.98); }
+
+/* ---------- Preferences: rows that unfold ---------- */
+.group.prefs { padding-top: 0; padding-bottom: 0; }
+.disc { border-bottom: 0.5px solid var(--card-line); }
+.disc:last-child { border-bottom: 0; }
+.disc-row { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 50px; text-align: left; }
+.disc-ic { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--card-line); color: var(--accent); flex: none; }
+.disc-ic .i { width: 16px; height: 16px; }
+.disc-row b { font-size: 15px; font-weight: 500; flex: none; }
+.disc-val { flex: 1; min-width: 0; text-align: right; font-size: 14px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.disc-row .chev { width: 14px; height: 14px; flex: none; background: currentColor; color: var(--ink-3); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 6 6 6-6 6' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 6 6 6-6 6' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; transition: transform 0.25s var(--spring); }
+.disc.open .chev { transform: rotate(90deg); }
+.disc-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.32s var(--smooth); }
+.disc.open .disc-body { grid-template-rows: 1fr; }
+.disc-inner { overflow: hidden; }
+.disc.open .disc-inner { padding: 2px 0 14px; }
+.disc-act { width: 100%; display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 12px; border-radius: 12px; background: rgba(10, 132, 255, 0.1); color: var(--accent); font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.disc-act .i { width: 18px; height: 18px; }
+.addr { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; border-radius: 12px; background: var(--card-line); margin-bottom: 8px; }
+.addr .i { width: 17px; height: 17px; color: var(--ink-3); flex: none; }
+.addr input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-size: 15px; color: var(--ink); }
+.addr-list { list-style: none; margin: 0; padding: 0; }
+.addr-list li { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 0.5px solid var(--card-line); cursor: pointer; }
+.addr-list li:last-child { border-bottom: 0; }
+.addr-list li .i { width: 16px; height: 16px; color: var(--ink-3); flex: none; }
+.addr-list li span { display: flex; flex-direction: column; min-width: 0; }
+.addr-list b { font-size: 14.5px; font-weight: 500; }
+.addr-list small { font-size: 12.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.addr-list li.none { font-size: 13px; color: var(--ink-3); cursor: default; }
+.chips { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
+.chips-title { margin: 8px 0 6px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+#pDietChips .chips-title { display: none; }
+.disc .ob-chip { height: 32px; padding: 0 12px; font-size: 14px; border-radius: 16px; }
+.ob-chip.add { border-style: dashed; color: var(--accent); }
+.chip-add { width: 100%; height: 40px; border: 0; outline: 0; border-radius: 12px; background: var(--card-line); padding: 0 12px; font-size: 15px; color: var(--ink); }
+/* Your people */
+.people-empty { margin: 0; padding: 12px 0; font-size: 14px; color: var(--ink-3); }
+.person-row { display: flex; align-items: center; gap: 12px; min-height: 54px; border-bottom: 0.5px solid var(--card-line); }
+.p-av { width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; background: var(--card-line); font-size: 13px; font-weight: 700; color: var(--ink-2); flex: none; }
+.person-row .grow { display: flex; flex-direction: column; min-width: 0; }
+.person-row b { font-size: 15px; font-weight: 500; }
+.person-row small { font-size: 12.5px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-row button { color: var(--ink-3); width: 32px; height: 32px; display: grid; place-items: center; }
+.person-row button .i { width: 15px; height: 15px; }
+.person-add { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-bottom: 0.5px solid var(--card-line); }
+.person-add input { height: 40px; border: 0; outline: 0; border-radius: 12px; background: var(--card-line); padding: 0 12px; font-size: 15px; color: var(--ink); }
+.person-add button { height: 40px; border-radius: 20px; background: var(--ink); color: var(--bg); font-size: 15px; font-weight: 600; }

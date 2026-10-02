@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary, wrapCard, autoReminders } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
-import { geocode } from './lib/places.mjs';
+import { geocode, searchAddress, reverseAddress } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
 import { ics, planEvents, validTz, localToUtc } from './lib/calendar.mjs';
@@ -225,8 +225,18 @@ app.post('/api/me', api(async (req, res) => {
   if (profile) {
     const p = u.profile;
     for (const k of ['name', 'email', 'phone', 'diet', 'preferences']) if (typeof profile[k] === 'string') p[k] = profile[k].slice(0, 300);
-    if (profile.home === null || (profile.home && typeof profile.home.label === 'string')) p.home = profile.home;
-    if (Array.isArray(profile.people)) p.people = profile.people.slice(0, 20).map((x) => ({ name: String(x.name || '').slice(0, 60), contact: String(x.contact || '').slice(0, 120) })).filter((x) => x.name);
+    if (profile.home === null) p.home = null;
+    else if (profile.home && typeof profile.home.label === 'string') {
+      const h = profile.home;
+      p.home = { label: h.label.slice(0, 200), ...(Number.isFinite(h.lat) && Number.isFinite(h.lon) ? { lat: h.lat, lon: h.lon } : {}) };
+    }
+    // Your people: a name and the email their PayPal requests go to (older entries kept a free "contact").
+    if (Array.isArray(profile.people)) {
+      p.people = profile.people.slice(0, 30).map((x) => {
+        const c = String(x.email || x.contact || '').trim().slice(0, 120);
+        return { name: String(x.name || '').trim().slice(0, 60), email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c) ? c : '' };
+      }).filter((x) => x.name);
+    }
   }
   if (rules) {
     if (AUTONOMY[rules.autonomy]) u.rules.autonomy = rules.autonomy;
@@ -619,6 +629,17 @@ app.get('/api/missions/:id/events', (req, res) => {
   });
 });
 
+// Usual address: suggestions while typing, and "use my current location" turned into an address.
+app.get('/api/geo/search', api(async (req) => {
+  const q = String(req.query.q || '').trim().slice(0, 120);
+  if (q.length < 3) return [];
+  return await searchAddress(q, req.get('X-Lang') === 'fr' ? 'fr' : 'en');
+}));
+app.get('/api/geo/reverse', api(async (req) => {
+  const lat = Number(req.query.lat), lon = Number(req.query.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error('lat and lon');
+  return await reverseAddress(lat.toFixed(5), lon.toFixed(5), req.get('X-Lang') === 'fr' ? 'fr' : 'en');
+}));
 app.get('/api/geocode', api(async (req) => {
   const q = String(req.query.q || '').trim().slice(0, 160);
   if (q.length < 3) throw new Error('Type an address');
