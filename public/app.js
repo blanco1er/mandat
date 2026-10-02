@@ -878,6 +878,7 @@ function handle({ type, data }) {
     case 'option': return optionCard(data);
     case 'limit': return limitCard(data);
     case 'top_places': return topCard(data);
+    case 'products': return productsCard(data);
     case 'notify': return addStep(t('Sent to your phone · {text}', { text: data.text }), 'step mem');
     case 'choices': return choicesRow(data);
     case 'reminder': return reminderCard(data);
@@ -913,6 +914,8 @@ const TOOL_LABEL = {
   estimate_trip: (a) => t('Checking how to get to {place}', { place: a.to }),
   inspect_place: (a) => t('Looking at {name}: photos and reviews', { name: a.name }),
   calculate: () => t('Checking the numbers'),
+  find_products: (a) => t('Comparing products: {query}', { query: a.query }),
+  buy_product: () => t('Paying with PayPal'),
   find_top_places: (a) => t('Comparing the best {places} in {city}', { places: many(a.category), city: a.city }),
   find_real_places: (a) => t('Looking for real {places} nearby', { places: many(a.category) }),
   find_network_merchants: (a) => t('Checking {places} I can book and pay', { places: many(a.category) }),
@@ -1094,6 +1097,32 @@ function optionCard(o) {
   fold(li);
   state.cards['o:' + o.merchant_id] = li;
   if (old) old.replaceWith(li); else add(li);
+}
+// Real products (Channel3): one card, a row of tiles; tap one to see it, compare retailers and open the shop.
+function productsCard(d) {
+  const li = el('li', 'card top shop');
+  const list = d.products || [];
+  li.innerHTML = `<div class="tp-head"><b>${esc(t('Products · {query}', { query: d.query }))}</b><small>${esc(t('{n} retailers compared', { n: new Set(list.flatMap((p) => p.offers.map((o) => o.retailer))).size }))}</small></div>
+    <div class="tp-row">${list.map((p, i) => `<button type="button" class="tp-tile" data-i="${i}">${p.image ? `<img class="pr-img" src="${esc(p.image)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="tp-ph">🛍️</span>'}<b>${esc(p.title)}</b><small><strong>${esc(fmtC(p.price, p.currency))}</strong>${p.was && p.was > p.price ? ` <s>${esc(fmtC(p.was, p.currency))}</s>` : ''} · ${esc(p.retailer)}</small></button>`).join('')}</div>
+    <div class="tp-detail" hidden></div>`;
+  const detail = li.querySelector('.tp-detail');
+  li.querySelectorAll('.tp-tile').forEach((b) => b.addEventListener('click', () => {
+    const on = b.classList.contains('on');
+    li.querySelectorAll('.tp-tile').forEach((x) => x.classList.remove('on'));
+    if (on) { detail.hidden = true; return; }
+    b.classList.add('on');
+    const p = list[Number(b.dataset.i)];
+    detail.innerHTML = `${p.photo || p.image ? `<img class="zoomable pr-hero" src="${esc(p.photo || p.image)}" alt="${esc(p.title)}" referrerpolicy="no-referrer">` : ''}
+      <div class="tp-info"><b>${esc(p.title)}</b><small>${esc([p.brand, p.category].filter(Boolean).join(' · '))}</small>
+      ${p.features?.length ? `<ul class="op-hl">${p.features.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
+      <ul class="pr-offers">${p.offers.map((o) => `<li><span>${esc(o.retailer)}</span><b>${esc(fmtC(o.price, o.currency))}</b></li>`).join('')}</ul>
+      <div class="pv-actions"><button type="button" class="pill-btn pr-buy">${t('Choose this one')}</button><a href="${esc(p.url)}" target="_blank" rel="noopener sponsored">${esc(t('See it at {shop}', { shop: p.retailer }))}</a></div></div>`;
+    detail.hidden = false;
+    detail.querySelector('img')?.addEventListener('error', (e) => e.target.remove());
+    detail.querySelector('.pr-buy').addEventListener('click', () => { const text = t('I choose {title} ({price})', { title: p.title, price: fmtC(p.price, p.currency) }); if (vm.on) vmAnswer(text); else send(text); });
+  }));
+  li.querySelectorAll('.tp-tile img').forEach((im) => im.addEventListener('error', () => im.replaceWith(Object.assign(document.createElement('span'), { className: 'tp-ph', textContent: '🛍️' }))));
+  add(li);
 }
 // The best places of a city: one card, a row of tiles; tap one to see it right there.
 const PRICE_SIGN = ['', '€', '€€', '€€€', '€€€€'];

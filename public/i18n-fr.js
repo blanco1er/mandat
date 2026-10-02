@@ -613,4 +613,11 @@ export default {
   "on site": "sur place",
   "Nothing paid yet": "Rien de payé pour l’instant",
   "This amount is set aside in the budget.": "Ce montant est mis de côté dans le budget.",
+  "Products · {query}": "Produits · {query}",
+  "{n} retailers compared": "{n} marchands comparés",
+  "Choose this one": "Je choisis celui-ci",
+  "See it at {shop}": "Voir chez {shop}",
+  "I choose {title} ({price})": "Je choisis {title} ({price})",
+  "Comparing products: {query}": "Je compare les produits : {query}",
+  "Paying with PayPal": "Paiement avec PayPal",
 };
