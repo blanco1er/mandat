@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="google" content="notranslate">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mandat · phone preview</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; height: 100%; background: radial-gradient(120% 90% at 50% 0%, #23242b, #0c0d10); font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; color: #f2f2f7; }
+    body { display: grid; place-items: center; overflow: hidden; }
+    .stage { display: flex; flex-direction: column; align-items: center; gap: 14px; transform-origin: center; }
+    /* An iPhone-sized frame (390 × 844 points) with the real app inside. */
+    .device { position: relative; width: 390px; height: 844px; padding: 12px; border-radius: 58px; background: linear-gradient(145deg, #3a3b40, #1b1c20); box-shadow: 0 0 0 2px #4a4b52, 0 30px 80px rgba(0, 0, 0, 0.55); }
+    .screen { width: 390px; height: 844px; border-radius: 46px; overflow: hidden; background: #000; display: flex; flex-direction: column; }
+    /* Status bar, as on a real iPhone: the app starts below it. */
+    .status { height: 50px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 30px 0 40px; font: 600 16px/1 -apple-system, system-ui, sans-serif; color: #fff; background: #0b0c10; position: relative; }
+    .status .icons { display: flex; gap: 6px; align-items: center; }
+    .status svg { height: 12px; fill: #fff; }
+    .island { position: absolute; top: 11px; left: 50%; width: 122px; height: 34px; margin-left: -61px; border-radius: 20px; background: #000; }
+    .device iframe { width: 390px; flex: 1; border: 0; display: block; background: #0b0c10; }
+    .caption { font-size: 13px; color: #8e8e93; }
+    .caption a { color: #0a84ff; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="device"><div class="screen">
+      <div class="status" aria-hidden="true"><span>9:41</span><span class="island"></span><span class="icons"><svg viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2" width="3" height="10" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg><svg viewBox="0 0 16 12"><path d="M8 2.5c2.3 0 4.4.9 6 2.4l1.4-1.5A10.4 10.4 0 0 0 8 .5 10.4 10.4 0 0 0 .6 3.4L2 4.9a8.4 8.4 0 0 1 6-2.4Zm0 4c1.2 0 2.3.5 3.2 1.2l1.4-1.4A6.6 6.6 0 0 0 8 4.5c-1.8 0-3.4.7-4.6 1.8l1.4 1.4c.9-.7 2-1.2 3.2-1.2Zm0 4 2-2a2.8 2.8 0 0 0-4 0l2 2Z"/></svg><svg viewBox="0 0 27 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3" fill="none" stroke="#fff" opacity=".5"/><rect x="2" y="2" width="17" height="8" rx="1.8"/><rect x="24" y="4" width="2" height="4" rx="1" opacity=".5"/></svg></span></div>
+      <iframe src="/" title="Mandat on a phone"></iframe>
+    </div></div>
+    <p class="caption">Mandat at iPhone size · <a href="/" target="_blank">open full screen</a></p>
+  </div>
+  <script>
+    // Fit the device to the window height.
+    const fit = () => {
+      const k = Math.min(1, (innerHeight - 40) / 920, (innerWidth - 40) / 420);
+      document.getElementById('stage').style.transform = `scale(${k})`;
+    };
+    addEventListener('resize', fit);
+    fit();
+  </script>
+</body>
+</html>
