@@ -23,6 +23,9 @@ services:
         sync: false
       - key: GOOGLE_PLACES_KEY
         sync: false
+      # Real products to shop for (Channel3: 100M+ products, 25k+ retailers).
+      - key: CHANNEL3_API_KEY
+        sync: false
       # Durable data (accounts, missions, photos, push keys) in a Cloudflare R2 bucket named mandat-data.
       - key: R2_ACCOUNT_ID
         sync: false
