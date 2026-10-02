@@ -913,3 +913,87 @@ a.pv-none:hover { filter: brightness(1.06); }
 .budget-pill[aria-expanded="true"] .b-pen { transform: none; }
 .b-inline, .b-inline input { font-size: 15px; }
 .budget-pill.unset #cBudget { font-weight: 500; color: var(--ink-3); }
+
+/* ---------- Welcome v2: calm page, editorial type, the product shown working ---------- */
+body.on-welcome { padding-top: env(safe-area-inset-top); }
+body.on-welcome #topbar, body.on-welcome .backdrop { display: none; }
+#welcome { min-height: 100svh; display: flex; flex-direction: column; padding: 18px 22px calc(18px + env(safe-area-inset-bottom)); max-width: 460px; margin: 0 auto; }
+.w-top { display: flex; align-items: center; justify-content: space-between; height: 32px; }
+.w-mark { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 7px; }
+.w-mark::before { content: ""; width: 18px; height: 18px; border-radius: 6px; background: var(--ink); -webkit-mask: radial-gradient(circle at 50% 50%, transparent 4px, #000 4.5px); mask: radial-gradient(circle at 50% 50%, transparent 4px, #000 4.5px); }
+.w-badge { font-size: 11.5px; font-weight: 600; color: var(--ink-3); border: 1px solid var(--card-line); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.01em; }
+.w-title { margin: 34px 0 12px; font-size: 32px; line-height: 36px; font-weight: 700; letter-spacing: -0.028em; }
+.w-lede { margin: 0 0 26px; font-size: 16px; line-height: 23px; color: var(--ink-2); max-width: 34ch; }
+.story { margin: 0; padding: 14px; border-radius: 22px; background: var(--card); border: 1px solid var(--card-line); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 18px 50px rgba(20, 16, 8, 0.08); transition: opacity 0.4s var(--smooth); }
+.story.fading { opacity: 0; }
+.story-budget { display: flex; align-items: center; gap: 10px; padding: 0 2px 12px; border-bottom: 1px solid var(--card-line); }
+.sb-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--card-line); overflow: hidden; }
+.sb-bar i { display: block; height: 100%; width: 0; border-radius: 3px; background: var(--held); transition: width 0.9s var(--smooth); }
+.story-budget small { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.story-steps { list-style: none; margin: 0; padding: 12px 0 0; display: flex; flex-direction: column; gap: 10px; min-height: 262px; }
+.story-steps li { animation: storyIn 0.5s var(--spring) both; }
+@keyframes storyIn { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+.st-ask { align-self: flex-end; max-width: 82%; padding: 9px 13px; border-radius: 18px 18px 6px 18px; background: var(--accent); color: #fff; font-size: 14.5px; line-height: 19px; }
+.st-row { display: flex; gap: 11px; align-items: center; }
+.st-row div { display: flex; flex-direction: column; min-width: 0; }
+.st-row b { font-size: 14.5px; font-weight: 600; line-height: 19px; }
+.st-row small { font-size: 12.5px; color: var(--ink-3); line-height: 17px; }
+.st-ic { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--card-line); }
+.st-ic svg { width: 16px; height: 16px; fill: var(--ink-2); }
+.st-hold .st-ic { background: rgba(0, 112, 224, 0.12); }
+.st-hold .st-ic svg { fill: var(--pp-sky); }
+.st-deal .st-ic { background: rgba(242, 163, 58, 0.16); }
+.st-deal .st-ic svg { fill: #c47a12; }
+.st-done .st-ic { background: var(--ok); }
+.st-done .st-ic svg { fill: #fff; }
+.w-bottom { margin-top: auto; padding-top: 26px; }
+.pp-btn { width: 100%; height: 54px; border-radius: 27px; background: #ffc439; color: #111; font-size: 17px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; transition: transform 0.25s var(--spring), filter 0.2s; }
+.pp-btn:active { transform: scale(0.98); filter: brightness(0.96); }
+.pp-word { font-style: italic; font-weight: 800; font-size: 19px; letter-spacing: -0.01em; }
+.pp-word i { font-style: italic; }
+.pp-word i:first-child { color: #003087; }
+.pp-word i:last-child { color: #0070e0; }
+.w-fine { margin: 12px 4px 0; font-size: 12px; line-height: 17px; color: var(--ink-3); text-align: center; }
+@media (prefers-color-scheme: dark) {
+  .story { box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); }
+}
+@media (max-height: 700px) { .w-title { margin-top: 20px; font-size: 28px; line-height: 32px; } .story-steps { min-height: 230px; } }
+
+/* ---------- Identity v2: one calm surface, a real mark, drawn icons, no rainbow ---------- */
+.backdrop { display: none; }
+.logo { width: 100%; height: 100%; display: block; color: var(--ink); }
+.brand-mark { width: 22px; height: 22px; background: none; box-shadow: none; border-radius: 0; display: inline-block; }
+.w-mark::before { content: none; }
+.w-mark .logo { width: 20px; height: 20px; }
+.i { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.i.fill { fill: currentColor; stroke: none; }
+.icon-btn .i { width: 20px; height: 20px; }
+.icon-btn.plus .i { width: 22px; height: 22px; stroke-width: 2; }
+.icon-btn.stop .i { width: 18px; height: 18px; }
+#lbClose .i, .push-x .i { width: 18px; height: 18px; }
+.tray-item button .i, .c-thumbs button .i { width: 12px; height: 12px; stroke-width: 2.4; }
+.card.pay .lock .i { width: 16px; height: 16px; }
+.card.pay.hold .lock { color: #c47a12; }
+.pay-main b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pay-main small { font-size: 12px; color: var(--ink-3); }
+.wu-check .i { width: 18px; height: 18px; stroke: #fff; stroke-width: 2.4; }
+.rm-ic { color: #c47a12; }
+.rm-ic .i { width: 16px; height: 16px; }
+.plan-ic { background: var(--ink) !important; color: var(--bg); display: grid; place-items: center; }
+.plan-ic .i { width: 16px; height: 16px; }
+/* The voice button: a solid, quiet control (no rainbow sphere). */
+.orb-core { background: var(--ink); animation: none !important; filter: none; }
+.orb-ring { display: none; }
+.orb-wave i { background: var(--bg); box-shadow: none; }
+.orb.listening .orb-core { background: var(--accent); }
+.orb.listening .orb-wave i { background: #fff; }
+.orb.thinking .orb-core { animation: thinkPulse 1.4s ease-in-out infinite !important; }
+@keyframes thinkPulse { 50% { opacity: 0.6; } }
+.orb.speaking .orb-core { background: var(--accent); }
+.orb.speaking .orb-wave i { background: #fff; }
+.hero-orb { display: none; }
+/* Home header: the date, then the screen's name, as in Apple's own apps. */
+#home .eyebrow { text-transform: none; color: var(--ink-3); font-size: 14px; font-weight: 600; margin: 4px 0 -8px; }
+.card.pay { display: block; }
+.card.pay > header { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
+.card.pay > header .pay-main { flex: 1; min-width: 0; }

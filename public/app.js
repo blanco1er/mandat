@@ -1,4 +1,5 @@
 // Mandat — client. Welcome (PayPal login) → mandate → missions → a mission live; settings.
+import { t, lang, locale, applyI18n } from '/i18n.js';
 import { budgetFromText } from '/budget.mjs'; // same reader as the server: "700 €", "40 € each for 4", "budget 250"…
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -10,6 +11,8 @@ const many = (c) => PLURAL[c] || c + 's';
 // ---------- routing ----------
 const VIEWS = ['welcome', 'mandate', 'home', 'live', 'activity', 'settings'];
 function show(view) {
+  document.body.classList.toggle('on-welcome', view === 'welcome');
+  if (view === 'welcome') playStory(); else stopStory();
   for (const v of VIEWS) $('#' + v).hidden = v !== view;
   $('#tabbar').hidden = !['home', 'activity', 'settings'].includes(view);
   $('#composer').hidden = view !== 'live';
@@ -29,6 +32,47 @@ function show(view) {
   if (view === 'home') requestAnimationFrame(placePill);
   requestAnimationFrame(() => placeLens());
 }
+
+// Welcome story: a real mission plays out in a few seconds — ask, compare, negotiate, hold with PayPal, all set.
+applyI18n();
+let storyTimer = null;
+const STORY_ICON = {
+  found: '<path d="M10.5 4a6.5 6.5 0 0 1 5.2 10.4l4.4 4.4-1.4 1.4-4.4-4.4A6.5 6.5 0 1 1 10.5 4Zm0 2a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9Z"/>',
+  deal: '<path d="M11.6 3H20v8.4l-9.3 9.3a1.5 1.5 0 0 1-2.1 0l-6.3-6.3a1.5 1.5 0 0 1 0-2.1L11.6 3Zm4.9 3.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Z"/>',
+  hold: '<path d="M8.3 20.5H5.4L7.7 5h5.1c3.2 0 4.9 1.6 4.5 4.3-.5 3-2.6 4.4-5.6 4.4H9.4l-1.1 6.8Zm1.4-9.1h1.7c1.5 0 2.5-.6 2.7-2 .2-1.3-.6-1.9-2-1.9h-1.6l-.8 3.9Z"/>',
+  done: '<path d="m9.6 16.2-4-4L4.2 13.6l5.4 5.4L20 8.6l-1.4-1.4z"/>',
+};
+function playStory() {
+  stopStory();
+  const list = $('#storySteps');
+  const money = (v) => new Intl.NumberFormat(locale(), { style: 'currency', currency: 'EUR', maximumFractionDigits: v % 1 ? 2 : 0 }).format(v);
+  const budget = (held) => {
+    $('#sbHeld').style.width = (held / 160) * 100 + '%';
+    $('#sbText').textContent = t('story.budget', { held: money(held), total: money(160) });
+  };
+  const steps = [
+    () => list.append(el('li', 'st-ask', t('story.ask'))),
+    () => list.append(storyRow('found', t('story.found'), t('story.foundSub'))),
+    () => list.append(storyRow('deal', t('story.deal'), t('story.dealSub'))),
+    () => { list.append(storyRow('hold', t('story.hold'), t('story.holdSub'))); budget(28.8); },
+    () => list.append(storyRow('done', t('story.done'), t('story.doneSub'))),
+  ];
+  const reset = () => { list.innerHTML = ''; budget(0); $('#story').classList.remove('fading'); };
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) { reset(); steps.forEach((f) => f()); return; }
+  let i = 0;
+  reset();
+  const tick = () => {
+    if (i < steps.length) { steps[i++](); storyTimer = setTimeout(tick, i === 1 ? 900 : 1100); return; }
+    storyTimer = setTimeout(() => { $('#story').classList.add('fading'); storyTimer = setTimeout(() => { reset(); i = 0; tick(); }, 450); }, 3200);
+  };
+  storyTimer = setTimeout(tick, 500);
+}
+function storyRow(kind, title, sub) {
+  const li = el('li', 'st-row st-' + kind);
+  li.innerHTML = `<span class="st-ic"><svg viewBox="0 0 24 24">${STORY_ICON[kind]}</svg></span><div><b>${esc(title)}</b><small>${esc(sub)}</small></div>`;
+  return li;
+}
+function stopStory() { clearTimeout(storyTimer); storyTimer = null; }
 
 history.scrollRestoration = 'manual'; // every screen opens at its top
 async function boot() {
@@ -206,7 +250,7 @@ function drawComposeThumbs() {
   box.hidden = !compose.photos.length;
   compose.photos.forEach((src, i) => {
     const t = el('div', 'tray-item');
-    t.innerHTML = `<img src="${src}" alt="Photo ${i + 1}"><button type="button" aria-label="Remove photo ${i + 1}">✕</button>`;
+    t.innerHTML = `<img src="${src}" alt="Photo ${i + 1}"><button type="button" aria-label="Remove photo ${i + 1}">${svg('close')}</button>`;
     t.querySelector('img').addEventListener('click', () => openLightbox(src));
     t.querySelector('button').addEventListener('click', () => { compose.photos.splice(i, 1); drawComposeThumbs(); onCompose(); });
     box.append(t);
@@ -274,7 +318,8 @@ function renderHome(missions) {
   state.missions = missions;
   const name = (state.me.profile.name || state.me.paypal.payerName || '').split(' ')[0];
   const h = new Date().getHours();
-  $('#hello').textContent = `${h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'}${name ? ', ' + name : ''}`;
+  const today = new Date().toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' });
+  $('#hello').textContent = today.charAt(0).toUpperCase() + today.slice(1);
   $('#stoppedBanner').hidden = !state.me.frozen;
   $('#cRule').textContent = ruleText();
   $('#cRule').classList.remove('error');
@@ -527,7 +572,7 @@ function renderTray() {
   tray.hidden = !state.attach.length || $('#live').hidden;
   state.attach.forEach((src, i) => {
     const t = el('div', 'tray-item');
-    t.innerHTML = `<img src="${src}" alt="Photo ${i + 1} to send"><button type="button" aria-label="Remove photo ${i + 1}">✕</button>`;
+    t.innerHTML = `<img src="${src}" alt="Photo ${i + 1} to send"><button type="button" aria-label="Remove photo ${i + 1}">${svg('close')}</button>`;
     t.querySelector('img').addEventListener('click', () => openLightbox(src));
     t.querySelector('button').addEventListener('click', () => { state.attach.splice(i, 1); renderTray(); syncComposer(); });
     tray.append(t);
@@ -596,7 +641,7 @@ function handle({ type, data }) {
     case 'reminder_due': {
       const card = state.cards['rm:' + data.id];
       if (card) card.classList.add('done');
-      return add(el('li', 'step due', '⏰ ' + data.text));
+      return add(el('li', 'step due', data.text));
     }
     case 'verified': return verifiedMark(data);
     case 'negotiation': return negotiation(data);
@@ -784,7 +829,7 @@ function wrapupCard(w) {
     return `${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}${t ? ' · ' + t : ''}`;
   };
   const money = [w.paid ? `${fmtC(w.paid, w.currency)} paid` : '', w.held ? `${fmtC(w.held, w.currency)} held until confirmed` : ''].filter(Boolean).join(' · ');
-  li.innerHTML = `<div class="wu-head"><span class="wu-check">✓</span><div><b>${esc(w.headline)}</b><small>${money || 'Nothing left to do'}</small></div></div>
+  li.innerHTML = `<div class="wu-head"><span class="wu-check">${svg('check')}</span><div><b>${esc(w.headline)}</b><small>${money || 'Nothing left to do'}</small></div></div>
     <ol class="wu-lines">${(w.lines || []).map((l) => `<li><span class="wu-when">${esc(day(l.when))}</span><span class="wu-what">${esc(l.what)}${l.where ? ` <i>· ${esc(l.where)}</i>` : ''}</span></li>`).join('')}</ol>
     ${w.note ? `<p class="wu-note">${esc(w.note)}</p>` : ''}
     ${w.reminders?.length ? `<p class="wu-rem">⏰ ${w.reminders.map((r) => esc(new Date(r.at).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' }))).join(' · ')} — on your phone</p>` : ''}
@@ -818,7 +863,7 @@ function reminderCard(r) {
   const li = el('li', 'card reminder' + (r.sent ? ' done' : ''));
   const when = new Date(r.at);
   const label = when.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-  li.innerHTML = `<span class="rm-ic">⏰</span><div class="rm-main"><b>${esc(r.text)}</b><small>Notification · ${esc(label)}</small></div><a class="rm-cal" href="/api/missions/${state.mission}/reminders/${r.id}.ics" aria-label="Add to Calendar">${svg('cal')}</a>`;
+  li.innerHTML = `<span class="rm-ic">${svg('bell')}</span><div class="rm-main"><b>${esc(r.text)}</b><small>Notification · ${esc(label)}</small></div><a class="rm-cal" href="/api/missions/${state.mission}/reminders/${r.id}.ics" aria-label="Add to Calendar">${svg('cal')}</a>`;
   state.cards['rm:' + r.id] = li;
   add(li);
 }
@@ -875,10 +920,10 @@ function paymentCard({ kind, entry, mode, why, reason }) {
   const isNew = !li;
   if (isNew) li = state.cards['p:' + entry.id] = el('li', 'card pay');
   li.className = 'card pay ' + kind + (kind === 'capture' ? ' captured' : '');
-  const [icon, title, sub] = kind === 'hold' ? ['🔒', 'Held with PayPal', 'Not charged until the merchant confirms']
-    : kind === 'capture' ? ['✓', 'Paid with PayPal', why ? why + ' · deposit captured' : 'Merchant confirmed · deposit captured']
-    : ['↩︎', 'Refunded with PayPal', reason || 'Back to your PayPal'];
-  li.innerHTML = `<header><span class="lock">${icon}</span><div class="pay-main"><b>${title.replace(' with PayPal', '')} · ${esc(entry.merchant)}</b></div><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span></header>
+  const [icon, title, sub] = kind === 'hold' ? ['lock', 'Held with PayPal', 'Not charged until the merchant confirms']
+    : kind === 'capture' ? ['check', 'Paid with PayPal', why ? why + ' · deposit captured' : 'Merchant confirmed · deposit captured']
+    : ['undo', 'Refunded with PayPal', reason || 'Back to your PayPal'];
+  li.innerHTML = `<header><span class="lock">${svg(icon)}</span><div class="pay-main"><b>${esc(entry.merchant)}</b><small>${title}</small></div><span class="amt">${kind === 'refund' ? '+' : ''}${fmt(entry.amount)}</span></header>
     <div class="pay-detail"><p>${esc(shortLabel(entry.merchant, entry.label))}</p><p class="why">${esc(sub)} · PayPal${mode === 'sandbox' ? ' sandbox' : mode ? ' (demo)' : ''}</p></div>`;
   fold(li);
   if (isNew) add(li);
@@ -908,7 +953,7 @@ function planCard({ items }) {
   const budget = state.envTotal || 0;
   const multiDay = groups.filter((g) => g.key !== 'later').length > 1;
   const booked = items.filter((i) => i.status === 'confirmed' || i.status === 'held').length;
-  card.innerHTML = `<header><span class="avatar" style="background:var(--accent)">✦</span><div><b>${multiDay ? 'Your trip, day by day' : 'Your plan'}</b><small>${booked}/${items.length} booked${planned ? ` · ${fmt(planned)}${budget ? ' of ' + fmt(budget) : ''}` : ''}</small></div></header>
+  card.innerHTML = `<header><span class="avatar plan-ic">${svg('route')}</span><div><b>${multiDay ? 'Your trip, day by day' : 'Your plan'}</b><small>${booked}/${items.length} booked${planned ? ` · ${fmt(planned)}${budget ? ' of ' + fmt(budget) : ''}` : ''}</small></div></header>
     <div class="timeline">${groups.map((g) => `<section class="tl-day"><h3>${label(g.key)}</h3>${g.items.map((it) => {
       const [st, cls] = PLAN_STATUS[it.status] || [it.status, 'off'];
       const time = /\d{2}:\d{2}/.test(it.when || '') ? it.when.match(/\d{2}:\d{2}/)[0] : !it.d && it.when ? it.when : '';
@@ -1619,11 +1664,16 @@ const ICON = {
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
   listen: '<path d="M4 9.5v5h3.5L12 19V5L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/>',
   stop: '<rect x="7" y="7" width="10" height="10" rx="1.5"/>',
+  close: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
+  lock: '<rect x="5.5" y="10.5" width="13" height="9.5" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+  undo: '<path d="M9 7 5 11l4 4"/><path d="M5 11h9a5 5 0 0 1 0 10h-2"/>',
+  bell: '<path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  route: '<circle cx="6.5" cy="17.5" r="2"/><circle cx="17.5" cy="6.5" r="2"/><path d="M8.5 17.5h6a3 3 0 0 0 0-6h-5a3 3 0 0 1 0-6h6"/>',
   cal: '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 10h16M9 3v4M15 3v4M12 13v5M9.5 15.5h5"/>',
   qr: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2"/>',
   share: '<path d="M12 15V4M8 7.5 12 3.5l4 4"/><path d="M7 11H6a1.5 1.5 0 0 0-1.5 1.5v6A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5v-6A1.5 1.5 0 0 0 18 11h-1"/>',
 };
-const svg = (name) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`;
+const svg = (name) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICON[name]}</svg>`;
 function sayBubble(text) {
   const li = el('li', 'say');
   const body = el('div', 'say-text md');

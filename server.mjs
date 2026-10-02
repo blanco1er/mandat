@@ -661,7 +661,7 @@ app.post('/api/merchants/:mid/requests/:rid/collect', api(async (req) => {
   emit('envelope', envelopeView(b.s));
   saveMission(b.s);
   pushFor(b, { type: 'collected', data: { merchant: m.name, amount: entry.amount } });
-  run(b, (e2) => userTurn(b.s, `[system] ${m.name} confirmed the booking and collected the ${entry.amount} deposit (paid with PayPal). Mark it confirmed in the plan and tell the user in one short sentence.`, e2));
+  run(b, (e2) => userTurn(b.s, `[system] ${m.name} confirmed the booking and collected the ${entry.amount} deposit (paid with PayPal). Mark it confirmed in the plan. The card already shows the payment, so do not repeat it: say nothing unless this was the last open booking (then set the reminders and wrap up) or there is something new the user must know.`, e2));
   return { ok: true, collected: entry.amount };
 }));
 
