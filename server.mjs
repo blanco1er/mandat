@@ -10,7 +10,7 @@ import { geocode, searchAddress, reverseAddress } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
 import { ics, planEvents, validTz, localToUtc } from './lib/calendar.mjs';
-import { KINDS, remember, memoryBrief } from './lib/memory.mjs';
+import { KINDS, remember, forget, memoryBrief } from './lib/memory.mjs';
 import { persist } from './lib/store.mjs';
 import { synthesize, ttsEnabled } from './lib/tts.mjs';
 import { emojiFor, isEmoji } from './lib/emoji.mjs';
@@ -267,8 +267,13 @@ app.post('/api/me/avatar', api(async (req, res) => {
 app.post('/api/me/interview', api(async (req, res) => {
   const u = me(req, res);
   const L = reqLang(req);
-  // The first question is always the same: instant, free, and with its ready answers.
+  // The opening is fixed: instant and free. Someone Mandat already knows is asked what has changed.
   if (!(Array.isArray(req.body?.history) && req.body.history.length)) {
+    if (u.memory?.length || u.profile.people?.length) return {
+      say: tr(L, 'Good to see you again. Has anything changed since last time?'),
+      choices: ['Nothing has changed', 'I moved', 'My situation changed', 'Tell you more'].map((c) => tr(L, c)),
+      saved: [], done: false, user: publicUser(u),
+    };
     return {
       say: tr(L, 'Who do you most often plan outings or trips with?'),
       choices: ['My partner', 'My children', 'My family', 'Friends', 'Colleagues', 'Mostly on my own'].map((c) => tr(L, c)),
@@ -283,21 +288,27 @@ app.post('/api/me/interview', api(async (req, res) => {
   const sys = `You are Mandat, a personal agent that books and pays errands (restaurants, trips, gifts, repairs, bills shared with friends). You are getting to know the user in a short, warm interview so future missions need fewer questions. Write in ${L === 'fr' ? 'French, using "vous"' : 'English'}.
 What you already know (never ask it again):
 ${known}
-Rules: ask ONE short, concrete question at a time (20 words at most) about what helps with errands: the people they often plan with (name, relation, email for PayPal requests), their diets and allergies, favourite or avoided places and cuisines, usual budgets, how they like to travel, timing habits, important dates (birthdays, anniversaries), accessibility needs. Go deeper before moving on: when the user mentions a person (partner, child, friend, parent), ask their first name next, then one or two useful details about them, one question at a time (birthday or age, diet or allergies, what they love, email for PayPal requests), then change topic. Save people completely, with name and relation (e.g. "Léa is the user's daughter, born on 12 March 2015"); keep a birth date rather than an age when you can. Set "type" to "name", "date" or "email" when you ask for one of those (then "choices" is empty), otherwise "choice": then "choices" MUST hold 2 to 4 short ready answers (3 words or fewer each; for people, think partner, children, family, friends, colleagues). The user can always type their own answer. From the user's last answer, put each lasting fact in "save" as one self-contained sentence. Questions asked so far: ${asked}. After about 6 questions, or if the user wants to stop, ask if there is anything else Mandat should know; when they say no, thank them in one warm sentence and set "done" to true. Never ask for payment details, passwords or ID numbers. No dashes as punctuation.
+Rules: ask ONE short, concrete question at a time (20 words at most) about what helps with errands: the people they often plan with (name, relation, email for PayPal requests), their diets and allergies, favourite or avoided places and cuisines, usual budgets, how they like to travel, timing habits, important dates (birthdays, anniversaries), accessibility needs. Go deeper before moving on: when the user mentions a person (partner, child, friend, parent), ask their first name next, then one or two useful details about them, one question at a time (birthday or age, diet or allergies, what they love, email for PayPal requests), then change topic. Save people completely, with name and relation (e.g. "Léa is the user's daughter, born on 12 March 2015"); keep a birth date rather than an age when you can. Always give 2 to 4 short ready answers in "choices" (3 words or fewer each), even for names, dates or emails: offer what makes sense there (names you already know, "Not sure", "I'll add it later"...). For people, think partner, children, family, friends, colleagues. The user can always type their own answer or skip.
+Life changes: if an answer contradicts what you know (a breakup, a move, a new job, someone no longer around), put the outdated memory ids in "forget" and save the new facts, and say it in a few kind words. When the user says nothing has changed, thank them and offer to add more or stop.
+When you close (done=true), always end with one sentence inviting them to come back here if their life changes (a move, new people around them, new habits). From the user's last answer, put each lasting fact in "save" as one self-contained sentence. Questions asked so far: ${asked}. After about 6 questions, or if the user wants to stop, ask if there is anything else Mandat should know; when they say no, thank them in one warm sentence and set "done" to true. Never ask for payment details, passwords or ID numbers. No dashes as punctuation.
 When the user gives someone's email, also put that person in "people" (name and email) so their PayPal requests can be sent.
-Reply with JSON only: {"save":[{"fact":"...","kind":"preference|person|place|habit|constraint|fact"}],"people":[{"name":"...","email":"..."}],"say":"...","type":"choice|name|date|email","choices":["..."],"done":false}`;
+Reply with JSON only: {"save":[{"fact":"...","kind":"preference|person|place|habit|constraint|fact"}],"forget":["mem_..."],"people":[{"name":"...","email":"..."}],"say":"...","choices":["..."],"done":false}`;
   const ask = async (extra) => {
     const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, json: true, temperature: 0.5, maxTokens: 1500, messages: [{ role: 'system', content: sys }, ...hist, ...(extra ? [{ role: 'system', content: extra }] : [])] });
     try { return JSON.parse(message.content || '{}'); } catch { return { say: message.content || '' }; }
   };
   let out = await ask();
   // A question that calls for a choice must come with its ready answers: ask once more if they are missing.
-  if (!out.done && (out.type || 'choice') === 'choice' && !(Array.isArray(out.choices) && out.choices.length >= 2)) {
+  if (!out.done && !(Array.isArray(out.choices) && out.choices.length >= 2)) {
     const again = await ask('Your last reply had no "choices". Reply again with the same question and 2 to 4 short ready answers in "choices".');
     if (Array.isArray(again.choices) && again.choices.length >= 2) out = { ...out, say: again.say || out.say, choices: again.choices };
   }
   const s = { id: 'interview', title: tr(L, 'Get to know me'), userId: u.id };
   const saved = [];
+  // What is no longer true goes away (a move, a breakup, someone who left).
+  for (const id of (Array.isArray(out.forget) ? out.forget : []).slice(0, 6)) {
+    if (typeof id === 'string' && /^mem_[0-9a-f]{8}$/.test(id)) forget(s, { id, scope: 'global' });
+  }
   for (const f of (Array.isArray(out.save) ? out.save : []).slice(0, 6)) {
     const r = remember(s, { fact: f?.fact, kind: f?.kind, scope: 'global' });
     if (!r.error) saved.push(r.item.text);
