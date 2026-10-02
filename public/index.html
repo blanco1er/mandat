@@ -113,7 +113,6 @@
   <!-- 2. Home: ask for anything, then your missions by urgency -->
   <main id="home" class="view" hidden>
     <p class="eyebrow" id="hello"></p>
-    <h1 class="large-title" id="homeTitle">Missions</h1>
     <form class="compose" id="compose" autocomplete="off">
       <textarea id="cText" rows="2" aria-label="Describe what you need, with a budget"></textarea>
       <div class="c-thumbs" id="cThumbs" hidden aria-label="Photos for this mission"></div>
@@ -164,7 +163,7 @@
   <!-- 4. Settings -->
   <!-- 3. Activity: every money movement, in an AG Grid ledger -->
   <main id="activity" class="view wide" hidden>
-    <div class="page-head"><h1 class="large-title">Activity</h1><button type="button" class="head-link" id="csvBtn">Export CSV</button></div>
+    <div class="page-head"><button type="button" class="head-link" id="csvBtn">Export CSV</button></div>
     <div class="stat-strip">
       <div><small>Paid</small><b id="tPaid">—</b></div>
       <div><small>Held</small><b id="tHeld">—</b></div>
@@ -183,7 +182,6 @@
   </main>
 
   <main id="settings" class="view" hidden>
-    <h1 class="large-title">Settings</h1>
 
     <div class="profile-card">
       <span class="avatar-lg" id="sInit" aria-hidden="true">·</span>

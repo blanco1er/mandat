@@ -27,7 +27,9 @@ function show(view) {
   $('#stopMission').hidden = view !== 'live';
   $('#newMission').hidden = view !== 'home';
   $('.brand-mark').hidden = view === 'live';
-  if (view !== 'live') { $('#topTitle').textContent = 'Mandat'; setTopEmoji(''); }
+  // The bar says where you are: the tab's name next to the mark (the app's name is already on the icon).
+  const TAB_TITLE = { home: 'Missions', activity: 'Activity', settings: 'Settings' };
+  if (view !== 'live') { $('#topTitle').textContent = TAB_TITLE[view] ? t(TAB_TITLE[view]) : 'Mandat'; setTopEmoji(''); }
   $$('#tabbar button').forEach((b) => (b.dataset.tab === view ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   window.scrollTo({ top: 0 });
   if (view === 'home') requestAnimationFrame(placePill);
