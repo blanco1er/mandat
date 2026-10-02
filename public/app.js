@@ -2258,17 +2258,19 @@ function unlockSpeech() {
 }
 // The keyboard: iPhone keeps fixed bars at the bottom of the page, behind or far above the keyboard.
 // The visible area tells where the keyboard starts; the message bar is moved to sit just on top of it.
-if (window.visualViewport) {
+const editing = () => { const e = document.activeElement; return !!e && (e.tagName === 'TEXTAREA' || (e.tagName === 'INPUT' && !/^(checkbox|radio|button|submit|range|file)$/.test(e.type)) || e.isContentEditable); };
+const fitKeyboard = () => {
   const vv = window.visualViewport;
-  const fitKeyboard = () => {
-    const kb = Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop));
-    document.documentElement.style.setProperty('--kb', (kb > 80 ? kb : 0) + 'px');
-    document.body.classList.toggle('kb-open', kb > 80);
-  };
-  vv.addEventListener('resize', fitKeyboard);
-  vv.addEventListener('scroll', fitKeyboard);
-  fitKeyboard();
-}
+  const open = editing() && matchMedia('(pointer: coarse)').matches; // a phone with its keyboard up
+  // how far the bottom of what you see is above the bottom of the page (0 when iPhone already scrolled it)
+  const lift = open && vv ? Math.max(0, Math.round(innerHeight - vv.height - vv.offsetTop)) : 0;
+  document.documentElement.style.setProperty('--kb', lift + 'px');
+  document.body.classList.toggle('kb-open', open);
+};
+window.visualViewport?.addEventListener('resize', fitKeyboard);
+window.visualViewport?.addEventListener('scroll', fitKeyboard);
+document.addEventListener('focusin', () => requestAnimationFrame(fitKeyboard));
+document.addEventListener('focusout', () => setTimeout(fitKeyboard, 60));
 // A newer version is live (an app on the home screen is resumed, never reloaded, by iPhone): reload when the
 // app comes back to the screen, never in the middle of a voice conversation.
 let buildSeen = '';
