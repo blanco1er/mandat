@@ -912,3 +912,4 @@ a.pv-none:hover { filter: brightness(1.06); }
 .budget-edit .b-chips button.on { background: var(--accent); color: #fff; }
 .budget-pill[aria-expanded="true"] .b-pen { transform: none; }
 .b-inline, .b-inline input { font-size: 15px; }
+.budget-pill.unset #cBudget { font-weight: 500; color: var(--ink-3); }

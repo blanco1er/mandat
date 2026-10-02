@@ -1,4 +1,5 @@
 // Mandat — client. Welcome (PayPal login) → mandate → missions → a mission live; settings.
+import { budgetFromText } from '/budget.mjs'; // same reader as the server: "700 €", "40 € each for 4", "budget 250"…
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
 const state = { me: null, mission: null, es: null, currency: 'EUR', speaking: false, listening: false, cards: {}, verified: {}, photo: null, voiceTurn: false, live: false };
@@ -76,7 +77,8 @@ const IDEAS = [
   { e: '🇪🇸', t: 'Two weeks in Spain', d: 'Trains, stays, budget kept', b: 700, q: 'Two weeks in Spain in October, I leave from Paris. 700 euros all in.' },
 ];
 const EMOJI = [[/wedding|mariage|boda/i, '💍'], [/birthday|anniversaire/i, '🎂'], [/flight|plane|avion/i, '✈️'], [/train|tren/i, '🚆'], [/spain|españa|espagne|lisbon|travel|trip|voyage|vacation|weekend/i, '🧳'], [/hotel|hôtel/i, '🛎️'], [/sushi/i, '🍣'], [/pizza/i, '🍕'], [/coffee|café|brunch/i, '☕'], [/cake|gâteau|bakery|boulanger/i, '🥐'], [/dinner|lunch|restaurant|dîner|table/i, '🍽️'], [/split|share|bill|addition/i, '🧾'], [/flower|fleur/i, '💐'], [/gift|cadeau/i, '🎁'], [/party|fête/i, '🎉'], [/concert|festival/i, '🎵'], [/cinema|cinéma|movie/i, '🎬'], [/ticket|billet|theatre|théâtre/i, '🎟️'], [/repair|fix|tyre|tire|répar/i, '🔧'], [/bike|vélo/i, '🚲'], [/hair|coiff/i, '💇'], [/spa|massage/i, '💆'], [/doctor|médecin|dentist/i, '🩺'], [/dog|chien|cat|chat|pet/i, '🐾'], [/move|déménag/i, '📦'], [/clean|ménage/i, '🧹']];
-const compose = { budget: 400, auto: false, touched: false, emoji: null, photos: [], voice: false };
+// The budget is optional: say it in your message, set it in the pill, or let Mandat stay under your daily limit.
+const compose = { budget: null, suggested: null, auto: false, touched: false, emoji: null, photos: [], voice: false };
 
 // Ideas: tapping one fills the box — it never starts anything by itself.
 for (const i of IDEAS) {
@@ -87,6 +89,7 @@ for (const i of IDEAS) {
   b.addEventListener('click', () => {
     $('#cText').value = i.q;
     compose.emoji = i.e;
+    compose.suggested = i.b;
     setBudget(i.b, { auto: false, touched: false }); // an amount you then type still wins
     onCompose();
     $('#cText').focus();
@@ -111,26 +114,24 @@ function typeHint() {
 }
 setInterval(typeHint, 4200);
 
-// The budget is read from your words ("700 euros", "€50 each") unless you set it yourself.
-function budgetFromText(t) {
-  const m = t.match(/(?:€|eur\s?)\s?(\d[\d\s.,]*)|(\d[\d\s.,]*)\s?(?:€|euros?|eur\b)/i);
-  if (!m) return null;
-  const n = Number((m[1] || m[2]).replace(/\s/g, '').replace(/,(\d{1,2})$/, '.$1').replace(/,/g, ''));
-  return n > 0 && n < 100000 ? Math.round(n) : null;
-}
 function setBudget(v, { auto = false, touched = compose.touched } = {}) {
-  compose.budget = v;
+  compose.budget = v || null;
   compose.auto = auto;
   compose.touched = touched;
-  $('#cBudget').textContent = fmtC(v);
+  $('#cBudget').textContent = v ? fmtC(v) : 'Optional';
+  $('#cBudgetBtn').classList.toggle('unset', !v);
   $('#cBudgetAuto').hidden = !auto;
-  $('#cBudgetIn').value = v;
+  $('#cBudgetIn').value = v || '';
   $$('#cChips button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === v));
+  if (state.me && !$('#cRule').classList.contains('error')) $('#cRule').textContent = ruleText();
 }
 function onCompose() {
   const t = $('#cText').value;
-  const found = budgetFromText(t);
-  if (found && !compose.touched) setBudget(found, { auto: true, touched: false });
+  const found = budgetFromText(t)?.amount;
+  if (!compose.touched) {
+    if (found) { if (found !== compose.budget || !compose.auto) setBudget(found, { auto: true, touched: false }); }
+    else if (compose.auto) setBudget(compose.suggested, { auto: false, touched: false }); // the amount was deleted
+  }
   // One button, as in a mission: the voice orb while empty, the send arrow as soon as there is something.
   const has = !!t.trim() || compose.photos.length > 0;
   $('#compose').classList.toggle('has-text', has);
@@ -157,7 +158,7 @@ function toggleBudget(open = $('#cBudgetEdit').hidden) {
   $('#cBudgetBtn').classList.toggle('editing', open);
   $('#cBudgetBtn').setAttribute('aria-expanded', String(open));
   if (open) {
-    $('#cBudgetIn').value = compose.budget;
+    $('#cBudgetIn').value = compose.budget || '';
     fitBudgetIn();
     requestAnimationFrame(() => { const i = $('#cBudgetIn'); i.focus(); i.select(); });
   } else $('#cBudgetIn').blur();
@@ -170,6 +171,7 @@ $('#cBudgetIn').addEventListener('input', () => {
   const raw = $('#cBudgetIn').value.replace(/[^\d.,]/g, '');
   if (raw !== $('#cBudgetIn').value) $('#cBudgetIn').value = raw; // digits only
   const v = Math.round(Number(raw.replace(/\s/g, '').replace(',', '.')));
+  if (!raw) setBudget(compose.suggested, { touched: false });
   if (v > 0 && v < 100000) {
     const keep = $('#cBudgetIn').value;
     setBudget(v, { touched: true });
@@ -223,7 +225,8 @@ $('#compose').addEventListener('submit', async (e) => {
   try {
     const location = await locate();
     const emoji = compose.emoji || EMOJI.find(([re]) => re.test(intent))?.[1] || '';
-    const r = await post('/api/missions', { intent, budget: compose.budget, emoji, location, images: compose.photos });
+    const budgetSource = compose.touched ? 'pill' : compose.auto ? 'words' : compose.budget ? 'suggested' : 'none';
+    const r = await post('/api/missions', { intent, budget: compose.budget, budgetSource, emoji, location, images: compose.photos });
     state.voiceTurn = compose.voice;
     resetCompose();
     openMission(r.id);
@@ -237,14 +240,15 @@ $('#compose').addEventListener('submit', async (e) => {
 });
 function resetCompose() {
   $('#cText').value = '';
-  Object.assign(compose, { emoji: null, photos: [], voice: false, auto: false, touched: false });
+  Object.assign(compose, { emoji: null, suggested: null, photos: [], voice: false, auto: false, touched: false });
   drawComposeThumbs();
-  setBudget(400);
+  setBudget(null);
   toggleBudget(false);
   onCompose();
 }
 function ruleText() {
   const lvl = state.me.rules.autonomy;
+  if (!compose.budget) return `No budget? Say it in your message — or Mandat stays under your daily limit (${fmtC(state.me.rules.dailyCap)}).`;
   return lvl === 'autopilot' ? 'Autopilot · books and holds deposits on its own, inside this budget.' : lvl === 'careful' ? 'Careful · asks you before every payment.' : `Balanced · asks you before any payment over ${fmtC(state.me.rules.approveAbove)}.`;
 }
 $('#newMission').addEventListener('click', () => {
@@ -436,7 +440,7 @@ $('#resumeAll').addEventListener('click', async () => {
   state.me = (await post('/api/me/stop', { stopped: false })).user;
   refreshHome();
 });
-setBudget(400);
+setBudget(null);
 typeHint();
 
 // ---------- a mission, live ----------
@@ -581,6 +585,7 @@ function handle({ type, data }) {
       return requestAnimationFrame(() => window.scrollTo({ top: document.body.scrollHeight })); // land on the latest, no animation
     case 'title': $('#topTitle').textContent = data.title; if (data.emoji) setTopEmoji(data.emoji); return;
     case 'memory': return memoryStep(data);
+    case 'budget_changed': return addStep(`Budget changed · ${fmtC(data.from, data.currency)} → ${fmtC(data.to, data.currency)}`);
     case 'clash': return clashCard(data);
     case 'busy': state.busy = data.on; if (!data.on) closeSteps(); typing(data.on); return orbState(data.on ? 'thinking' : state.speaking ? 'speaking' : 'idle');
     case 'tool': typing(state.busy); return toolStep(data);

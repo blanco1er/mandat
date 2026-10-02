@@ -12,6 +12,7 @@ import { invoiceStatus } from './lib/invoices.mjs';
 import { ics, planEvents, validTz, localToUtc } from './lib/calendar.mjs';
 import { KINDS } from './lib/memory.mjs';
 import { emojiFor, isEmoji } from './lib/emoji.mjs';
+import { budgetFromText } from './lib/budget.mjs';
 import * as Push from './lib/push.mjs';
 import { merchant, checkInbox } from './lib/merchants.mjs';
 import { newUser, getUser, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
@@ -62,6 +63,8 @@ function allowance(u, kind = 'turns') {
   usage.users.set(u.id, mine);
 }
 app.use(express.static(path.resolve('public'), { extensions: ['html'] }));
+// The budget reader is shared with the app, so both understand "40 € each for 4" the same way.
+app.get('/budget.mjs', (req, res) => res.type('text/javascript').sendFile(path.resolve('lib/budget.mjs')));
 
 // ---------- account (cookie) ----------
 function cookie(req, name) {
@@ -359,12 +362,19 @@ app.post('/api/missions', api(async (req, res) => {
   if (u.frozen) throw new Error('Mandat is stopped. Resume it in Settings.');
   const { intent = '', budget, location = null } = req.body || {};
   const emoji = isEmoji(req.body?.emoji) ? req.body.emoji.trim() : emojiFor(intent);
-  if (!(budget > 0 && budget <= 5000)) throw new Error('Budget must be between 1 and 5000.');
+  // The budget is optional: the pill wins, then the amount said in the message, then a suggestion;
+  // with none of these, the mission stays under the user's daily limit.
+  const used = monthCommitted(u, u.missions.map(getMission));
+  const said = budgetFromText(intent);
+  const source = req.body?.budgetSource === 'pill' && budget > 0 ? 'pill' : said ? 'words' : budget > 0 ? 'suggested' : 'limit';
+  const total = source === 'pill' || source === 'suggested' ? Math.round(budget) : source === 'words' ? said.amount : Math.min(u.rules.dailyCap || 300, Math.max(0, u.rules.monthlyCap - used));
+  if (source === 'limit' && total < 1) throw new Error(`Your monthly limit (${u.rules.monthlyCap} €) is already planned. Raise it in Settings, or say a budget.`);
+  if (!(total > 0 && total <= 5000)) throw new Error('A mission budget goes from 1 to 5,000 €.');
+  if (used + total > u.rules.monthlyCap) throw new Error(`This would exceed your monthly limit (${u.rules.monthlyCap} €, ${used} € already planned).`);
   allowance(u, 'missions');
   allowance(u, 'turns');
-  const used = monthCommitted(u, u.missions.map(getMission));
-  if (used + budget > u.rules.monthlyCap) throw new Error(`This would exceed your monthly cap (${u.rules.monthlyCap} €, ${used} € already planned).`);
-  const s = createSession({ budget, approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });
+  const s = createSession({ budget: total, approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });
+  s.envelope.source = source;
   s.title = plainTitle(intent); // instant; the AI title replaces it in the background
   u.missions.unshift(s.id);
   saveUser(u);
