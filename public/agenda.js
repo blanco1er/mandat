@@ -138,6 +138,7 @@ export async function mountAgenda(el, { get, post, lang, onOpen, onAsked }) {
   el.after(empty);
   const api = {
     cal,
+    destroy() { cal.destroy(); empty.remove(); },
     async refresh() {
       const d = await get('/api/me/agenda');
       cal.resourceStore.data = d.missions;

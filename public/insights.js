@@ -242,6 +242,7 @@ export async function mountInsights(el, { get, post, lang, license, compact = fa
   return {
     api,
     harness: () => harness,
+    destroy() { try { harness?.dispose?.(); } catch {} api.destroy(); },
     // New payments land in the same report without resetting what the user built.
     async refresh() { data = await get('/api/me/insights'); api.setProperty('data', sources(data, W)); },
     csv() {

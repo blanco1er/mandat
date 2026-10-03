@@ -15,6 +15,9 @@ function show(view) {
   document.body.classList.toggle('on-welcome', view === 'welcome' || view === 'onboard');
   if (view === 'welcome') playStory(); else stopStory();
   for (const v of VIEWS) $('#' + v).hidden = v !== view;
+  // Heavy components (calendar, dashboard) are released when their tab is left, so iPhone keeps the app alive.
+  if (view !== 'agenda' && agenda) { try { agenda.destroy(); } catch {} agenda = null; agendaTry = null; }
+  if (view !== 'activity' && studio) { try { studio.destroy(); } catch {} studio = null; studioTry = null; $('#studio').textContent = ''; $('#assistant').textContent = ''; $('#assistant').className = 'assistant-col'; }
   $('#tabbar').hidden = !['home', 'agenda', 'activity', 'settings'].includes(view);
   $('#composer').hidden = view !== 'live';
   document.documentElement.classList.toggle('on-live', view === 'live'); // the conversation scrolls inside, the page never moves
@@ -1690,17 +1693,29 @@ function openReceipt(p, mission) {
     p.paypal_ref ? [t('PayPal reference'), p.paypal_ref] : null,
   ].filter((r) => r && r[1]);
   $('#rcRows').innerHTML = rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
-  $('#rcOpen').href = '/receipt/' + encodeURIComponent(p.payment_id) + '?lang=' + lang;
   $('#scrim').hidden = false;
   $('#rcSheet').hidden = false;
 }
-function closeReceipt() { $('#rcSheet').hidden = true; $('#scrim').hidden = true; rcPay = null; }
+// The receipt opens inside the app (a separate window cost iPhone its memory, and had no way back).
+const receiptUrl = (p, embed) => '/receipt/' + encodeURIComponent(p.payment_id) + '?lang=' + lang + (embed ? '&embed=1' : '');
+$('#rcOpen').addEventListener('click', () => {
+  if (!rcPay) return;
+  $('#rcFrame').src = receiptUrl(rcPay, true);
+  $('#rcView').hidden = false;
+});
+$('#rcViewBack').addEventListener('click', () => { $('#rcView').hidden = true; $('#rcFrame').src = 'about:blank'; });
+$('#rcPdf').addEventListener('click', () => {
+  // the print sheet of the receipt alone: "Save to Files" makes the PDF
+  try { $('#rcFrame').contentWindow.focus(); $('#rcFrame').contentWindow.print(); } catch { location.href = receiptUrl(rcPay, false); }
+});
+$('#rcViewShare').addEventListener('click', () => $('#rcShare').click());
+function closeReceipt() { $('#rcSheet').hidden = true; $('#scrim').hidden = true; }
 $('#rcClose').addEventListener('click', closeReceipt);
 $('#scrim').addEventListener('click', () => { if (!$('#rcSheet').hidden) closeReceipt(); });
 $('#rcCsv').addEventListener('click', () => rcPay && downloadCsv([rcPay], `mandat-${rcPay.payment_id}.csv`));
 $('#rcShare').addEventListener('click', async () => {
   if (!rcPay) return;
-  const url = location.origin + '/receipt/' + encodeURIComponent(rcPay.payment_id) + '?lang=' + lang;
+  const url = location.origin + receiptUrl(rcPay, false);
   const text = `${rcPay.merchant} · ${payLine(rcPay).state} · ${rcPay.paypal_ref || ''}`;
   try { if (navigator.share) await navigator.share({ title: t('Payment receipt'), text, url }); else { await navigator.clipboard.writeText(url); flashLabel($('#rcShare'), t('Link copied')); } } catch {}
 });
@@ -1753,7 +1768,16 @@ $('#analyseOpen').addEventListener('click', async () => {
     $('#analyseBody').classList.remove('loading');
   } else sheetStudio.refresh().catch(() => {});
 });
-$('#analyseClose').addEventListener('click', () => { $('#analyseSheet').hidden = true; document.body.classList.remove('no-scroll'); });
+$('#analyseClose').addEventListener('click', () => {
+  $('#analyseSheet').hidden = true;
+  document.body.classList.remove('no-scroll');
+  // the dashboard and its agents hold a lot of memory on a phone: released when the analysis closes
+  try { sheetStudio?.destroy(); } catch {}
+  sheetStudio = null;
+  $('#analyseBoard').textContent = '';
+  $('#analyseChat').textContent = '';
+  $('#analyseChat').className = 'analyse-chat';
+});
 $$('#analyseSeg button').forEach((b) => b.addEventListener('click', () => analyseView(b.dataset.v)));
 $('#csvBtn').addEventListener('click', () => {
   if (!insights) return;

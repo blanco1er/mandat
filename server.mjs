@@ -563,7 +563,7 @@ app.get('/receipt/:id', (req, res) => {
     const u = getUser(cookie(req, 'mandat_uid'));
     const found = u && findPayment(u, getMission, String(req.params.id).slice(0, 80));
     if (!found) return res.status(404).type('text/plain').send('Receipt not found.');
-    res.set('Cache-Control', 'no-store').type('html').send(receiptHtml(found, u, reqLang(req) === 'fr' || u.lang === 'fr' || String(req.query.lang) === 'fr' ? 'fr' : 'en'));
+    res.set('Cache-Control', 'no-store').type('html').send(receiptHtml(found, u, reqLang(req) === 'fr' || u.lang === 'fr' || String(req.query.lang) === 'fr' ? 'fr' : 'en', { embed: req.query.embed === '1' }));
   } catch (e) { res.status(500).type('text/plain').send('Receipt unavailable.'); }
 });
 app.get('/api/me/agenda', api(async (req, res) => agendaOf(me(req, res), getMission)));

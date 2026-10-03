@@ -1549,3 +1549,11 @@ body.kb-open .analyse-sheet .sc-bar { margin-bottom: 8px; }
 .person-edit .chip-add { margin-top: 12px; width: 100%; }
 .pa-rel { gap: 6px; }
 #obFit .chips-title:first-child { margin-top: 0; }
+
+/* the receipt, inside the app */
+.rc-view { position: fixed; inset: 0; z-index: 45; display: flex; flex-direction: column; background: var(--bg); padding-top: env(safe-area-inset-top); }
+.rc-view .grow { flex: 1; }
+.rc-back { display: flex; align-items: center; gap: 2px; height: 36px; padding: 0 10px 0 4px; font-size: 17px; color: var(--accent); }
+.rc-back svg { width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.rc-top-btn { height: 34px; padding: 0 14px; border-radius: 17px; font-size: 15px; font-weight: 600; color: var(--ink); background: var(--card-line); }
+#rcFrame { flex: 1; width: 100%; border: 0; background: #fff; padding-bottom: env(safe-area-inset-bottom); }

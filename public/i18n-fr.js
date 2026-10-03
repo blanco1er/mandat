@@ -623,6 +623,8 @@ export default {
   "Best value": "Meilleur rapport qualité-prix",
   "Photo sent": "Photo envoyée",
   "Agenda": "Agenda",
+  "Return": "Retour",
+  "Receipt": "Reçu",
   "Tap someone to add who they are, their sizes and style: Mandat then buys for them without asking. With an email, “split it with Sam” sends Sam’s PayPal request straight away.": "Touchez une personne pour indiquer qui elle est, ses tailles et son style : Mandat achète alors pour elle sans vous redemander. Avec un e-mail, « partage avec Sam » envoie directement la demande PayPal à Sam.",
   "Nobody yet. Add your partner, children, family or friends.": "Personne pour l’instant. Ajoutez votre partenaire, vos enfants, votre famille ou vos amis.",
   "Tap to add details": "Touchez pour ajouter des détails",
