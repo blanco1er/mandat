@@ -705,4 +705,11 @@ export default {
   "Yesterday": "Hier",
   "Today": "Aujourd’hui",
   "The agenda could not load. Check your connection and try again.": "L’agenda n’a pas pu se charger. Vérifiez votre connexion et réessayez.",
+  "Clothing section": "Rayon",
+  "Clothing size (age)": "Taille (âge)",
+  "Top size (shirts, jackets)": "Taille du haut (chemises, vestes)",
+  "Trouser size (EU)": "Taille de pantalon (EU)",
+  "Shoe size (EU)": "Pointure (EU)",
+  "top {size}": "haut {size}",
+  "clothes {size}": "vêtements {size}",
 };

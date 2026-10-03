@@ -61,9 +61,7 @@ export async function mountAgenda(el, { get, post, lang, onOpen, onAsked }) {
   const loc = lang === 'fr' ? 'fr-FR' : 'en-GB';
   const when = (d) => d.toLocaleString(loc, { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   const hour = (d) => d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
-  // Open on the next thing that is planned (or today).
   const now = new Date();
-  const next = data.events.map((e) => new Date(e.startDate)).filter((d) => d >= new Date(now.toDateString())).sort((a, b) => a - b)[0] || now;
   const asked = new Set();
   // The list runs from today to the furthest booking, however far it is (a week at least).
   const today = new Date(now.toDateString());
@@ -122,8 +120,9 @@ export async function mountAgenda(el, { get, post, lang, onOpen, onAsked }) {
   const times = (r) => (r.allDay ? { className: 'm-ev-time', text: W.allDay } : { className: 'm-ev-time', children: [{ tag: 'b', text: hour(r.startDate) }, { tag: 'span', text: hour(r.realEnd ? new Date(r.realEnd) : r.endDate) }] });
   const cal = new B.Calendar({
     appendTo: el,
-    date: narrow ? today : next,
-    mode: narrow ? 'agenda' : 'week',
+    // the upcoming list first, everywhere: soonest to latest across months and years (Day/Week/Month to drag)
+    date: today,
+    mode: 'agenda',
     sidebar: narrow ? false : { items: { datePicker: { showEvents: 'dots' } } },
     resources: data.missions,
     events: data.events.map(shape),

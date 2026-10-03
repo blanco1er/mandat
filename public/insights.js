@@ -10,10 +10,10 @@ const STUDIO = 'https://cdn.jsdelivr.net/npm/ag-studio@3.0.0/dist/umd/ag-studio.
 
 const WORDS = {
   en: {
-    paid: 'Paid', held: 'Held now', due: 'Still to pay', left: 'Budget left', byCat: 'Where the money goes', byMission: 'Budget per mission',
+    paid: 'Paid', held: 'Held now', due: 'Still to pay', left: 'Budget left', byCat: 'Where the money goes', byMission: 'Committed per mission',
     payments: 'Every payment', date: 'Date', merchant: 'Merchant or friend', category: 'Category', what: 'What', kind: 'Type', status: 'Status',
     spent: 'Paid', heldF: 'Held', refunded: 'Refunded', full: 'Full price', balance: 'Balance due', owed: 'Owed to you', back: 'Paid back', ref: 'PayPal reference',
-    mission: 'Mission', created: 'Created', city: 'City', budget: 'Budget', committed: 'Committed', leftF: 'Left', stillToPay: 'Still to pay', missionsT: 'Missions', paymentsT: 'Payments',
+    mission: 'Mission', created: 'Created', city: 'City', budget: 'Budget', committed: 'Committed', leftF: 'Left', stillToPay: 'Still to pay', missionsT: 'Missions', paymentsT: 'Payments', cur: 'Currency', fr: false,
     page: 'Spending', placeholder: 'A chart, a filter, a question…', send: 'Send', hello: 'Ask me about your spending: I can answer, or change the dashboard for you.', failed: 'That did not work. Try again in a moment.', seeBoard: 'See it on the dashboard',
     steps: { view_schema: 'Reading your data', view_report: 'Looking at the dashboard', view_page: 'Looking at the dashboard', mission_books: 'Checking your books', delegate_to: 'Working on the dashboard', add_widget: 'Adding a chart', configure_widget: 'Setting up the chart', execute_query: 'Running the numbers', position_widget: 'Placing the chart', remove_widget: 'Removing a chart', add_page_filter: 'Filtering the page', remove_page_filter: 'Removing a filter', other: 'Working' },
     starters: [
@@ -24,10 +24,10 @@ const WORDS = {
     brief: 'This dashboard shows the user\'s own money, handled by Mandat, the agent that books and pays for them with PayPal. Table "payments": one row per deposit or purchase (status Held = reserved, not charged; Paid = captured; Released = never charged; Refunded) and per bill share sent to a friend. Table "missions": each errand with its budget, what is committed at full price, what is left and what is still to pay on site. Amounts are in euros. Answer in English (statuses in plain words: held, paid, released, refunded), in a sentence or two, like a careful accountant. For any question about why an amount is what it is, or what is still owed to whom, call mission_books: its numbers are computed by the app, use them as they are and never add them up yourself. Never show internal ids (mission_id, payment_id) to the user: name missions by their title.',
   },
   fr: {
-    paid: 'Payé', held: 'Bloqué', due: 'Reste à régler', left: 'Budget restant', byCat: 'Où va l’argent', byMission: 'Budget par mission',
+    paid: 'Payé', held: 'Bloqué', due: 'Reste à régler', left: 'Budget restant', byCat: 'Où va l’argent', byMission: 'Engagé par mission',
     payments: 'Tous les paiements', date: 'Date', merchant: 'Commerçant ou proche', category: 'Catégorie', what: 'Objet', kind: 'Type', status: 'État',
     spent: 'Payé', heldF: 'Bloqué', refunded: 'Remboursé', full: 'Prix total', balance: 'Solde dû', owed: 'On vous doit', back: 'Remboursé par un proche', ref: 'Référence PayPal',
-    mission: 'Mission', created: 'Créée le', city: 'Ville', budget: 'Budget', committed: 'Engagé', leftF: 'Restant', stillToPay: 'Reste à régler', missionsT: 'Missions', paymentsT: 'Paiements',
+    mission: 'Mission', created: 'Créée le', city: 'Ville', budget: 'Budget', committed: 'Engagé', leftF: 'Restant', stillToPay: 'Reste à régler', missionsT: 'Missions', paymentsT: 'Paiements', cur: 'Devise', fr: true,
     page: 'Dépenses', placeholder: 'Un graphique, un filtre, une question…', send: 'Envoyer', hello: 'Posez-moi une question sur vos dépenses : je réponds, ou je modifie le tableau pour vous.', failed: 'Ça n’a pas marché. Réessayez dans un instant.', seeBoard: 'Voir sur le tableau',
     steps: { view_schema: 'Je lis vos données', view_report: 'Je regarde le tableau', view_page: 'Je regarde le tableau', mission_books: 'Je consulte vos comptes', delegate_to: 'Je prépare le tableau', add_widget: 'J’ajoute un graphique', configure_widget: 'Je règle le graphique', execute_query: 'Je fais les calculs', position_widget: 'Je place le graphique', remove_widget: 'Je retire un graphique', add_page_filter: 'Je filtre la page', remove_page_filter: 'Je retire un filtre', other: 'Je travaille' },
     starters: [
@@ -83,8 +83,17 @@ function mandatAdapter(post) {
   };
 }
 
+// chart labels stay readable on a phone: long mission names are shortened
+const short = (t = '') => (t.length > 22 ? t.slice(0, 21).trimEnd() + '…' : t);
 function sources(data, W) {
-  const money = { format: 'currencyFormat', formatOptions: { format: '#,##0.00 €' } };
+  // One currency: its symbol on every amount. Euros and dollars together: plain amounts and a Currency column.
+  const curs = [...new Set([...data.payments, ...data.missions].map((x) => x.currency || 'EUR'))];
+  const sym = curs.length === 1;
+  const nf = sym
+    ? new Intl.NumberFormat(W.fr ? 'fr-FR' : 'en-GB', { style: 'currency', currency: curs[0], currencyDisplay: 'narrowSymbol' })
+    : new Intl.NumberFormat(W.fr ? 'fr-FR' : 'en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const money = { format: 'currencyFormat', formatOptions: { format: nf } };
+  const cur = curs.length > 1 ? [{ id: 'currency', name: W.cur, format: 'textFormat' }] : [];
   return {
     sources: [
       {
@@ -99,6 +108,7 @@ function sources(data, W) {
           { id: 'what', name: W.what, format: 'textFormat', cardinality: 'high' },
           { id: 'kind', name: W.kind, format: 'textFormat' },
           { id: 'status', name: W.status, format: 'textFormat' },
+          ...cur,
           { id: 'spent', name: W.spent, ...money },
           { id: 'held', name: W.heldF, ...money },
           { id: 'refunded', name: W.refunded, ...money },
@@ -111,12 +121,13 @@ function sources(data, W) {
       },
       {
         id: 'missions', name: W.missionsT,
-        data: data.missions.map((m) => ({ ...m, created: m.created ? new Date(m.created) : null })),
+        data: data.missions.map((m) => ({ ...m, mission: short(m.mission), created: m.created ? new Date(m.created) : null })),
         fields: [
           { id: 'mission_id', name: 'Mission ID', format: 'textFormat', cardinality: 'high' },
           { id: 'mission', name: W.mission, format: 'textFormat' },
           { id: 'created', name: W.created, format: 'dateTimeFormat' },
           { id: 'city', name: W.city, format: 'textFormat' },
+          ...cur,
           { id: 'budget', name: W.budget, ...money },
           { id: 'committed', name: W.committed, ...money },
           { id: 'left', name: W.leftF, ...money },
@@ -133,7 +144,7 @@ function sources(data, W) {
 }
 
 // The report the page opens on. On a phone every widget takes the full width, one under the other.
-function report(W, narrow) {
+function report(W, narrow, mixed) {
   const sum = (id) => ({ id, aggregation: 'sum' });
   const widgets = {
     'by-category': {
@@ -143,14 +154,14 @@ function report(W, narrow) {
     },
     'by-mission': {
       type: 'bar-chart-grouped',
-      dataMapping: { categoryKey: [{ id: 'missions.mission' }], valueKey: [sum('missions.committed'), sum('missions.left')], tooltipKey: [] },
+      dataMapping: { categoryKey: [{ id: 'missions.mission' }], valueKey: [sum('missions.committed')], tooltipKey: [] }, // what each mission really costs (a mission with no budget would flatten the others)
       sort: [{ field: sum('missions.committed'), direction: 'desc' }],
       format: { title: { enabled: true, text: W.byMission } },
     },
     payments: {
       type: 'grid',
       dataMapping: {
-        cols: [{ id: 'payments.date' }, { id: 'payments.merchant' }, { id: 'missions.mission' }, { id: 'payments.status' }, { id: 'payments.spent' }, { id: 'payments.held' }, { id: 'payments.balance_due' }, { id: 'payments.paypal_ref' }],
+        cols: [{ id: 'payments.date' }, { id: 'payments.merchant' }, { id: 'missions.mission' }, { id: 'payments.status' }, ...(mixed ? [{ id: 'payments.currency' }] : []), { id: 'payments.spent' }, { id: 'payments.held' }, { id: 'payments.balance_due' }, { id: 'payments.paypal_ref' }],
       },
       sort: [{ field: { id: 'payments.date' }, direction: 'desc' }],
       format: { title: { enabled: true, text: W.payments } },
@@ -233,7 +244,7 @@ export async function mountInsights(el, { get, post, lang, license, compact = fa
     panels: narrow ? { view: { left: [], right: [] } } : { edit: { left: [], right: ['filters', 'edit', 'data'] }, view: { left: [], right: ['filters'] } },
     theme: theme(ag),
     data: sources(data, W),
-    initialState: report(W, narrow),
+    initialState: report(W, narrow, new Set([...data.payments, ...data.missions].map((x) => x.currency || 'EUR')).size > 1),
     localeText: { ...(fr || {}), aiMessageInputPlaceholder: W.placeholder },
     ai: ({ api }) => harness || buildHarness(api),
   });
@@ -246,7 +257,7 @@ export async function mountInsights(el, { get, post, lang, license, compact = fa
     // New payments land in the same report without resetting what the user built.
     async refresh() { data = await get('/api/me/insights'); api.setProperty('data', sources(data, W)); },
     csv() {
-      const cols = ['date', 'mission_id', 'merchant', 'category', 'what', 'kind', 'status', 'spent', 'held', 'refunded', 'balance_due', 'paypal_ref'];
+      const cols = ['date', 'mission_id', 'merchant', 'category', 'what', 'kind', 'status', 'spent', 'held', 'refunded', 'balance_due', 'currency', 'paypal_ref'];
       const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
       return [cols.join(','), ...data.payments.map((p) => cols.map((c) => q(p[c])).join(','))].join('\n');
     },

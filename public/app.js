@@ -1,6 +1,6 @@
 // Mandat — client. Welcome (PayPal login) → mandate → missions → a mission live; settings.
 import { t, tn, lang, locale, applyI18n, setLang, chosenLang } from '/i18n.js';
-import { budgetFromText } from '/budget.mjs';
+import { budgetFromText, currencyFromText } from '/budget.mjs';
 import { createSmoke } from '/smoke.js'; // same reader as the server: "700 €", "40 € each for 4", "budget 250"…
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -168,7 +168,7 @@ const FIT = {
   cut: ['Menswear', 'Womenswear', 'Both'],
   top: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
   bottom: ['34', '36', '38', '40', '42', '44', '46', '48'],
-  shoes: ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'],
+  shoes: ['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46', '47'],
   style: ['Classic', 'Casual', 'Elegant', 'Sporty', 'Streetwear', 'Business', 'Bohemian', 'Minimalist'],
 };
 const KID_FIT = { cut: ['Boy', 'Girl', 'Both'], top: ['2 yrs', '4 yrs', '6 yrs', '8 yrs', '10 yrs', '12 yrs', '14 yrs'], shoes: ['24', '26', '28', '30', '32', '34', '36', '38'] };
@@ -178,8 +178,8 @@ function fitPicker(box, fit, onChange, { kid = false } = {}) {
   const f = { ...(fit || {}) };
   // The cut comes first: Mandat never guesses whether to look at menswear or womenswear.
   const rows = kid
-    ? [['cut', 'Clothes for', KID_FIT.cut], ['top', 'Clothing size', KID_FIT.top], ['shoes', 'Shoes (EU)', KID_FIT.shoes], ['style', 'Style', FIT.style]]
-    : [['cut', 'Clothes for', FIT.cut], ['top', 'Top', FIT.top], ['bottom', 'Trousers', FIT.bottom], ['shoes', 'Shoes (EU)', FIT.shoes], ['style', 'Style', FIT.style]];
+    ? [['cut', 'Clothing section', KID_FIT.cut], ['top', 'Clothing size (age)', KID_FIT.top], ['shoes', 'Shoe size (EU)', KID_FIT.shoes], ['style', 'Style', FIT.style]]
+    : [['cut', 'Clothing section', FIT.cut], ['top', 'Top size (shirts, jackets)', FIT.top], ['bottom', 'Trouser size (EU)', FIT.bottom], ['shoes', 'Shoe size (EU)', FIT.shoes], ['style', 'Style', FIT.style]];
   box.innerHTML = '';
   for (const [key, title, items] of rows) {
     box.append(el('p', 'chips-title', t(title)));
@@ -202,7 +202,8 @@ function fitPicker(box, fit, onChange, { kid = false } = {}) {
     box.append(wrap);
   }
 }
-const fitText = (f) => [f?.cut && t(f.cut), f?.top, f?.bottom && t('trousers {size}', { size: f.bottom }), f?.shoes && t('shoes {size}', { size: f.shoes }), f?.style && splitList(f.style).map((x) => t(x)).join(', ')].filter(Boolean).join(' · ');
+// Every size says what it is: "top M", never a bare "M".
+const fitText = (f) => [f?.cut && t(f.cut), f?.top && (/yrs/.test(f.top) ? t('clothes {size}', { size: t(f.top) }) : t('top {size}', { size: f.top })), f?.bottom && t('trousers {size}', { size: f.bottom }), f?.shoes && t('shoes {size}', { size: f.shoes }), f?.style && splitList(f.style).map((x) => t(x)).join(', ')].filter(Boolean).join(' · ');
 const OB_DIET = DIET.slice(0, 10);
 const OB_LIKES = ['Quiet places', 'Terraces', 'Local spots', 'Fine dining', 'Good value', 'Italian', 'Japanese', 'Trains over planes', 'Central hotels', 'Early dinners'];
 let obStep = 0;
@@ -326,7 +327,7 @@ const IDEAS = [
 ];
 const EMOJI = [[/wedding|mariage|boda/i, '💍'], [/birthday|anniversaire/i, '🎂'], [/flight|plane|avion/i, '✈️'], [/train|tren/i, '🚆'], [/spain|españa|espagne|lisbon|travel|trip|voyage|vacation|weekend/i, '🧳'], [/hotel|hôtel/i, '🛎️'], [/sushi/i, '🍣'], [/pizza/i, '🍕'], [/coffee|café|brunch/i, '☕'], [/cake|gâteau|bakery|boulanger/i, '🥐'], [/dinner|lunch|restaurant|dîner|table/i, '🍽️'], [/split|share|bill|addition/i, '🧾'], [/flower|fleur/i, '💐'], [/gift|cadeau/i, '🎁'], [/party|fête/i, '🎉'], [/concert|festival/i, '🎵'], [/cinema|cinéma|movie/i, '🎬'], [/ticket|billet|theatre|théâtre/i, '🎟️'], [/repair|fix|tyre|tire|répar/i, '🔧'], [/bike|vélo/i, '🚲'], [/hair|coiff/i, '💇'], [/spa|massage/i, '💆'], [/doctor|médecin|dentist/i, '🩺'], [/dog|chien|cat|chat|pet/i, '🐾'], [/move|déménag/i, '📦'], [/clean|ménage/i, '🧹']];
 // The budget is optional: say it in your message, set it in the pill, or let Mandat stay under your daily limit.
-const compose = { budget: null, suggested: null, auto: false, touched: false, emoji: null, photos: [], voice: false };
+const compose = { currency: 'EUR', budget: null, suggested: null, auto: false, touched: false, emoji: null, photos: [], voice: false };
 
 // Ideas: tapping one fills the box — it never starts anything by itself.
 for (const i of IDEAS) {
@@ -367,7 +368,8 @@ function setBudget(v, { auto = false, touched = compose.touched } = {}) {
   compose.budget = v || null;
   compose.auto = auto;
   compose.touched = touched;
-  $('#cBudget').textContent = v ? fmtC(v) : t('Optional');
+  $('#cBudget').textContent = v ? fmtC(v, compose.currency) : t('Optional');
+  $('#cBudgetBtn .b-cur').textContent = compose.currency === 'USD' ? '$' : '€';
   $('#cBudgetBtn').classList.toggle('unset', !v);
   $('#cBudgetAuto').hidden = !auto;
   $('#cBudgetBtn').classList.toggle('auto', !!auto);
@@ -378,6 +380,8 @@ function setBudget(v, { auto = false, touched = compose.touched } = {}) {
 function onCompose() {
   const text = $('#cText').value;
   const found = budgetFromText(text)?.amount;
+  const cur = currencyFromText(text); // the mission is opened in this currency
+  if (cur !== compose.currency) { compose.currency = cur; setBudget(compose.budget, { auto: compose.auto }); }
   if (!compose.touched) {
     if (found) { if (found !== compose.budget || !compose.auto) setBudget(found, { auto: true, touched: false }); }
     else if (compose.auto) setBudget(compose.suggested, { auto: false, touched: false }); // the amount was deleted
@@ -1632,26 +1636,33 @@ function dayLabel(d) {
 // Read like a bank statement: what really left (or came back), and where each payment stands. A payment
 // refunded in full or released before being charged is shown struck through: it costs nothing.
 function payLine(p) {
-  const was = `<s>${esc(fmt(p.amount || 0))}</s>`;
+  const fmtP = (v) => fmtC(v, p.currency);
+  const was = `<s>${esc(fmtP(p.amount || 0))}</s>`;
   switch (p.status) {
-    case 'Paid': return { amt: '−' + esc(fmt(p.spent)), state: t('Paid'), cls: 'ok' };
+    case 'Paid': return { amt: '−' + esc(fmtP(p.spent)), state: t('Paid'), cls: 'ok' };
     case 'Refunded':
       return p.spent > 0.004
-        ? { amt: '−' + esc(fmt(p.spent)), state: t('Partly refunded'), cls: 'ok' } // what is still paid, after the refund
+        ? { amt: '−' + esc(fmtP(p.spent)), state: t('Partly refunded'), cls: 'ok' } // what is still paid, after the refund
         : { amt: was, state: t('Refunded'), cls: 'refund', off: true };
-    case 'Held': return { amt: esc(fmt(p.held)), state: t('Held'), cls: 'wait' };
+    case 'Held': return { amt: esc(fmtP(p.held)), state: t('Held'), cls: 'wait' };
     case 'Released': return { amt: was, state: t('Not charged'), cls: 'off', off: true };
-    case 'Owed to you': return { amt: '+' + esc(fmt(p.owed_to_you)), state: t('Owed to you'), cls: 'wait' };
-    case 'Paid back': return { amt: '+' + esc(fmt(p.paid_back)), state: t('Paid back'), cls: 'ok' };
-    default: return { amt: esc(fmt(p.amount || 0)), state: t(p.status || ''), cls: 'off' };
+    case 'Owed to you': return { amt: '+' + esc(fmtP(p.owed_to_you)), state: t('Owed to you'), cls: 'wait' };
+    case 'Paid back': return { amt: '+' + esc(fmtP(p.paid_back)), state: t('Paid back'), cls: 'ok' };
+    default: return { amt: esc(fmtP(p.amount || 0)), state: t(p.status || ''), cls: 'off' };
   }
 }
 function renderActivity(d) {
-  const sum = (rows, k) => Math.round(rows.reduce((x, r) => x + (Number(r[k]) || 0), 0) * 100) / 100;
-  $('#sPaid').textContent = fmt(sum(d.payments, 'spent'));
-  $('#sHeld').textContent = fmt(sum(d.payments, 'held'));
-  $('#sDue').textContent = fmt(sum(d.missions, 'still_to_pay'));
-  $('#sLeft').textContent = fmt(sum(d.missions, 'left'));
+  // totals per currency: euros and dollars are never added together
+  const sum = (rows, k) => {
+    const by = {};
+    for (const r of rows) { const c = r.currency || state.currency; by[c] = (by[c] || 0) + (Number(r[k]) || 0); }
+    const parts = Object.entries(by).filter(([, v]) => Math.round(v * 100)).map(([c, v]) => fmtC(Math.round(v * 100) / 100, c));
+    return parts.join(' · ') || fmt(0);
+  };
+  $('#sPaid').textContent = sum(d.payments, 'spent');
+  $('#sHeld').textContent = sum(d.payments, 'held');
+  $('#sDue').textContent = sum(d.missions, 'still_to_pay');
+  $('#sLeft').textContent = sum(d.missions, 'left');
   const names = Object.fromEntries(d.missions.map((m) => [m.mission_id, m.mission]));
   const list = $('#payList');
   list.textContent = '';
@@ -1688,10 +1699,10 @@ function openReceipt(p, mission) {
   const rows = [
     [t('For'), p.what],
     [t('Date'), when],
-    p.amount ? [t('Amount'), fmt(p.amount)] : null,
-    p.refunded ? [t('Refunded'), fmt(p.refunded)] : null,
-    p.full_price > p.amount + 0.5 ? [t('Full price'), fmt(p.full_price)] : null,
-    p.balance_due ? [t('Balance still to pay'), fmt(p.balance_due)] : null,
+    p.amount ? [t('Amount'), fmtC(p.amount, p.currency)] : null,
+    p.refunded ? [t('Refunded'), fmtC(p.refunded, p.currency)] : null,
+    p.full_price > p.amount + 0.5 ? [t('Full price'), fmtC(p.full_price, p.currency)] : null,
+    p.balance_due ? [t('Balance still to pay'), fmtC(p.balance_due, p.currency)] : null,
     p.paypal_ref ? [t('PayPal reference'), p.paypal_ref] : null,
   ].filter((r) => r && r[1]);
   $('#rcRows').innerHTML = rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
@@ -1722,7 +1733,7 @@ $('#rcShare').addEventListener('click', async () => {
   try { if (navigator.share) await navigator.share({ title: t('Payment receipt'), text, url }); else { await navigator.clipboard.writeText(url); flashLabel($('#rcShare'), t('Link copied')); } } catch {}
 });
 function downloadCsv(rows, name) {
-  const cols = ['date', 'mission', 'merchant', 'category', 'what', 'kind', 'status', 'amount', 'spent', 'held', 'refunded', 'balance_due', 'paypal_ref'];
+  const cols = ['date', 'mission', 'merchant', 'category', 'what', 'kind', 'status', 'amount', 'spent', 'held', 'refunded', 'balance_due', 'currency', 'paypal_ref'];
   const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const csv = [cols.join(','), ...rows.map((p) => cols.map((c) => q(p[c])).join(','))].join('\n');
   const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
@@ -3078,7 +3089,7 @@ for (const b of $$('.stepper button')) {
   });
 }
 function fmtC(v, cur = 'EUR') {
-  return new Intl.NumberFormat(locale(), { style: 'currency', currency: cur, maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
+  return new Intl.NumberFormat(locale(), { style: 'currency', currency: cur, currencyDisplay: 'narrowSymbol', maximumFractionDigits: v % 1 ? 2 : 0 }).format(v || 0);
 }
 // Follow new content only if you are already at the bottom; otherwise offer a "New message" pill.
 // In a mission the messages scroll inside #live (the page itself stays put, so the message bar never moves).

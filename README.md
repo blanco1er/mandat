@@ -9,6 +9,24 @@ Built for the PayPal AI Hackathon (Devpost, 2026). Everything runs on the **PayP
 
 ---
 
+## For judges: try it in five minutes
+
+Open **https://mandat-qb77.onrender.com** on a phone (it installs as an app) or a desktop browser. No sign-up: your browser gets its own private space.
+
+1. **Sign the mandate.** Tap *Sign mandate with PayPal* and log in with the **sandbox buyer account given in the Devpost testing instructions** (never a real PayPal login). Pick a monthly limit and an autonomy level (*Balanced* is a good start).
+2. **Give it an errand.** Tap one of the examples or type your own, in English or French, in any city. Some that show different parts of the app:
+   - *"Dinner for 4 in Paris on Friday around 8pm, 200 € max, and a ride home"*: real places, negotiation with merchant agents, a deposit **held** with PayPal (not charged).
+   - *"A birthday present for my 8-year-old niece who loves unicorns, under $40"*: real products from Channel3, photos checked, two options, then a PayPal payment.
+   - Attach a photo of something broken (*"my scooter's tyre is flat, get it fixed this week"*): Mandat reads the photo, finds a repair shop and books a slot.
+   - *"Gala evening for 6 next Saturday, I already have my suit"*: a plan with several bookings; it asks for sizes only for what you still need, and remembers them.
+3. **Answer its few questions** (buttons under each message), then let it work. Merchants without an AI agent answer by themselves within a minute in this demo.
+4. **Look at the money and the dates.**
+   - *Activity*: every payment like a bank statement (held, paid, refunded), a receipt for each one, CSV export, and an AG Studio dashboard with its own assistant (*"Where did my money go this month?"*).
+   - *Agenda*: every dated booking on a Bryntum Calendar. Drag one to another time: Mandat asks the merchant to move it, and nothing is paid twice.
+5. **Change your mind.** *"Make it 8 people"*, *"cancel the ride"*: bookings are updated, holds are voided, and the budget envelope never goes over.
+
+Everything runs on the **PayPal sandbox**: no real money moves. The first visit after a quiet period can take up to a minute while the free host wakes up.
+
 ## The problem
 
 Handing an errand to an AI agent ("book dinner for six on Saturday, get a cake and flowers, 300 € max") is easy to say and hard to trust. Today an agent either cannot pay at all, so you finish every booking yourself, or it gets a card with no real limit and no record of what it did.
@@ -151,6 +169,11 @@ Open `http://localhost:8790`.
 | `MANDAT_DATA` | no | Data directory, defaults to `./data` (gitignored). |
 | `MANDAT_TURNS_PER_USER_DAY`, `MANDAT_MISSIONS_PER_USER_DAY`, `MANDAT_TURNS_PER_DAY`, `MANDAT_WRITES_PER_MINUTE` | no | Public-demo guards (defaults 80, 15, 3000, 40): daily AI allowance per person and for the whole app, plus a per-IP burst limit on writes. They keep the AI bill bounded while judges test the hosted demo. |
 | `MANDAT_NETWORK_SECRET` | no | Signing key of the demo merchant network. Random at each start if absent. |
+| `GOOGLE_PLACES_KEY` | no | Real place photos and ratings (Google Places), speech-to-text and the neural voice. Without it, places come from OpenStreetMap only and the phone's own voice is used. |
+| `CHANNEL3_API_KEY` | no | Real product search and shopping. Without it, Mandat books services but does not shop. |
+| `AG_STUDIO_LICENSE_KEY` | no | AG Studio licence. Without it the Activity dashboard works with a trial watermark. |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | no | Keeps `data/` in a Cloudflare R2 bucket across restarts. |
+| `PAYPAL_ENV` | no | `sandbox` (default) or `production`. |
 
 Local alternative to environment variables: `PAYPAL_KEY_FILE` and `DEEPSEEK_KEY_FILE` can point to JSON files (`{"client_id","client_secret"}` and `{"api_key"}`). The server refuses to read them unless they are `chmod 600`.
 
@@ -167,8 +190,8 @@ The repo includes a Render Blueprint: [`render.yaml`](render.yaml).
 3. In the PayPal sandbox app, enable **Save payment methods** and **Invoicing**.
 
 Notes on the free plan:
-- **The disk is ephemeral.** Users, missions and the OSM cache in `data/` are reset on every redeploy or restart. That is fine for a demo, and the PayPal sandbox keeps its own records.
-- A free instance sleeps after about 15 minutes without traffic. [`.github/workflows/keepalive.yml`](.github/workflows/keepalive.yml) calls the site every 10 minutes so it stays awake for judges. To turn it on, set the repository variable (or secret) `MANDAT_URL` to the hosted URL. Without it, the workflow skips.
+- **The disk is ephemeral.** When the Cloudflare R2 variables are set, `data/` is mirrored to R2 and restored at start (`start.mjs`, `lib/store.mjs`), so users and missions survive a redeploy. Without them, data is reset on every restart, which is fine for a quick demo.
+- A free instance sleeps after about 15 minutes without traffic. The server visits its own public address every 9 minutes (`start.mjs`; set `MANDAT_KEEPALIVE=off` to stop it), and [`.github/workflows/keepalive.yml`](.github/workflows/keepalive.yml) adds an outside ping when the repository variable `MANDAT_URL` is set.
 
 ## Tools used
 
