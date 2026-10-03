@@ -4,8 +4,8 @@
 
 Built for the PayPal AI Hackathon (Devpost, 2026). Everything runs on the **PayPal sandbox**, so no real money moves.
 
-- Hosted demo: `https://<your-render-service>.onrender.com` *(see [Deploy on Render](#deploy-on-render))*
-- Stack: Node.js 20+, Express, plain HTML/CSS/JS (installable PWA), PayPal REST APIs + PayPal Agent Toolkit, DeepSeek
+- Hosted demo: **https://mandat-qb77.onrender.com** (PayPal sandbox; see [Deploy on Render](#deploy-on-render) to run your own)
+- Stack: Node.js 20+, Express, plain HTML/CSS/JS (installable PWA), PayPal Server SDK + PayPal Agent Toolkit, DeepSeek, AG Studio, Bryntum Calendar, Channel3
 
 ---
 
@@ -21,8 +21,8 @@ Mandat is for people who want the errand done but keep control of the money: a *
 |---|---|
 | **Sign a mandate once** | One trip to PayPal saves your PayPal account with **Vault v3** (setup token, then payment token). That trip also connects your account (name and email come back with the token). You set a monthly limit and an autonomy level. |
 | **One budget envelope per mission** | Each mission has its own envelope: total / held / paid / remaining. Every payment is checked against it first (`lib/envelope.mjs`), and the monthly limit is checked when a mission is created. |
-| **Ask by text, voice, or photo** | Type, speak (Web Speech API; replies are read aloud with `speechSynthesis` and stop when you start talking), or attach a photo (a receipt, a flyer, a broken bike). The photo is read once by the model and kept as a text description. |
-| **Real places on a map** | The agent searches real nearby places with OpenStreetMap (Nominatim + Overpass) and shows them on an interactive map inside the conversation (MapLibre + OpenFreeMap). |
+| **Ask by text, voice, or photo** | Type, speak, or attach a photo (a receipt, a broken scooter, a character a child loves). Voice is recorded in the page and transcribed by Google Speech-to-Text; replies are read with a neural Google voice (Chirp 3 HD), only when you spoke. The photo is read once by the model and kept as a text description. |
+| **Real places, any city** | Real places from Google Places (rating, reviews, photos the agent looks at before choosing) and OpenStreetMap (addresses, transit lines), on an interactive map (MapLibre + OpenFreeMap). The merchant network opens in any city the first time it is asked for. |
 | **Negotiation with merchant agents** | Bookings go through a demo merchant network. Merchants that run an AI agent quote and negotiate (availability, discounts, counter-offers) inside their own private rules, and the exchange is shown live. |
 | **Know Your Agent** | Before negotiating or paying, the buyer agent checks the merchant agent's identity card, signed by the network with HMAC-SHA256 (`verify_merchant`). |
 | **Booking requests for merchants without AI** | For small merchants with no agent, Mandat sends a structured booking request (items from their catalogue, slot, deposit) to a **private merchant inbox** (`/merchant/:id?k=…`, an HMAC-signed link; in production it would arrive by SMS or email). The merchant taps **Accept**, **Other time** (counter-proposal) or **Decline** — no app, no AI on their side. After they accept, the shopper's agent holds the deposit with PayPal; the merchant then taps **Confirm & collect** and the deposit is captured. |
@@ -30,7 +30,9 @@ Mandat is for people who want the errand done but keep control of the money: a *
 | **Approvals by autonomy level** | *Careful* asks before every payment, *Balanced* pays small deposits alone and asks above your limit, *Autopilot* acts on its own inside the mission budget and reports each step. A **daily limit** across all missions still applies: above it, the agent must ask. Pending payments appear as an Approve / Decline sheet. |
 | **Split the bill** | Exact to the cent (`lib/split.mjs`): equal or unequal shares, rounding cents assigned to whoever paid. Each friend gets a **detailed PayPal invoice** (bill lines with their part, who paid, where, when, how it was split) with a pay link and a **QR code**. PayPal also emails it when an address is known. Paid invoices show up in the mission. |
 | **Notifications** | Web Push (VAPID) only for moments that need you: approvals, a question from the agent, a merchant accepting or declining, a friend paying, a mission fully booked. Nothing is sent while you are looking at that mission. |
-| **Activity ledger** | Every money movement across missions in an **AG Grid** ledger (held / paid / released / refunded / owed to you / paid back, with the PayPal reference), with a **natural-language filter** ("refunds in October", "what Sam still owes"). |
+| **Shopping with photos checked** | Real products from 25,000+ retailers through **Channel3**: Mandat searches, looks at the photos of the best candidates against the need ("a gift for an 8-year-old who loves Stitch"), drops what does not fit, offers the two best with their real difference, and pays with PayPal. |
+| **Agenda driven by the agent** | Every dated step of every mission in a **Bryntum Calendar**. Moving an event asks Mandat to move the booking with the merchant (`move_booking`): same booking, no new payment, and it only changes once the merchant agrees. |
+| **Spending dashboard with its own agent** | The Activity tab is an **AG Studio** dashboard built from the books (paid, held, still to pay, budget left, where the money goes, every payment with its PayPal reference). Its assistant is AG Studio's agent framework running on Mandat's model, with a tool that reads the books as the app computes them. |
 | **Stop switch** | One toggle freezes all payments for every mission, and each mission also has its own stop button. A mission that still holds money cannot be deleted. |
 
 No sign-up: each browser gets its own private space through an HTTP-only cookie.
@@ -64,6 +66,18 @@ No sign-up: each browser gets its own private space through an HTTP-only cookie.
   - *Prefix caching:* the stable instructions come first and the changing budget state comes last, so DeepSeek bills the repeated prefix as a cache hit. Each call logs its tokens and cache-hit percentage.
   - *Fast model by default, fallback on failure:* `DEEPSEEK_FAST_MODEL` serves every call. On a timeout, a 429 or a 5xx, the call moves once to `DEEPSEEK_SMART_MODEL`, and a half-streamed reply is replaced cleanly.
   - *Health probe:* a model that hung is skipped. An 8-token probe re-checks it at most every 5 minutes, so no user waits on a broken model.
+
+## Sponsor technologies
+
+| Sponsor | What Mandat does with it | Where |
+|---|---|---|
+| **AG Grid: AG Studio** | The Activity tab is an AG Studio dashboard over two tables joined by a relationship (payments → missions), opening on a ready-made report in Mandat's theme (light and dark, French locale, a phone layout). Its chat is the **Studio Agent Framework**: the five built-in agents (lead, planning, page, widget, data) run on Mandat's model through our own `AgLlmAdapter`, which posts each turn to `/api/studio/llm` so the key stays on the server. The lead agent gets a Mandat brief and a custom tool, `mission_books`, that returns the books exactly as the app computes them, so it never adds amounts up itself. Ask "spending by week" and it delegates to the page agent, then the widget agent, and a new chart appears. | `public/insights.js`, `lib/studio.mjs` |
+| **Bryntum: Calendar** | The Agenda tab shows every dated step of every mission, one colour per mission, steps still waiting dashed. The agent drives the schedule: dragging an event sends the move to Mandat, which asks the same merchant with `move_booking`. Merchants with an agent answer at once, the others confirm from their inbox; the event only lands at the new time once they agree, and nothing is paid twice. | `public/agenda.js`, `lib/calendar.mjs` (`agendaOf`), `move_booking` in `lib/agent.mjs` |
+| **Channel3** | `find_products` searches real products (European retailers priced in euros, or the US market in English), the agent looks at the photos of the five best candidates against what the person needs and drops what does not fit, then `buy_product` pays with PayPal inside the mission budget. | `lib/shop.mjs`, `find_products` / `buy_product` in `lib/agent.mjs` |
+| **APIMatic: Context Plugin for PayPal** | Installed in the coding agent (`npx context-plugins install https://github.com/paypaldev/server-sdk-context-plugin-preview`) and used to move every PayPal call onto the APIMatic-generated **PayPal Server SDK**, following its skills: pinned version, a timeout per attempt, typed `CustomError` mapping, and POST retries that are safe because every write carries a `PayPal-Request-Id`. | `lib/paypal.mjs` |
+| **Render** | Hosting: a free web service, data kept in a private Cloudflare R2 bucket between restarts. | `render.yaml`, `start.mjs`, `lib/store.mjs` |
+
+**Trials.** AG Studio and Bryntum run on their free trial builds. Bryntum counts its 45 days per browser from the first visit; AG Studio without a key only shows a watermark. Set `AG_STUDIO_LICENSE_KEY` to remove it.
 
 ## Architecture
 
@@ -163,12 +177,17 @@ Notes on the free plan:
 | **PayPal Server SDK** (`@paypal/paypal-server-sdk`, sandbox): Vault v3, Orders v2, Payments v2 | Mandate, deposit holds, captures on confirmation, voids, refunds |
 | **APIMatic Context Plugin for PayPal** | Coding-agent context used to integrate the PayPal Server SDK |
 | **PayPal Agent Toolkit** (`@paypal/agent-toolkit`) | Invoicing v2 tools for split bills: create, send, QR code, status |
-| **DeepSeek API** (OpenAI-compatible) | Tool-calling agent, merchant agents, photo reading, ledger filter, titles |
+| **DeepSeek API** (OpenAI-compatible) | Tool-calling agent, merchant agents, plan review, photo reading, the AG Studio agents, titles |
 | **OpenStreetMap**: Nominatim + Overpass | Geocoding and real nearby places, cached on disk, with a custom User-Agent, per the usage policies |
 | **MapLibre GL JS + OpenFreeMap** | Interactive map inside the conversation, no API key |
-| **AG Grid Community** | Activity ledger |
+| **AG Studio** (`ag-studio` 3.0, Studio Agent Framework) | Spending dashboard and its assistant (Activity tab) |
+| **Bryntum Calendar** (`@bryntum/calendar-trial` 7.3) | Agenda tab, moves handled by the agent |
+| **Channel3 API** | Product search, offers and photos for purchases |
+| **Google Places API (New)** | Real places, ratings, reviews and photos |
+| **Google Cloud Text-to-Speech (Chirp 3 HD) and Speech-to-Text** | The voice of Mandat, and what you say |
+| **AG Grid Community** | Fallback ledger when the dashboard cannot load |
 | **Web Push** (`web-push`, VAPID) + Service Worker | Notifications and the app badge |
-| **Web Speech API** (`SpeechRecognition`, `speechSynthesis`) | Voice in and voice out, in the browser |
+| **Web Speech API** | Fallback for voice when the cloud voice is not available |
 | **Express** | HTTP server, static files, Server-Sent Events |
 | **Render** | Hosting (free web service) |
 | **GitHub Actions** | Keep-alive ping for the hosted demo |
