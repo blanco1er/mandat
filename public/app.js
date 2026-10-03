@@ -88,6 +88,7 @@ async function boot() {
   const r = await get('/api/me');
   state.me = r.user;
   state.paypalMode = r.paypalMode;
+  state.agStudioKey = r.agStudioKey || '';
   $('#demoNote').textContent = r.paypalMode === 'sandbox' ? t('PayPal sandbox: no real money moves.') : t('Demo mode: PayPal sandbox keys are not set up yet.');
   const p = new URLSearchParams(location.search);
   history.replaceState(null, '', '/');
@@ -1599,7 +1600,28 @@ function ledgerColumns(narrow) {
     { field: 'ref', headerName: t('PayPal reference'), filter: 'agTextColumnFilter', flex: 1, minWidth: 120, hide: narrow, cellClass: 'led-ref', tooltipField: 'ref' },
   ];
 }
+// The spending dashboard (AG Studio, public/insights.js) is the Activity tab; the plain ledger below is kept
+// as the fallback when the dashboard cannot load.
+let studio, studioTry;
 async function openActivity() {
+  if (studio) { studio.refresh().catch(() => {}); return; }
+  if (studioTry !== false) {
+    try {
+      studioTry ||= import('/insights.js').then((m) => m.mountInsights($('#studio'), { get, post, lang, license: state.agStudioKey || '' }));
+      $('#studio').hidden = false;
+      $('#activity').classList.add('has-studio');
+      studio = await studioTry;
+      return;
+    } catch (e) {
+      console.warn('[activity] dashboard unavailable, plain ledger instead:', e.message);
+      studioTry = false;
+      $('#studio').hidden = true;
+      $('#activity').classList.remove('has-studio');
+    }
+  }
+  return openLedger();
+}
+async function openLedger() {
   const [data, ag] = await Promise.all([get('/api/me/activity'), loadAgGrid().catch(() => null)]);
   $('#tPaid').textContent = fmt(data.totals.paid);
   $('#tHeld').textContent = fmt(data.totals.held);
@@ -1664,8 +1686,15 @@ $('#filterClear').addEventListener('click', () => {
   $('#filterChip').hidden = true;
   $('#askText').value = '';
 });
-$('#csvBtn').addEventListener('click', () => ledger?.exportDataAsCsv({ fileName: `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv`, columnKeys: ['at', 'mission', 'who', 'what', 'kind', 'status', 'amount', 'ref'],
-  processCellCallback: (p) => (p.column.getColId() === 'kind' ? kindLabel(p.value) : p.column.getColId() === 'status' ? t(p.value || '') : p.value instanceof Date ? p.value.toISOString() : p.value) }));
+$('#csvBtn').addEventListener('click', () => {
+  if (studio) {
+    const url = URL.createObjectURL(new Blob([studio.csv()], { type: 'text/csv' }));
+    Object.assign(document.createElement('a'), { href: url, download: `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv` }).click();
+    return setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  ledger?.exportDataAsCsv({ fileName: `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv`, columnKeys: ['at', 'mission', 'who', 'what', 'kind', 'status', 'amount', 'ref'],
+  processCellCallback: (p) => (p.column.getColId() === 'kind' ? kindLabel(p.value) : p.column.getColId() === 'status' ? t(p.value || '') : p.value instanceof Date ? p.value.toISOString() : p.value) });
+});
 
 function renderSettings() {
   const u = state.me;
@@ -3070,8 +3099,8 @@ async function get(url) {
   if (!r.ok) throw new Error(j.error || t('Request failed'));
   return j;
 }
-async function post(url, body) {
-  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...HEADERS }, body: JSON.stringify(body) });
+async function post(url, body, { signal } = {}) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...HEADERS }, body: JSON.stringify(body), signal });
   const j = await r.json();
   if (!r.ok) throw Object.assign(new Error(j.error || t('Request failed')), { code: j.code });
   return j;

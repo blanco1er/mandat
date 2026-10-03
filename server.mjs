@@ -2,6 +2,7 @@
 // live event stream per mission (SSE), approvals, stop switch, merchant inbox.
 import express from 'express';
 import { shopEnabled } from './lib/shop.mjs';
+import { insightsData, studioTurn, booksOf } from './lib/studio.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -64,16 +65,16 @@ app.use('/api', (req, res, next) => {
   next();
 });
 // Daily AI allowance: per person and for the whole app (each agent turn or ledger question counts once).
-const LIMITS = { turns: Number(process.env.MANDAT_TURNS_PER_USER_DAY || 150), missions: Number(process.env.MANDAT_MISSIONS_PER_USER_DAY || 30), global: Number(process.env.MANDAT_TURNS_PER_DAY || 3000) };
+const LIMITS = { turns: Number(process.env.MANDAT_TURNS_PER_USER_DAY || 150), missions: Number(process.env.MANDAT_MISSIONS_PER_USER_DAY || 30), studio: Number(process.env.MANDAT_STUDIO_TURNS_PER_USER_DAY || 200), global: Number(process.env.MANDAT_TURNS_PER_DAY || 3000) };
 let usage = { day: '', global: 0, users: new Map() };
 function allowance(u, kind = 'turns') {
   const day = new Date().toISOString().slice(0, 10);
   if (usage.day !== day) usage = { day, global: 0, users: new Map() };
-  const mine = usage.users.get(u.id) || { turns: 0, missions: 0 };
+  const mine = usage.users.get(u.id) || { turns: 0, missions: 0, studio: 0 };
   if (usage.global >= LIMITS.global) throw Object.assign(new Error(tr(u.lang, 'Mandat has reached its daily demo limit. Please come back tomorrow.')), { status: 429 });
   if (mine[kind] >= LIMITS[kind]) throw Object.assign(new Error(kind === 'missions' ? tr(u.lang, "That's {n} new missions today, the demo limit. Continue an existing one, or come back tomorrow.", { n: LIMITS.missions }) : tr(u.lang, "You reached today's demo limit for the AI. It resets at midnight (UTC).")), { status: 429 });
   mine[kind]++;
-  if (kind === 'turns') usage.global++;
+  if (kind !== 'missions') usage.global++;
   usage.users.set(u.id, mine);
 }
 // The app's own files are always checked with the server before a stored copy is used: an app installed on
@@ -255,7 +256,8 @@ app.get('/api/health', (req, res) => { res.set('Cache-Control', 'no-store'); res
 app.get('/api/me', api(async (req, res) => {
   const u = me(req, res);
   const missions = u.missions.map((id) => getMission(id)).filter(Boolean).map((s) => missionSummary(live.get(s.id)?.s || s, { busy: !!live.get(s.id)?.running }));
-  return { user: publicUser(u), missions, paypalMode: PayPal.MODE };
+  // AG Studio's licence key is a client-side key by design (it only removes the watermark), so it is sent as is.
+  return { user: publicUser(u), missions, paypalMode: PayPal.MODE, agStudioKey: process.env.AG_STUDIO_LICENSE_KEY || '' };
 }));
 
 app.post('/api/me', api(async (req, res) => {
@@ -528,6 +530,16 @@ app.get('/api/me/activity', api(async (req, res) => {
       back: sum((r) => (r.kind === 'Share' ? r.amount : 0) + (r.refunded || 0)),
     },
   };
+}));
+// AG Studio: the spending dashboard's data, and its agent's model calls (the key stays on the server).
+app.get('/api/me/insights', api(async (req, res) => insightsData(me(req, res), getMission)));
+app.get('/api/me/books', api(async (req, res) => ({ missions: booksOf(me(req, res), getMission, String(req.query.mission || '')) })));
+app.post('/api/studio/llm', api(async (req, res) => {
+  const u = me(req, res);
+  allowance(u, 'studio');
+  const body = req.body || {};
+  if (!Array.isArray(body.input)) throw new Error('Bad request');
+  return studioTurn(body);
 }));
 // "Refunds in October", "what Sam still owes"… → an AG Grid filter model, in one small call.
 app.post('/api/me/activity/ask', api(async (req, res) => {
