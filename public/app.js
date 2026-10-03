@@ -712,7 +712,7 @@ let agenda, agendaTry;
 async function openAgenda() {
   if (agenda) return agenda.refresh().catch(() => {});
   try {
-    agendaTry ||= import('/agenda.js').then((m) => m.mountAgenda($('#calendar'), {
+    agendaTry ||= import('/agenda.js?v=' + (buildSeen || Date.now())).then((m) => m.mountAgenda($('#calendar'), {
       get, post, lang,
       onOpen: (id) => openMission(id),
       onAsked: (text) => {
@@ -758,7 +758,7 @@ addEventListener('resize', () => placeLens(), { passive: true });
     x0 = null;
     // Settle on the tab under the finger (a plain tap is handled the same way).
     const target = [...bar.querySelectorAll('button')].find((b) => x >= b.offsetLeft && x <= b.offsetLeft + b.offsetWidth) || null;
-    if (target && target.getAttribute('aria-current') == null) { TABS[target.dataset.tab](); show(target.dataset.tab); }
+    if (target && target.getAttribute('aria-current') == null) { TABS[target.dataset.tab](); show(target.dataset.tab); checkBuild(); }
     else placeLens();
   };
   bar.addEventListener('pointerup', end);
@@ -1728,7 +1728,7 @@ function downloadCsv(rows, name) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 async function mountStudio(host, compact, chatHost, onBoardChange) {
-  const m = await import('/insights.js');
+  const m = await import('/insights.js?v=' + (buildSeen || Date.now()));
   const st = await m.mountInsights(host, { get, post, lang, license: state.agStudioKey || '', compact });
   if (chatHost) m.mountAssistant(chatHost, st, { lang, onBoardChange });
   return st;
@@ -2512,10 +2512,12 @@ async function checkBuild() {
   try {
     const { build } = await fetch('/api/health', { cache: 'no-store' }).then((r) => r.json());
     if (!buildSeen) buildSeen = build;
-    else if (build && build !== buildSeen && !vm.on) location.reload();
+    // a new version: reload when nothing is in progress (not while talking, typing or inside a mission)
+    else if (build && build !== buildSeen && !vm.on && !editing() && $('#live').hidden) location.reload();
   } catch {}
 }
 checkBuild();
+setInterval(() => { if (document.visibilityState === 'visible') checkBuild(); }, 120000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkBuild(); });
 addEventListener('pageshow', (e) => { if (e.persisted) checkBuild(); });
 // Safety net: whenever Mandat is neither working nor talking nor listening, the microphone comes back by itself.
