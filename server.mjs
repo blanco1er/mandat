@@ -567,6 +567,17 @@ app.get('/receipt/:id', (req, res) => {
   } catch (e) { res.status(500).type('text/plain').send('Receipt unavailable.'); }
 });
 app.get('/api/me/agenda', api(async (req, res) => agendaOf(me(req, res), getMission)));
+// Pinned dates of the agenda: kept on the account, so they follow the user on every device.
+app.post('/api/me/pins', api(async (req, res) => {
+  const u = me(req, res);
+  const id = String(req.body?.id || '').slice(0, 80);
+  if (!/^s_[0-9a-f]+~\d+$/.test(id)) throw new Error('Bad pin');
+  u.pins = (u.pins || []).filter((p) => p.id !== id);
+  if (req.body?.on) u.pins.unshift({ id, date: String(req.body.date || '').slice(0, 16), label: String(req.body.label || '').slice(0, 80), mission: String(req.body.mission || '').slice(0, 80) });
+  u.pins = u.pins.slice(0, 30);
+  saveUser(u);
+  return { pins: u.pins };
+}));
 app.get('/api/me/books', api(async (req, res) => ({ missions: booksOf(me(req, res), getMission, String(req.query.mission || '')) })));
 app.post('/api/studio/llm', api(async (req, res) => {
   const u = me(req, res);
