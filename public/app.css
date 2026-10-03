@@ -1400,3 +1400,14 @@ html.on-live #live { position: fixed; inset: 0; max-width: none; margin: 0; over
 #activity.has-studio .stat-strip, #activity.has-studio .ask-bar, #activity.has-studio .filter-chip,
 #activity.has-studio #ledger, #activity.has-studio .ledger-empty, #activity.has-studio .ledger-count { display: none !important; }
 @media (max-width: 719px) { .studio-host { height: calc(100dvh - 170px); margin: 0 -8px 12px; border-radius: 14px; } }
+
+/* Agenda: the Bryntum Calendar fills the page; steps still waiting are dashed */
+.calendar-host { height: calc(100dvh - 170px); min-height: 480px; margin: 8px 0 12px; border-radius: 18px; overflow: hidden; background: var(--card); box-shadow: var(--shadow); }
+#agenda.view.wide { max-width: 1280px; }
+.calendar-host .mandat-pending .b-cal-event, .calendar-host .b-cal-event-wrap.mandat-pending .b-cal-event { border-style: dashed !important; opacity: 0.78; }
+.calendar-host .b-cal-event-wrap.mandat-asked .b-cal-event { animation: mandat-asked 1.6s ease-in-out infinite; }
+@keyframes mandat-asked { 50% { opacity: 0.45; } }
+.agenda-note { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 21; max-width: min(520px, calc(100vw - 32px)); padding: 10px 16px; border-radius: 16px; background: var(--ink); color: var(--bg); font-size: 14px; line-height: 19px; box-shadow: var(--shadow); }
+.agenda-empty { text-align: center; color: var(--ink-2); font-size: 15px; margin: 8px 0 0; }
+@media (max-width: 719px) { .calendar-host { margin: 0 -8px 12px; border-radius: 14px; height: calc(100dvh - 160px); } }
+@media (max-width: 400px) { .tabbar button { width: 78px; } .tab-lens { width: 78px; } }

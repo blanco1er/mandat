@@ -11,7 +11,7 @@ import * as PayPal from './lib/paypal.mjs';
 import { geocode, searchAddress, reverseAddress } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
-import { ics, planEvents, validTz, localToUtc } from './lib/calendar.mjs';
+import { ics, planEvents, validTz, localToUtc, agendaOf } from './lib/calendar.mjs';
 import { KINDS, remember, forget, memoryBrief, missionsBrief } from './lib/memory.mjs';
 import { persist } from './lib/store.mjs';
 import { synthesize, ttsEnabled } from './lib/tts.mjs';
@@ -533,6 +533,7 @@ app.get('/api/me/activity', api(async (req, res) => {
 }));
 // AG Studio: the spending dashboard's data, and its agent's model calls (the key stays on the server).
 app.get('/api/me/insights', api(async (req, res) => insightsData(me(req, res), getMission)));
+app.get('/api/me/agenda', api(async (req, res) => agendaOf(me(req, res), getMission)));
 app.get('/api/me/books', api(async (req, res) => ({ missions: booksOf(me(req, res), getMission, String(req.query.mission || '')) })));
 app.post('/api/studio/llm', api(async (req, res) => {
   const u = me(req, res);

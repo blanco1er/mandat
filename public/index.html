@@ -183,6 +183,11 @@
     <p class="ledger-count"><small id="ledgerCount"></small> · Tap a line to open its mission</p>
   </main>
 
+  <main id="agenda" class="view wide" hidden>
+    <div id="calendar" class="calendar-host"></div>
+    <p class="agenda-note" id="agendaNote" hidden></p>
+  </main>
+
   <main id="settings" class="view" hidden>
 
     <button type="button" class="profile-card account-open" id="accountOpen">
@@ -287,10 +292,11 @@
     </div>
   </div>
 
-  <!-- Floating tab bar (home / settings) -->
+  <!-- Floating tab bar (missions / agenda / activity / settings) -->
   <nav class="tabbar glass" id="tabbar" hidden>
     <i class="tab-lens" id="tabLens" aria-hidden="true"></i>
     <button data-tab="home" aria-current="page"><svg viewBox="0 0 24 24"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z"/></svg><span>Missions</span></button>
+    <button data-tab="agenda"><svg viewBox="0 0 24 24"><path d="M7 2h2v2h6V2h2v2h2.5A1.5 1.5 0 0 1 21 5.5v14a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5v-14A1.5 1.5 0 0 1 4.5 4H7V2Zm12 8H5v9h14v-9ZM7 12h4v3H7v-3Z"/></svg><span>Agenda</span></button>
     <button data-tab="activity"><svg viewBox="0 0 24 24"><path d="M4 19h16v2H4zM5 10h3v7H5zm5.5-5h3v12h-3zM16 13h3v4h-3z"/></svg><span>Activity</span></button>
     <button data-tab="settings"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Zm8.6 2.3-1.9-.3a7 7 0 0 0-.7-1.7l1.1-1.6-1.6-1.6-1.6 1.1a7 7 0 0 0-1.7-.7l-.3-1.9h-2.2l-.3 1.9a7 7 0 0 0-1.7.7L7.5 5.6 5.9 7.2 7 8.8a7 7 0 0 0-.7 1.7l-1.9.3v2.2l1.9.3c.2.6.4 1.2.7 1.7l-1.1 1.6 1.6 1.6 1.6-1.1c.5.3 1.1.5 1.7.7l.3 1.9h2.2l.3-1.9c.6-.2 1.2-.4 1.7-.7l1.6 1.1 1.6-1.6-1.1-1.6c.3-.5.5-1.1.7-1.7l1.9-.3z"/></svg><span>Settings</span></button>
   </nav>

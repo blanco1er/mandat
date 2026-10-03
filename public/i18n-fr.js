@@ -622,4 +622,6 @@ export default {
   "Paying with PayPal": "Paiement avec PayPal",
   "Best value": "Meilleur rapport qualité-prix",
   "Photo sent": "Photo envoyée",
+  "Agenda": "Agenda",
+  "The agenda could not load. Check your connection and try again.": "L’agenda n’a pas pu se charger. Vérifiez votre connexion et réessayez.",
 };

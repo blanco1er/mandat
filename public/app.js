@@ -10,12 +10,12 @@ const PLURAL = { bakery: 'bakeries', florist: 'florists', restaurant: 'restauran
 const many = (c) => t(PLURAL[c] || c + 's');
 
 // ---------- routing ----------
-const VIEWS = ['welcome', 'onboard', 'mandate', 'home', 'live', 'activity', 'settings'];
+const VIEWS = ['welcome', 'onboard', 'mandate', 'home', 'live', 'agenda', 'activity', 'settings'];
 function show(view) {
   document.body.classList.toggle('on-welcome', view === 'welcome' || view === 'onboard');
   if (view === 'welcome') playStory(); else stopStory();
   for (const v of VIEWS) $('#' + v).hidden = v !== view;
-  $('#tabbar').hidden = !['home', 'activity', 'settings'].includes(view);
+  $('#tabbar').hidden = !['home', 'agenda', 'activity', 'settings'].includes(view);
   $('#composer').hidden = view !== 'live';
   document.documentElement.classList.toggle('on-live', view === 'live'); // the conversation scrolls inside, the page never moves
   $('#bottomFade').hidden = view !== 'live';
@@ -29,7 +29,7 @@ function show(view) {
   $('#topMe').hidden = view !== 'home';
   $('.brand-mark').hidden = view === 'live';
   // The bar says where you are: the tab's name next to the mark (the app's name is already on the icon).
-  const TAB_TITLE = { home: 'Missions', activity: 'Activity', settings: 'Settings' };
+  const TAB_TITLE = { home: 'Missions', agenda: 'Agenda', activity: 'Activity', settings: 'Settings' };
   if (view !== 'live') { $('#topTitle').textContent = TAB_TITLE[view] ? t(TAB_TITLE[view]) : 'Mandat'; setTopEmoji(''); }
   $$('#tabbar button').forEach((b) => (b.dataset.tab === view ? b.setAttribute('aria-current', 'page') : b.removeAttribute('aria-current')));
   window.scrollTo({ top: 0 });
@@ -658,7 +658,30 @@ async function refreshHome() {
   paintMe(r.user);
   renderHome(r.missions);
 }
-const TABS = { home: () => refreshHome(), activity: () => openActivity(), settings: () => renderSettings() };
+const TABS = { home: () => refreshHome(), agenda: () => openAgenda(), activity: () => openActivity(), settings: () => renderSettings() };
+// Agenda: everything Mandat planned, in a Bryntum Calendar (public/agenda.js). Moving an event asks Mandat.
+let agenda, agendaTry;
+async function openAgenda() {
+  if (agenda) return agenda.refresh().catch(() => {});
+  try {
+    agendaTry ||= import('/agenda.js').then((m) => m.mountAgenda($('#calendar'), {
+      get, post, lang,
+      onOpen: (id) => openMission(id),
+      onAsked: (text) => {
+        const n = $('#agendaNote');
+        n.textContent = text;
+        n.hidden = false;
+        clearTimeout(n._t);
+        n._t = setTimeout(() => { n.hidden = true; }, 7000);
+      },
+    }));
+    agenda = await agendaTry;
+  } catch (e) {
+    agendaTry = null;
+    $('#agendaNote').textContent = t('The agenda could not load. Check your connection and try again.');
+    $('#agendaNote').hidden = false;
+  }
+}
 // The glass lens sits under the current tab; drag along the bar and it follows, then settles on the nearest tab.
 function placeLens(x) {
   const bar = $('#tabbar'), lens = $('#tabLens');
