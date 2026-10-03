@@ -1478,7 +1478,7 @@ html.on-live #live { position: fixed; inset: 0; max-width: none; margin: 0; over
 .analyse-close { width: 34px; height: 34px; border-radius: 17px; display: grid; place-items: center; background: var(--card-line); }
 .analyse-close svg { width: 16px; height: 16px; stroke: var(--ink); stroke-width: 2; fill: none; stroke-linecap: round; }
 .analyse-seg { flex: none; width: 210px; }
-.analyse-body { flex: 1; min-height: 0; padding-bottom: env(safe-area-inset-bottom); }
+.analyse-body { flex: 1; min-height: 0; }
 .analyse-body.loading::after { content: ""; display: block; width: 28px; height: 28px; margin: 40vh auto 0; border-radius: 50%; border: 3px solid var(--card-line); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -1527,7 +1527,7 @@ html.on-live #live { position: fixed; inset: 0; max-width: none; margin: 0; over
 .sc-board { align-self: flex-start; padding: 7px 12px; border-radius: 14px; font-size: 14px; font-weight: 600; color: var(--accent); background: rgba(10, 108, 255, 0.1); }
 .sc-starters { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 10px; }
 .sc-starters button { padding: 8px 12px; border-radius: 16px; font-size: 14px; font-weight: 500; color: var(--ink); background: var(--card); border: 1px solid var(--card-line); }
-.sc-bar { display: flex; align-items: center; gap: 8px; margin: 0 12px calc(12px + env(safe-area-inset-bottom)); padding: 6px 6px 6px 16px; border-radius: 26px; background: var(--card); border: 1px solid var(--card-line); box-shadow: var(--shadow); }
+.sc-bar { display: flex; align-items: center; gap: 8px; margin: 0 12px max(10px, calc(env(safe-area-inset-bottom) - 8px)); /* just above the home indicator */ padding: 6px 6px 6px 16px; border-radius: 26px; background: var(--card); border: 1px solid var(--card-line); box-shadow: var(--shadow); }
 .sc-bar input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-size: 16px; color: var(--ink); }
 .sc-send { width: 38px; height: 38px; border-radius: 19px; display: grid; place-items: center; background: var(--accent); flex: none; }
 .sc-send:disabled { opacity: 0.4; }
@@ -1536,3 +1536,6 @@ html.on-live #live { position: fixed; inset: 0; max-width: none; margin: 0; over
 /* reading the analysis on a phone: no selection frame around a widget or a tapped cell */
 .analyse-board .ag-studio-layout-widget-selected { box-shadow: none !important; }
 .analyse-board .ag-cell-focus:not(.ag-cell-range-selected), .analyse-board .ag-cell-focus:focus-within { border-color: transparent !important; outline: none !important; }
+
+body.kb-open .analyse-sheet .sc-bar { margin-bottom: 8px; }
+.analyse-sheet { overscroll-behavior: contain; }

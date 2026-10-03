@@ -14,28 +14,28 @@ const WORDS = {
     payments: 'Every payment', date: 'Date', merchant: 'Merchant or friend', category: 'Category', what: 'What', kind: 'Type', status: 'Status',
     spent: 'Paid', heldF: 'Held', refunded: 'Refunded', full: 'Full price', balance: 'Balance due', owed: 'Owed to you', back: 'Paid back', ref: 'PayPal reference',
     mission: 'Mission', created: 'Created', city: 'City', budget: 'Budget', committed: 'Committed', leftF: 'Left', stillToPay: 'Still to pay', missionsT: 'Missions', paymentsT: 'Payments',
-    page: 'Spending', placeholder: 'Ask for a chart, a filter, an answer…', send: 'Send', hello: 'Ask me about your spending: I can answer, or change the dashboard for you.', failed: 'That did not work. Try again in a moment.', seeBoard: 'See it on the dashboard',
+    page: 'Spending', placeholder: 'A chart, a filter, a question…', send: 'Send', hello: 'Ask me about your spending: I can answer, or change the dashboard for you.', failed: 'That did not work. Try again in a moment.', seeBoard: 'See it on the dashboard',
     steps: { view_schema: 'Reading your data', view_report: 'Looking at the dashboard', view_page: 'Looking at the dashboard', mission_books: 'Checking your books', delegate_to: 'Working on the dashboard', add_widget: 'Adding a chart', configure_widget: 'Setting up the chart', execute_query: 'Running the numbers', position_widget: 'Placing the chart', remove_widget: 'Removing a chart', add_page_filter: 'Filtering the page', remove_page_filter: 'Removing a filter', other: 'Working' },
     starters: [
       ['Spending by week', 'Add a column chart of what I paid per week.'],
       ['Biggest payments', 'Which five payments were the largest, and for which mission?'],
       ['What is left to pay?', 'For each mission, what is still to pay, to whom and when?'],
     ],
-    brief: 'This dashboard shows the user\'s own money, handled by Mandat, the agent that books and pays for them with PayPal. Table "payments": one row per deposit or purchase (status Held = reserved, not charged; Paid = captured; Released = never charged; Refunded) and per bill share sent to a friend. Table "missions": each errand with its budget, what is committed at full price, what is left and what is still to pay on site. Amounts are in euros. Answer in English, in a sentence or two, like a careful accountant. For any question about why an amount is what it is, or what is still owed to whom, call mission_books: its numbers are computed by the app, use them as they are and never add them up yourself. Never show internal ids (mission_id, payment_id) to the user: name missions by their title.',
+    brief: 'This dashboard shows the user\'s own money, handled by Mandat, the agent that books and pays for them with PayPal. Table "payments": one row per deposit or purchase (status Held = reserved, not charged; Paid = captured; Released = never charged; Refunded) and per bill share sent to a friend. Table "missions": each errand with its budget, what is committed at full price, what is left and what is still to pay on site. Amounts are in euros. Answer in English (statuses in plain words: held, paid, released, refunded), in a sentence or two, like a careful accountant. For any question about why an amount is what it is, or what is still owed to whom, call mission_books: its numbers are computed by the app, use them as they are and never add them up yourself. Never show internal ids (mission_id, payment_id) to the user: name missions by their title.',
   },
   fr: {
     paid: 'Payé', held: 'Bloqué', due: 'Reste à régler', left: 'Budget restant', byCat: 'Où va l’argent', byMission: 'Budget par mission',
     payments: 'Tous les paiements', date: 'Date', merchant: 'Commerçant ou proche', category: 'Catégorie', what: 'Objet', kind: 'Type', status: 'État',
     spent: 'Payé', heldF: 'Bloqué', refunded: 'Remboursé', full: 'Prix total', balance: 'Solde dû', owed: 'On vous doit', back: 'Remboursé par un proche', ref: 'Référence PayPal',
     mission: 'Mission', created: 'Créée le', city: 'Ville', budget: 'Budget', committed: 'Engagé', leftF: 'Restant', stillToPay: 'Reste à régler', missionsT: 'Missions', paymentsT: 'Paiements',
-    page: 'Dépenses', placeholder: 'Demandez un graphique, un filtre, une réponse…', send: 'Envoyer', hello: 'Posez-moi une question sur vos dépenses : je réponds, ou je modifie le tableau pour vous.', failed: 'Ça n’a pas marché. Réessayez dans un instant.', seeBoard: 'Voir sur le tableau',
+    page: 'Dépenses', placeholder: 'Un graphique, un filtre, une question…', send: 'Envoyer', hello: 'Posez-moi une question sur vos dépenses : je réponds, ou je modifie le tableau pour vous.', failed: 'Ça n’a pas marché. Réessayez dans un instant.', seeBoard: 'Voir sur le tableau',
     steps: { view_schema: 'Je lis vos données', view_report: 'Je regarde le tableau', view_page: 'Je regarde le tableau', mission_books: 'Je consulte vos comptes', delegate_to: 'Je prépare le tableau', add_widget: 'J’ajoute un graphique', configure_widget: 'Je règle le graphique', execute_query: 'Je fais les calculs', position_widget: 'Je place le graphique', remove_widget: 'Je retire un graphique', add_page_filter: 'Je filtre la page', remove_page_filter: 'Je retire un filtre', other: 'Je travaille' },
     starters: [
       ['Dépenses par semaine', 'Ajoute un graphique en colonnes de ce que j’ai payé par semaine.'],
       ['Plus gros paiements', 'Quels sont les cinq plus gros paiements, et pour quelle mission ?'],
       ['Ce qu’il reste à régler', 'Pour chaque mission, qu’est-ce qu’il reste à régler, à qui et quand ?'],
     ],
-    brief: 'Ce tableau de bord montre l’argent de l’utilisateur, géré par Mandat, l’agent qui réserve et paie pour lui avec PayPal. Table « payments » : une ligne par acompte ou achat (statut Held = bloqué, pas encaissé ; Paid = encaissé ; Released = jamais débité ; Refunded = remboursé) et par part de facture envoyée à un proche. Table « missions » : chaque démarche avec son budget, ce qui est engagé au prix total, ce qui reste et ce qui reste à régler sur place. Montants en euros. Réponds en français, vouvoiement, en une ou deux phrases, comme un comptable rigoureux. Pour toute question sur la raison d’un montant ou sur ce qui reste dû et à qui, appelle mission_books : ses chiffres sont calculés par l’appli, reprends-les tels quels et ne fais jamais l’addition toi-même. N’affiche jamais d’identifiant interne (mission_id, payment_id) : nomme les missions par leur titre.',
+    brief: 'Ce tableau de bord montre l’argent de l’utilisateur, géré par Mandat, l’agent qui réserve et paie pour lui avec PayPal. Table « payments » : une ligne par acompte ou achat (statut Held = bloqué, pas encaissé ; Paid = encaissé ; Released = jamais débité ; Refunded = remboursé) et par part de facture envoyée à un proche. Table « missions » : chaque démarche avec son budget, ce qui est engagé au prix total, ce qui reste et ce qui reste à régler sur place. Montants en euros. Réponds en français, statuts compris (Held = bloqué, Paid = payé, Released = libéré, Refunded = remboursé, jamais en anglais), vouvoiement, en une ou deux phrases, comme un comptable rigoureux. Pour toute question sur la raison d’un montant ou sur ce qui reste dû et à qui, appelle mission_books : ses chiffres sont calculés par l’appli, reprends-les tels quels et ne fais jamais l’addition toi-même. N’affiche jamais d’identifiant interne (mission_id, payment_id) : nomme les missions par leur titre.',
   },
 };
 
@@ -275,12 +275,14 @@ export function mountAssistant(el, studio, { lang, onBoardChange } = {}) {
     <div class="sc-starters">${W.starters.map(([label, prompt]) => `<button type="button" data-p="${escHtml(prompt)}">${escHtml(label)}</button>`).join('')}</div>
     <form class="sc-bar" autocomplete="off"><input aria-label="${escHtml(W.placeholder)}" placeholder="${escHtml(W.placeholder)}" enterkeyhint="send"><button type="submit" class="sc-send" aria-label="${escHtml(W.send)}"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
   const log = el.querySelector('.sc-log'), input = el.querySelector('input'), form = el.querySelector('form');
-  let session = null, changedBoard = false;
+  let session = null, boardSig = '';
+  // what is on the dashboard (pages, widgets, filters): compared before and after a question
+  const sig = () => { try { const st = studio.api.getState(); return JSON.stringify(st.pages.map((p) => [p.id, p.widgets, p.filters])); } catch { return ''; } };
   const step = (call) => {
     if (HIDDEN_STEPS.has(call.name)) return '';
     const done = call.status === 'complete', bad = call.status === 'error' || call.status === 'cancelled';
-    if (['add_widget', 'configure_widget', 'position_widget', 'remove_widget', 'add_page_filter', 'remove_page_filter'].includes(call.name) || (call.name === 'delegate_to' && done)) changedBoard = true;
-    return `<div class="sc-step ${done ? 'done' : bad ? 'bad' : 'run'}"><i aria-hidden="true"></i>${escHtml(W.steps[call.name] || W.steps.other)}</div>`;
+    const label = call.name === 'delegate_to' && call.args?.type?.id === 'data' ? W.steps.execute_query : W.steps[call.name] || W.steps.other;
+    return `<div class="sc-step ${done ? 'done' : bad ? 'bad' : 'run'}"><i aria-hidden="true"></i>${escHtml(label)}</div>`;
   };
   function render() {
     const busy = session.status === 'running';
@@ -295,7 +297,7 @@ export function mountAssistant(el, studio, { lang, onBoardChange } = {}) {
       }
     }
     if (busy) html += '<div class="sc-typing" aria-hidden="true"><i></i><i></i><i></i></div>';
-    else if (changedBoard && onBoardChange) html += `<button type="button" class="sc-board">${escHtml(W.seeBoard)}</button>`;
+    else if (onBoardChange && boardSig && boardSig !== sig()) html += `<button type="button" class="sc-board">${escHtml(W.seeBoard)}</button>`; // only when the dashboard really changed
     if (session.status === 'error') html += `<div class="sc-err">${escHtml(W.failed)}</div>`;
     log.innerHTML = html;
     log.querySelector('.sc-board')?.addEventListener('click', () => onBoardChange());
@@ -308,7 +310,7 @@ export function mountAssistant(el, studio, { lang, onBoardChange } = {}) {
     const harness = studio.harness();
     if (!harness) { console.warn('[assistant] no harness yet'); return; }
     el.querySelector('.sc-starters').hidden = true;
-    changedBoard = false;
+    boardSig = sig();
     if (!session) {
       try { session = await harness.createThread({ agentId: 'lead' }); } catch (e) { console.warn('[assistant] createThread', e); return; }
       session.addEventListener('changed', render);

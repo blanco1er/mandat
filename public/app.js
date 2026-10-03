@@ -2384,6 +2384,14 @@ const fitKeyboard = () => {
     document.documentElement.style.setProperty('--kb-top', Math.round(vv.offsetTop + vv.height - h - 6) + 'px');
   }
   document.body.classList.toggle('kb-open', open && !!vv);
+  // The full-screen analysis follows the visible area, so its message bar sits right on the keyboard.
+  const sheet = $('#analyseSheet');
+  if (sheet && !sheet.hidden && vv) {
+    sheet.style.top = open ? vv.offsetTop + 'px' : '';
+    sheet.style.height = open ? vv.height + 'px' : '';
+    sheet.style.bottom = open ? 'auto' : '';
+    if (open) requestAnimationFrame(() => { const log = $('#analyseChat .sc-log'); if (log) log.scrollTop = log.scrollHeight; });
+  }
 };
 window.visualViewport?.addEventListener('resize', fitKeyboard);
 window.visualViewport?.addEventListener('scroll', fitKeyboard);
