@@ -18,7 +18,7 @@ import { persist } from './lib/store.mjs';
 import { synthesize, ttsEnabled } from './lib/tts.mjs';
 import { transcribe, sttEnabled } from './lib/stt.mjs';
 import { emojiFor, isEmoji } from './lib/emoji.mjs';
-import { budgetFromText } from './lib/budget.mjs';
+import { budgetFromText, currencyFromText } from './lib/budget.mjs';
 import * as Push from './lib/push.mjs';
 import { tr, trn, langOf, money } from './lib/i18n-server.mjs';
 import { merchant, inboxAccess, inboxUrl } from './lib/merchants.mjs';
@@ -626,7 +626,7 @@ app.post('/api/missions', api(async (req, res) => {
   if (used + total > u.rules.monthlyCap) throw Object.assign(new Error(tr(L, 'This would exceed your monthly limit ({cap}, {used} already planned).', { cap: money(L, u.rules.monthlyCap), used: money(L, used) })), { status: 400, code: 'monthly_limit' });
   allowance(u, 'missions');
   allowance(u, 'turns');
-  const s = createSession({ budget: total, approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.get('X-Lang') || req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });
+  const s = createSession({ budget: total, currency: currencyFromText(intent), approveAbove: approveAboveFor(u), purpose: intent.slice(0, 120), location, language: req.get('X-Lang') || req.headers['accept-language']?.slice(0, 5) || 'en', userId: u.id, emoji });
   s.envelope.source = source;
   s._voice = req.body?.voice === true;
   s.title = plainTitle(intent); // instant; the AI title replaces it in the background
