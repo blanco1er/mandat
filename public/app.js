@@ -165,19 +165,21 @@ const TASTES = [
 ];
 // Sizes and style: tapped, never typed. Sizes are kept as they are written on labels; style in the app's words.
 const FIT = {
+  cut: ['Menswear', 'Womenswear', 'Both'],
   top: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
   bottom: ['34', '36', '38', '40', '42', '44', '46', '48'],
   shoes: ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'],
   style: ['Classic', 'Casual', 'Elegant', 'Sporty', 'Streetwear', 'Business', 'Bohemian', 'Minimalist'],
 };
-const KID_FIT = { top: ['2 yrs', '4 yrs', '6 yrs', '8 yrs', '10 yrs', '12 yrs', '14 yrs'], shoes: ['24', '26', '28', '30', '32', '34', '36', '38'] };
+const KID_FIT = { cut: ['Boy', 'Girl', 'Both'], top: ['2 yrs', '4 yrs', '6 yrs', '8 yrs', '10 yrs', '12 yrs', '14 yrs'], shoes: ['24', '26', '28', '30', '32', '34', '36', '38'] };
 const RELATIONS = ['Partner', 'Child', 'Parent', 'Sibling', 'Friend', 'Colleague', 'Other'];
 // One size per row (tap again to clear), several styles; onChange gets the whole fit object.
 function fitPicker(box, fit, onChange, { kid = false } = {}) {
   const f = { ...(fit || {}) };
+  // The cut comes first: Mandat never guesses whether to look at menswear or womenswear.
   const rows = kid
-    ? [['top', 'Clothing size', KID_FIT.top], ['shoes', 'Shoes (EU)', KID_FIT.shoes], ['style', 'Style', FIT.style]]
-    : [['top', 'Top', FIT.top], ['bottom', 'Trousers', FIT.bottom], ['shoes', 'Shoes (EU)', FIT.shoes], ['style', 'Style', FIT.style]];
+    ? [['cut', 'Clothes for', KID_FIT.cut], ['top', 'Clothing size', KID_FIT.top], ['shoes', 'Shoes (EU)', KID_FIT.shoes], ['style', 'Style', FIT.style]]
+    : [['cut', 'Clothes for', FIT.cut], ['top', 'Top', FIT.top], ['bottom', 'Trousers', FIT.bottom], ['shoes', 'Shoes (EU)', FIT.shoes], ['style', 'Style', FIT.style]];
   box.innerHTML = '';
   for (const [key, title, items] of rows) {
     box.append(el('p', 'chips-title', t(title)));
@@ -200,7 +202,7 @@ function fitPicker(box, fit, onChange, { kid = false } = {}) {
     box.append(wrap);
   }
 }
-const fitText = (f) => [f?.top, f?.bottom && t('trousers {size}', { size: f.bottom }), f?.shoes && t('shoes {size}', { size: f.shoes }), f?.style && splitList(f.style).map((x) => t(x)).join(', ')].filter(Boolean).join(' · ');
+const fitText = (f) => [f?.cut && t(f.cut), f?.top, f?.bottom && t('trousers {size}', { size: f.bottom }), f?.shoes && t('shoes {size}', { size: f.shoes }), f?.style && splitList(f.style).map((x) => t(x)).join(', ')].filter(Boolean).join(' · ');
 const OB_DIET = DIET.slice(0, 10);
 const OB_LIKES = ['Quiet places', 'Terraces', 'Local spots', 'Fine dining', 'Good value', 'Italian', 'Japanese', 'Trains over planes', 'Central hotels', 'Early dinners'];
 let obStep = 0;
