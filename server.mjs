@@ -262,6 +262,7 @@ app.get('/api/me', api(async (req, res) => {
   return { user: publicUser(u), missions, paypalMode: PayPal.MODE, agStudioKey: process.env.AG_STUDIO_LICENSE_KEY || '' };
 }));
 
+const cleanFit = (f) => Object.fromEntries(['top', 'bottom', 'shoes', 'height', 'style', 'age'].map((k) => [k, String(f[k] ?? '').trim().slice(0, 80)]).filter(([, v]) => v));
 app.post('/api/me', api(async (req, res) => {
   const u = me(req, res);
   const { profile, rules, voice } = req.body || {};
@@ -273,11 +274,19 @@ app.post('/api/me', api(async (req, res) => {
       const h = profile.home;
       p.home = { label: h.label.slice(0, 200), ...(Number.isFinite(h.lat) && Number.isFinite(h.lon) ? { lat: h.lat, lon: h.lon } : {}) };
     }
-    // Your people: a name and the email their PayPal requests go to (older entries kept a free "contact").
+    // Sizes and style, so Mandat can buy clothes and shoes that fit.
+    if (profile.fit && typeof profile.fit === 'object') p.fit = cleanFit(profile.fit);
+    // Your people: who they are to you, their sizes and style, and the email their PayPal requests go to
+    // (older entries kept a free "contact"). The email is optional: people are not only for split bills.
     if (Array.isArray(profile.people)) {
       p.people = profile.people.slice(0, 30).map((x) => {
         const c = String(x.email || x.contact || '').trim().slice(0, 120);
-        return { name: String(x.name || '').trim().slice(0, 60), email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c) ? c : '' };
+        return {
+          name: String(x.name || '').trim().slice(0, 60),
+          email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c) ? c : '',
+          relation: String(x.relation || '').trim().slice(0, 30),
+          ...(x.fit && typeof x.fit === 'object' ? { fit: cleanFit(x.fit) } : {}),
+        };
       }).filter((x) => x.name);
     }
   }
@@ -346,7 +355,7 @@ app.post('/api/me/interview', api(async (req, res) => {
   if (!(Array.isArray(req.body?.history) && req.body.history.length)) {
     if (u.memory?.length || u.profile.people?.length) return {
       say: tr(L, 'Good to see you again. What shall we talk about? Anything goes.'),
-      choices: ['My people', 'My tastes', 'A plan coming up', 'A change in my life'].map((c) => tr(L, c)),
+      choices: ['My people', 'My sizes and style', 'A plan coming up', 'A change in my life'].map((c) => tr(L, c)),
       saved: [], done: false, user: publicUser(u),
     };
     return {
@@ -360,16 +369,16 @@ app.post('/api/me/interview', api(async (req, res) => {
     .map((m) => ({ role: m.role === 'you' ? 'user' : 'assistant', content: String(m.text || '').slice(0, 500) }));
   const known = [agentBrief(u), memoryBrief(u)].filter(Boolean).join('\n') || 'Nothing yet.';
   const asked = hist.filter((m) => m.role === 'assistant').length;
-  const sys = `You are Mandat, a personal agent that books and pays errands (restaurants, trips, gifts, repairs, bills shared with friends). You are getting to know the user in a warm, free conversation: they can talk about anything (people, tastes, places, habits, plans, changes in their life) and you keep it going with one good question at a time, so future missions need fewer questions. Write in ${L === 'fr' ? 'French, using "vous"' : 'English'}.
+  const sys = `You are Mandat, a personal agent that books, buys and pays errands (restaurants, trips, events, gifts, clothes, furniture, repairs, bills shared with friends). You are getting to know the user in a warm, free conversation: they can talk about anything (people, tastes, places, habits, plans, changes in their life) and you keep it going with one good question at a time, so future missions need fewer questions. Write in ${L === 'fr' ? 'French, using "vous"' : 'English'}.
 What you already know (never ask it again):
 ${known}
 What their missions show (use it to propose smart answers and good questions, e.g. a place they booked twice, people they split bills with):
 ${missionsBrief(u) || 'No mission yet.'}
-Follow the user's lead first: whatever they bring up (a sport, a trip, a pet, a new job, a worry), react to it in a few natural words, save what lasts, and ask a follow-up about THAT before moving to anything else. When they pick a topic, ask about that topic. Rules: ask ONE short, concrete question at a time (20 words at most) about what helps with errands: the people they often plan with (name, relation, email for PayPal requests), their diets and allergies, favourite or avoided places and cuisines, usual budgets, how they like to travel, timing habits, important dates (birthdays, anniversaries), accessibility needs. Go deeper before moving on: when the user mentions a person (partner, child, friend, parent), ask their first name next, then one or two useful details about them, one question at a time (birthday or age, diet or allergies, what they love, email for PayPal requests), then change topic. Save people completely, with name and relation (e.g. "Léa is the user's daughter, born on 12 March 2015"); keep a birth date rather than an age when you can. Always give 2 to 4 short ready answers in "choices" (3 words or fewer each), even for names, dates or emails: offer what makes sense there (names you already know, "Not sure", "I'll add it later"...). For people, think partner, children, family, friends, colleagues. Every choice must be a real possible answer to your question (never filler like "I note it"); for a name, offer names you already know or "Later". Always speak to the user, never to the people they mention. The user can tick several answers at once and add their own words (they arrive comma-separated): take them all into account, and when several people come up, go through them one at a time. The user can always type their own answer or skip.
+Follow the user's lead first: whatever they bring up (a sport, a trip, a pet, a new job, a worry), react to it in a few natural words, save what lasts, and ask a follow-up about THAT before moving to anything else. When they pick a topic, ask about that topic. Rules: ask ONE short, concrete question at a time (20 words at most) about what helps with errands: the people they often plan with (name, relation, email for PayPal requests), their diets and allergies, favourite or avoided places and cuisines, usual budgets, how they like to travel, timing habits, important dates (birthdays, anniversaries), accessibility needs, and for shopping their sizes and style (top size, trouser size, shoe size, height, style such as classic, casual, elegant, sporty, streetwear) and those of the people they buy for (a child: age and clothing size; a partner: sizes and style). For sizes, offer the usual sizes as choices ("S", "M", "L", "XL", or "38" to "44" for shoes). Go deeper before moving on: when the user mentions a person (partner, child, friend, parent), ask their first name next, then one or two useful details about them, one question at a time (birthday or age, diet or allergies, what they love, email for PayPal requests), then change topic. Save people completely, with name and relation (e.g. "Léa is the user's daughter, born on 12 March 2015"); keep a birth date rather than an age when you can. Always give 2 to 4 short ready answers in "choices" (3 words or fewer each), even for names, dates or emails: offer what makes sense there (names you already know, "Not sure", "I'll add it later"...). For people, think partner, children, family, friends, colleagues. Every choice must be a real possible answer to your question (never filler like "I note it"); for a name, offer names you already know or "Later". Always speak to the user, never to the people they mention. The user can tick several answers at once and add their own words (they arrive comma-separated): take them all into account, and when several people come up, go through them one at a time. The user can always type their own answer or skip.
 Life changes: if an answer contradicts what you know (a breakup, a move, a new job, someone no longer around), put the outdated memory ids in "forget" and save the new facts, and say it in a few kind words. When the user says nothing has changed, thank them and offer to add more or stop.
 When you close (done=true), always end with one sentence inviting them to come back here if their life changes (a move, new people around them, new habits). From the user's last answer, put each lasting fact in "save" as one self-contained sentence. Questions asked so far: ${asked}. After about 6 questions, or if the user wants to stop, ask if there is anything else Mandat should know; when they say no, thank them in one warm sentence and set "done" to true. Never ask for payment details, passwords or ID numbers. No dashes as punctuation.
-When the user gives someone's email, also put that person in "people" (name and email) so their PayPal requests can be sent.
-Reply with JSON only: {"save":[{"fact":"...","kind":"preference|person|place|habit|constraint|fact"}],"forget":["mem_..."],"people":[{"name":"...","email":"..."}],"say":"...","choices":["..."],"done":false}`;
+When the user names a person close to them, also put them in "people" (name, relation in one word such as partner, child, parent, sibling, friend, colleague, and email, sizes or style when given) so Mandat can buy for them and send them PayPal requests. The user's own sizes and style go in "me" (top, bottom = trouser size, shoes = EU size, height in cm, style).
+Reply with JSON only: {"save":[{"fact":"...","kind":"preference|person|place|habit|constraint|fact"}],"forget":["mem_..."],"people":[{"name":"...","relation":"...","email":"","fit":{"age":"","top":"","bottom":"","shoes":"","style":""}}],"me":{"top":"","bottom":"","shoes":"","height":"","style":""},"say":"...","choices":["..."],"done":false}`;
   const ask = async (extra) => {
     const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, json: true, temperature: 0.5, maxTokens: 1500, messages: [{ role: 'system', content: sys }, ...hist, ...(extra ? [{ role: 'system', content: extra }] : [])] });
     try { return JSON.parse(message.content || '{}'); } catch { return { say: message.content || '' }; }
@@ -390,14 +399,27 @@ Reply with JSON only: {"save":[{"fact":"...","kind":"preference|person|place|hab
     const r = remember(s, { fact: f?.fact, kind: f?.kind, scope: 'global' });
     if (!r.error) saved.push(r.item.text);
   }
-  // People with an email go to "Your people" too: "split it with Ana" then needs nothing more.
+  // The people named go to "Your people" (who they are, their sizes, their email for PayPal requests), and the
+  // user's own sizes to their profile: Mandat can then buy for them without asking again.
   const fresh = getUser(u.id);
+  let changed = false;
   for (const p of (Array.isArray(out.people) ? out.people : []).slice(0, 5)) {
-    const name = String(p?.name || '').trim().slice(0, 60), email = String(p?.email || '').trim().slice(0, 120);
-    if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
-    fresh.profile.people = (fresh.profile.people || []).filter((x) => x.name.toLowerCase() !== name.toLowerCase()).concat({ name, email });
+    const name = String(p?.name || '').trim().slice(0, 60);
+    if (!name) continue;
+    const email = String(p?.email || '').trim().slice(0, 120);
+    const list = fresh.profile.people || (fresh.profile.people = []);
+    let x = list.find((y) => y.name.toLowerCase() === name.toLowerCase());
+    if (!x) { x = { name, email: '' }; list.push(x); }
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) x.email = email;
+    if (p.relation) x.relation = String(p.relation).trim().slice(0, 30);
+    if (p.fit && typeof p.fit === 'object') x.fit = { ...(x.fit || {}), ...cleanFit(p.fit) };
+    changed = true;
   }
-  if (out.people?.length) saveUser(fresh);
+  if (out.me && typeof out.me === 'object') {
+    const f = cleanFit(out.me);
+    if (Object.keys(f).length) { fresh.profile.fit = { ...(fresh.profile.fit || {}), ...f }; changed = true; }
+  }
+  if (changed) saveUser(fresh);
   return { say: String(out.say || '').slice(0, 400), choices: (Array.isArray(out.choices) ? out.choices : []).slice(0, 4).map((c) => String(c).slice(0, 60)), saved, done: out.done === true, user: publicUser(getUser(u.id)) };
 }));
 

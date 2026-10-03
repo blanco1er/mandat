@@ -56,7 +56,7 @@
 
   <!-- 1b. First run, after the mandate: a few things that make every mission better. Each step can wait. -->
   <main id="onboard" class="view" hidden>
-    <div class="ob-top"><button type="button" class="ob-back" id="obBack" aria-label="Back"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg></button><div class="ob-progress" aria-hidden="true"><i></i><i></i><i></i><i></i></div><button type="button" class="ob-skip" id="obSkip">Later</button></div>
+    <div class="ob-top"><button type="button" class="ob-back" id="obBack" aria-label="Back"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg></button><div class="ob-progress" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><button type="button" class="ob-skip" id="obSkip">Later</button></div>
     <section class="ob-step" data-step="0">
       <h1 class="ob-title">Where are you usually?</h1>
       <p class="ob-lede">Mandat searches around you. You can change this anytime in Settings.</p>
@@ -77,6 +77,11 @@
       <label class="ob-field"><span>Something else</span><input id="obLikesMore" placeholder="Rooftops, vintage shops…"></label>
     </section>
     <section class="ob-step" data-step="3" hidden>
+      <h1 class="ob-title">Your sizes and style</h1>
+      <p class="ob-lede">So Mandat can buy clothes and shoes that fit you. Tap what applies, skip the rest.</p>
+      <div id="obFit"></div>
+    </section>
+    <section class="ob-step" data-step="4" hidden>
       <h1 class="ob-title">Stay in the loop</h1>
       <p class="ob-lede">A reminder before each booking, and a ping when a payment needs you. Nothing else.</p>
       <button type="button" class="ob-option" id="obPush"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 1.5H5z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg><span><b>Turn on notifications</b><small id="obPushState">You can turn them off anytime</small></span></button>
@@ -243,14 +248,15 @@
     <div class="group prefs">
       <div class="disc" id="dHome"><button type="button" class="disc-row" aria-expanded="false"><span class="disc-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11Z"/><circle cx="12" cy="10" r="2.4"/></svg></span><b>Usual address</b><small class="disc-val" id="vHome"></small><span class="chev" aria-hidden="true"></span></button><div class="disc-body"><div class="disc-inner"><button type="button" class="disc-act" id="pLocate"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4 4 11l7 2 2 7 7-16Z"/></svg><span>Use my current location</span></button><div class="addr"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/></svg><input id="pHome" autocomplete="off" placeholder="Search an address" enterkeyhint="search"></div><ul class="addr-list" id="pHomeList"></ul></div></div></div>
       <div class="disc" id="dDiet"><button type="button" class="disc-row" aria-expanded="false"><span class="disc-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14Z"/><path d="M5 19 13 11"/></svg></span><b>Allergies & diet</b><small class="disc-val" id="vDiet"></small><span class="chev" aria-hidden="true"></span></button><div class="disc-body"><div class="disc-inner"><div class="chips" id="pDietChips"></div><input class="chip-add" id="pDietMore" placeholder="Add another" enterkeyhint="done"></div></div></div>
+      <div class="disc" id="dFit"><button type="button" class="disc-row" aria-expanded="false"><span class="disc-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 4.5 6.5 6 10.5l2-1V20h8V9.5l2 1 1.5-4L15 4c-.6 1.4-1.6 2.2-3 2.2S9.6 5.4 9 4Z"/></svg></span><b>Sizes &amp; style</b><small class="disc-val" id="vFit"></small><span class="chev" aria-hidden="true"></span></button><div class="disc-body"><div class="disc-inner"><div id="pFit"></div></div></div></div>
       <div class="disc" id="dLikes"><button type="button" class="disc-row" aria-expanded="false"><span class="disc-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19.5s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.5c0 5.6-7.5 10-7.5 10Z"/></svg></span><b>Tastes</b><small class="disc-val" id="vLikes"></small><span class="chev" aria-hidden="true"></span></button><div class="disc-body"><div class="disc-inner"><div class="addr"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 4.5 4.5"/></svg><input id="pLikesFind" placeholder="Search a taste" enterkeyhint="done"></div><div id="pLikesChips"></div></div></div></div>
     </div>
 
     <h2 class="group-title">Your people</h2>
     <div class="group"><div id="people"></div>
-      <form class="person-add" id="personAdd" hidden autocomplete="off"><input id="paName" placeholder="Name" required><input id="paEmail" type="email" placeholder="Email for PayPal requests" required><div class="pa-actions"><button type="button" class="pa-cancel" id="paCancel">Cancel</button><button type="submit">Save</button></div></form>
+      <form class="person-add" id="personAdd" hidden autocomplete="off"><input id="paName" placeholder="Name" required><div class="chips pa-rel" id="paRel"></div><input id="paEmail" type="email" placeholder="Email for PayPal requests (optional)"><div class="pa-actions"><button type="button" class="pa-cancel" id="paCancel">Cancel</button><button type="submit">Save</button></div></form>
       <button type="button" class="row-btn" id="addPerson">Add someone</button></div>
-    <p class="fine settings-fine">Say “split it with Sam” and Mandat sends Sam’s PayPal request to this email, without asking you again. People you split a bill with are added here for next time.</p>
+    <p class="fine settings-fine">Tap someone to add who they are, their sizes and style: Mandat then buys for them without asking. With an email, “split it with Sam” sends Sam’s PayPal request straight away.</p>
 
     <h2 class="group-title">Memory</h2>
     <div class="group mem-group">

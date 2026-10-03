@@ -1539,3 +1539,13 @@ html.on-live #live { position: fixed; inset: 0; max-width: none; margin: 0; over
 
 body.kb-open .analyse-sheet .sc-bar { margin-bottom: 8px; }
 .analyse-sheet { overscroll-behavior: contain; }
+
+/* your people: a row opens to who they are, their sizes and style */
+.person-row .p-open { flex: 1; min-width: 0; width: auto; height: auto; display: flex; align-items: center; gap: 12px; padding: 8px 0; text-align: left; color: var(--ink); }
+.person-row .p-open .grow { flex: 1; }
+.person-row.open .p-open small { white-space: normal; }
+.person-edit { padding: 6px 0 14px 46px; border-bottom: 0.5px solid var(--card-line); }
+.person-edit .chips-title:first-child { margin-top: 2px; }
+.person-edit .chip-add { margin-top: 12px; width: 100%; }
+.pa-rel { gap: 6px; }
+#obFit .chips-title:first-child { margin-top: 0; }

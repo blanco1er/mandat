@@ -160,9 +160,48 @@ const TASTES = [
   { title: 'Travel', items: ['Trains over planes', 'Central hotels', 'Boutique hotels', 'Hostels', 'Window seat', 'Walking distance'] },
   { title: 'Budget', items: ['Good value', 'Treat myself', 'Free cancellation'] },
 ];
+// Sizes and style: tapped, never typed. Sizes are kept as they are written on labels; style in the app's words.
+const FIT = {
+  top: ['XS', 'S', 'M', 'L', 'XL', 'XXL'],
+  bottom: ['34', '36', '38', '40', '42', '44', '46', '48'],
+  shoes: ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'],
+  style: ['Classic', 'Casual', 'Elegant', 'Sporty', 'Streetwear', 'Business', 'Bohemian', 'Minimalist'],
+};
+const KID_FIT = { top: ['2 yrs', '4 yrs', '6 yrs', '8 yrs', '10 yrs', '12 yrs', '14 yrs'], shoes: ['24', '26', '28', '30', '32', '34', '36', '38'] };
+const RELATIONS = ['Partner', 'Child', 'Parent', 'Sibling', 'Friend', 'Colleague', 'Other'];
+// One size per row (tap again to clear), several styles; onChange gets the whole fit object.
+function fitPicker(box, fit, onChange, { kid = false } = {}) {
+  const f = { ...(fit || {}) };
+  const rows = kid
+    ? [['top', 'Clothing size', KID_FIT.top], ['shoes', 'Shoes (EU)', KID_FIT.shoes], ['style', 'Style', FIT.style]]
+    : [['top', 'Top', FIT.top], ['bottom', 'Trousers', FIT.bottom], ['shoes', 'Shoes (EU)', FIT.shoes], ['style', 'Style', FIT.style]];
+  box.innerHTML = '';
+  for (const [key, title, items] of rows) {
+    box.append(el('p', 'chips-title', t(title)));
+    const wrap = el('div', 'chips');
+    const multi = key === 'style';
+    const chosen = new Set(multi ? splitList(f[key]) : [f[key]].filter(Boolean));
+    for (const v of items) {
+      const b = el('button', 'ob-chip' + (chosen.has(v) ? ' on' : ''), t(v));
+      b.type = 'button';
+      b.setAttribute('aria-pressed', String(chosen.has(v)));
+      b.addEventListener('click', () => {
+        if (multi) { if (chosen.has(v)) chosen.delete(v); else chosen.add(v); f[key] = [...chosen].join(', '); }
+        else f[key] = chosen.has(v) ? '' : v;
+        if (!f[key]) delete f[key];
+        fitPicker(box, f, onChange, { kid });
+        onChange(f);
+      });
+      wrap.append(b);
+    }
+    box.append(wrap);
+  }
+}
+const fitText = (f) => [f?.top, f?.bottom && t('trousers {size}', { size: f.bottom }), f?.shoes && t('shoes {size}', { size: f.shoes }), f?.style && splitList(f.style).map((x) => t(x)).join(', ')].filter(Boolean).join(' · ');
 const OB_DIET = DIET.slice(0, 10);
 const OB_LIKES = ['Quiet places', 'Terraces', 'Local spots', 'Fine dining', 'Good value', 'Italian', 'Japanese', 'Trains over planes', 'Central hotels', 'Early dinners'];
 let obStep = 0;
+let obFit = {};
 let obHomeSel = null; // the address picked from the suggestions or from the location
 function obChips(box, labels, saved) {
   box.innerHTML = '';
@@ -181,6 +220,8 @@ function onboardView() {
   obHomeSel = p.home || null;
   obChips($('#obDiet'), OB_DIET, p.diet || '');
   obChips($('#obLikes'), OB_LIKES, p.preferences || '');
+  obFit = { ...(p.fit || {}) };
+  fitPicker($('#obFit'), obFit, (f) => { obFit = f; });
   obGo(0);
   show('onboard');
 }
@@ -189,8 +230,8 @@ function obGo(i) {
   $$('.ob-step').forEach((s) => (s.hidden = Number(s.dataset.step) !== i));
   $$('.ob-progress i').forEach((d, k) => d.classList.toggle('on', k <= i));
   $('#obBack').classList.toggle('off', i === 0);
-  $('#obNext').textContent = i === 3 ? t('Start') : t('Continue');
-  if (i === 3) obPushState();
+  $('#obNext').textContent = i === 4 ? t('Start') : t('Continue');
+  if (i === 4) obPushState();
   window.scrollTo({ top: 0 });
 }
 function obPushState() {
@@ -206,6 +247,7 @@ async function obSave(i) {
   if (i === 0 && typed) profile.home = obHomeSel?.label === typed ? obHomeSel : { label: typed };
   if (i === 1) profile.diet = obPicked('#obDiet', '#obDietMore');
   if (i === 2) profile.preferences = obPicked('#obLikes', '#obLikesMore');
+  if (i === 3) profile.fit = obFit;
   if (Object.keys(profile).length) state.me = (await post('/api/me', { profile })).user;
 }
 // The mandate is missing: say why, right under the box, and let the person choose to sign.
@@ -242,10 +284,10 @@ async function obFinish() {
 }
 $('#obNext').addEventListener('click', async () => {
   try { await obSave(obStep); } catch {}
-  if (obStep < 3) obGo(obStep + 1); else obFinish();
+  if (obStep < 4) obGo(obStep + 1); else obFinish();
 });
 $('#obBack').addEventListener('click', () => { if (obStep > 0) obGo(obStep - 1); });
-$('#obSkip').addEventListener('click', () => (obStep < 3 ? obGo(obStep + 1) : obFinish()));
+$('#obSkip').addEventListener('click', () => (obStep < 4 ? obGo(obStep + 1) : obFinish()));
 $('#obLocate').addEventListener('click', async () => {
   $('#obLocState').textContent = t('Locating…');
   const l = await locate();
@@ -268,11 +310,13 @@ $('#obPush').addEventListener('click', async () => {
 // ---------- home ----------
 // ---------- home: one place to ask, then missions sorted by what needs you ----------
 const IDEAS = [
+  { e: '🎂', t: 'Birthday party', d: 'Place, cake, decorations to order', b: 400, q: "My daughter's 8th birthday next Saturday afternoon: a party for 12 children, a cake, and balloons and decorations delivered in time." },
+  { e: '📦', t: 'Moving house', d: 'Furniture, boxes, a van', b: 1500, q: 'I am moving into a two-room flat at the end of the month: a sofa, a bed and a table, moving boxes, and a van with two movers for the day.' },
+  { e: '🤵', t: 'Gala evening', d: 'Outfit, shoes, a table after', b: 600, q: 'I have a gala evening on Friday 20 November: an elegant outfit and shoes in my sizes, and a table for two somewhere nice after.' },
+  { e: '🎁', t: 'A gift', d: 'Compared from the photos', b: 60, q: 'A gift for my nephew, 10 years old, he loves football and Pokémon. 50 euros max, delivered to his home.' },
   { e: '🧳', t: 'Weekend away', d: 'Hotel, train and a plan', b: 600, q: 'A weekend in Lisbon for two in November, leaving from Paris. A nice hotel near the center and one good dinner.' },
-  { e: '🎂', t: 'Birthday evening', d: 'Table, cake, flowers', b: 300, q: "My partner's birthday this Saturday: dinner for 6 around 8pm near me, a cake and flowers." },
-  { e: '🧾', t: 'Split a bill', d: 'Everyone pays their share', b: 150, q: 'Dinner came to 128 euros and I paid. Split it with Sam, Lina and Tom.' },
   { e: '🔧', t: 'Get something fixed', d: 'Snap a photo, done', b: 80, q: 'My bike has a flat tyre. Find a repair shop near me that can fix it today.' },
-  { e: '💐', t: 'Send flowers', d: 'Delivered with a note', b: 70, q: 'Flowers delivered to my mum on Sunday morning, something cheerful, with a short note from me.' },
+  { e: '🧾', t: 'Split a bill', d: 'Everyone pays their share', b: 150, q: 'Dinner came to 128 euros and I paid. Split it with Sam, Lina and Tom.' },
   { e: '🇪🇸', t: 'Two weeks in Spain', d: 'Trains, stays, budget kept', b: 700, q: 'Two weeks in Spain in October, I leave from Paris. 700 euros all in.' },
 ];
 const EMOJI = [[/wedding|mariage|boda/i, '💍'], [/birthday|anniversaire/i, '🎂'], [/flight|plane|avion/i, '✈️'], [/train|tren/i, '🚆'], [/spain|españa|espagne|lisbon|travel|trip|voyage|vacation|weekend/i, '🧳'], [/hotel|hôtel/i, '🛎️'], [/sushi/i, '🍣'], [/pizza/i, '🍕'], [/coffee|café|brunch/i, '☕'], [/cake|gâteau|bakery|boulanger/i, '🥐'], [/dinner|lunch|restaurant|dîner|table/i, '🍽️'], [/split|share|bill|addition/i, '🧾'], [/flower|fleur/i, '💐'], [/gift|cadeau/i, '🎁'], [/party|fête/i, '🎉'], [/concert|festival/i, '🎵'], [/cinema|cinéma|movie/i, '🎬'], [/ticket|billet|theatre|théâtre/i, '🎟️'], [/repair|fix|tyre|tire|répar/i, '🔧'], [/bike|vélo/i, '🚲'], [/hair|coiff/i, '💇'], [/spa|massage/i, '💆'], [/doctor|médecin|dentist/i, '🩺'], [/dog|chien|cat|chat|pet/i, '🐾'], [/move|déménag/i, '📦'], [/clean|ménage/i, '🧹']];
@@ -1931,25 +1975,61 @@ $('#ivSay').addEventListener('submit', (e) => {
 });
 $('#ivGo').addEventListener('click', () => $('#ivSay').requestSubmit());
 // Your people: the agent reads this list, so "split it with Sam" reaches Sam's PayPal inbox without asking again.
+// Your people: who they are to you, their sizes and style (tap a row to open it), and an optional email for
+// PayPal requests. Mandat buys for them and splits bills with them without asking again.
+let personOpen = -1;
 function renderPeople(people) {
   const g = $('#people');
   g.innerHTML = '';
-  if (!people.length) g.append(el('p', 'people-empty', t('Nobody yet. Add the friends you often share a bill with.')));
+  if (!people.length) g.append(el('p', 'people-empty', t('Nobody yet. Add your partner, children, family or friends.')));
+  const save = () => { state.me.profile.people = people; saveProfile({ people }); };
   people.forEach((p, i) => {
-    const row = el('div', 'person-row');
+    const row = el('div', 'person-row' + (personOpen === i ? ' open' : ''));
     const initials = p.name.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
-    row.innerHTML = `<span class="p-av">${esc(initials)}</span><div class="grow"><b>${esc(p.name)}</b><small>${esc(p.email || t('No email yet'))}</small></div><button type="button" aria-label="${esc(t('Remove'))}">${svg('close')}</button>`;
-    row.querySelector('button').addEventListener('click', () => {
-      people.splice(i, 1);
-      saveProfile({ people });
-      renderPeople(people);
-    });
+    const sub = [p.relation && t(p.relation), fitText(p.fit), p.email].filter(Boolean).join(' · ') || t('Tap to add details');
+    row.innerHTML = `<button type="button" class="p-open"><span class="p-av">${esc(initials)}</span><span class="grow"><b>${esc(p.name)}</b><small>${esc(sub)}</small></span></button><button type="button" class="p-del" aria-label="${esc(t('Remove'))}">${svg('close')}</button>`;
+    row.querySelector('.p-open').addEventListener('click', () => { personOpen = personOpen === i ? -1 : i; renderPeople(people); });
+    row.querySelector('.p-del').addEventListener('click', () => { people.splice(i, 1); personOpen = -1; save(); renderPeople(people); });
     g.append(row);
+    if (personOpen !== i) return;
+    const ed = el('div', 'person-edit');
+    ed.append(el('p', 'chips-title', t('Who is it for you?')));
+    const rel = el('div', 'chips');
+    for (const r of RELATIONS) {
+      const b = el('button', 'ob-chip' + (p.relation === r ? ' on' : ''), t(r));
+      b.type = 'button';
+      b.addEventListener('click', () => { p.relation = p.relation === r ? '' : r; save(); renderPeople(people); });
+      rel.append(b);
+    }
+    ed.append(rel);
+    const fitBox = el('div');
+    fitPicker(fitBox, p.fit, (fit) => { p.fit = fit; save(); row.querySelector('small').textContent = [p.relation && t(p.relation), fitText(fit), p.email].filter(Boolean).join(' · '); }, { kid: p.relation === 'Child' });
+    ed.append(fitBox);
+    const mail = el('input', 'chip-add');
+    mail.type = 'email';
+    mail.placeholder = t('Email for PayPal requests (optional)');
+    mail.value = p.email || '';
+    mail.addEventListener('change', () => { const v = mail.value.trim(); if (!v || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { p.email = v; save(); } });
+    ed.append(mail);
+    g.append(ed);
   });
+}
+let paRelation = '';
+function drawPaRel() {
+  const box = $('#paRel');
+  box.innerHTML = '';
+  for (const r of RELATIONS) {
+    const b = el('button', 'ob-chip' + (paRelation === r ? ' on' : ''), t(r));
+    b.type = 'button';
+    b.addEventListener('click', () => { paRelation = paRelation === r ? '' : r; drawPaRel(); });
+    box.append(b);
+  }
 }
 $('#addPerson').addEventListener('click', () => {
   $('#personAdd').hidden = false;
   $('#addPerson').hidden = true;
+  paRelation = '';
+  drawPaRel();
   $('#paName').focus();
 });
 $('#paCancel').addEventListener('click', () => {
@@ -1961,9 +2041,10 @@ $('#personAdd').addEventListener('submit', (e) => {
   e.preventDefault();
   const name = $('#paName').value.trim();
   const email = $('#paEmail').value.trim();
-  if (!name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+  if (!name || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) return;
   const people = state.me.profile.people.filter((p) => p.name.toLowerCase() !== name.toLowerCase());
-  people.push({ name, email });
+  people.push({ name, email, relation: paRelation });
+  personOpen = people.length - 1; // open it right away, to add sizes and style
   state.me.profile.people = people;
   renderPeople(people);
   saveProfile({ people });
@@ -2027,12 +2108,14 @@ function prefSummary(p) {
   $('#vDiet').textContent = d.length ? d.join(', ') : t('None');
   const l = splitList(p.preferences);
   $('#vLikes').textContent = l.length ? l.join(', ') : t('None yet');
+  $('#vFit').textContent = fitText(p.fit) || t('Not set');
 }
 function renderPrefs(p) {
   prefSummary(p);
   $('#pHome').value = '';
   $('#pHomeList').innerHTML = '';
   chipPicker($('#pDietChips'), [{ title: 'Diet', items: DIET }], p.diet, (list) => savePref('diet', list));
+  fitPicker($('#pFit'), p.fit, (fit) => { state.me.profile.fit = fit; prefSummary(state.me.profile); saveProfile({ fit }); });
   drawTastes();
 }
 function drawTastes() {
