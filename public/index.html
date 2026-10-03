@@ -176,12 +176,25 @@
       <span class="grow"><b>Analyse my spending</b><small>Charts, and an assistant you can ask</small></span>
       <svg class="analyse-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
     </button>
-    <div id="studio" class="studio-host" hidden></div>
+    <div class="studio-row" id="studioRow" hidden><div class="assistant-col" id="assistant"></div><div id="studio" class="studio-host"></div></div>
     <h2 class="pay-head" id="payHead">Payments</h2>
     <ol class="pay-list" id="payList"></ol>
     <p class="m-empty" id="payEmpty" hidden>Nothing yet. When Mandat holds a deposit, pays a merchant or splits a bill, it shows up here.</p>
     <div id="ledger" class="ledger" hidden></div>
   </main>
+
+  <!-- One payment: its receipt, to view, save as PDF, download or share -->
+  <section class="sheet receipt-sheet" id="rcSheet" role="dialog" aria-modal="true" aria-labelledby="rcMerchant" hidden>
+    <div class="grabber" aria-hidden="true"></div>
+    <div class="rc-head"><span class="m-ic" id="rcIcon" aria-hidden="true"></span><div class="grow"><b id="rcMerchant"></b><small id="rcMission"></small></div><button type="button" class="analyse-close" id="rcClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></svg></button></div>
+    <div class="rc-amount"><b id="rcAmount"></b><span class="pay-state" id="rcState"></span></div>
+    <dl class="rc-rows" id="rcRows"></dl>
+    <div class="rc-actions">
+      <a class="rc-btn primary" id="rcOpen" target="_blank" rel="noopener">View receipt</a>
+      <button type="button" class="rc-btn" id="rcCsv">CSV</button>
+      <button type="button" class="rc-btn" id="rcShare">Share</button>
+    </div>
+  </section>
 
   <!-- Phone: the AG Studio analysis opens full screen, dashboard or assistant -->
   <section class="analyse-sheet" id="analyseSheet" role="dialog" aria-modal="true" aria-labelledby="analyseTitle" hidden>
@@ -193,7 +206,7 @@
         <button type="button" role="radio" data-v="ai" aria-checked="false">Assistant</button>
       </div>
     </header>
-    <div class="analyse-body" id="analyseBody"></div>
+    <div class="analyse-body" id="analyseBody"><div class="analyse-board" id="analyseBoard"></div><div class="analyse-chat" id="analyseChat" hidden></div></div>
   </section>
 
   <main id="agenda" class="view wide" hidden>

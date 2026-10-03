@@ -14,7 +14,8 @@ const WORDS = {
     payments: 'Every payment', date: 'Date', merchant: 'Merchant or friend', category: 'Category', what: 'What', kind: 'Type', status: 'Status',
     spent: 'Paid', heldF: 'Held', refunded: 'Refunded', full: 'Full price', balance: 'Balance due', owed: 'Owed to you', back: 'Paid back', ref: 'PayPal reference',
     mission: 'Mission', created: 'Created', city: 'City', budget: 'Budget', committed: 'Committed', leftF: 'Left', stillToPay: 'Still to pay', missionsT: 'Missions', paymentsT: 'Payments',
-    page: 'Spending', placeholder: 'Ask for a chart, a filter, an answer…',
+    page: 'Spending', placeholder: 'Ask for a chart, a filter, an answer…', send: 'Send', hello: 'Ask me about your spending: I can answer, or change the dashboard for you.', failed: 'That did not work. Try again in a moment.', seeBoard: 'See it on the dashboard',
+    steps: { view_schema: 'Reading your data', view_report: 'Looking at the dashboard', view_page: 'Looking at the dashboard', mission_books: 'Checking your books', delegate_to: 'Working on the dashboard', add_widget: 'Adding a chart', configure_widget: 'Setting up the chart', execute_query: 'Running the numbers', position_widget: 'Placing the chart', remove_widget: 'Removing a chart', add_page_filter: 'Filtering the page', remove_page_filter: 'Removing a filter', other: 'Working' },
     starters: [
       ['Spending by week', 'Add a column chart of what I paid per week.'],
       ['Biggest payments', 'Which five payments were the largest, and for which mission?'],
@@ -27,7 +28,8 @@ const WORDS = {
     payments: 'Tous les paiements', date: 'Date', merchant: 'Commerçant ou proche', category: 'Catégorie', what: 'Objet', kind: 'Type', status: 'État',
     spent: 'Payé', heldF: 'Bloqué', refunded: 'Remboursé', full: 'Prix total', balance: 'Solde dû', owed: 'On vous doit', back: 'Remboursé par un proche', ref: 'Référence PayPal',
     mission: 'Mission', created: 'Créée le', city: 'Ville', budget: 'Budget', committed: 'Engagé', leftF: 'Restant', stillToPay: 'Reste à régler', missionsT: 'Missions', paymentsT: 'Paiements',
-    page: 'Dépenses', placeholder: 'Demandez un graphique, un filtre, une réponse…',
+    page: 'Dépenses', placeholder: 'Demandez un graphique, un filtre, une réponse…', send: 'Envoyer', hello: 'Posez-moi une question sur vos dépenses : je réponds, ou je modifie le tableau pour vous.', failed: 'Ça n’a pas marché. Réessayez dans un instant.', seeBoard: 'Voir sur le tableau',
+    steps: { view_schema: 'Je lis vos données', view_report: 'Je regarde le tableau', view_page: 'Je regarde le tableau', mission_books: 'Je consulte vos comptes', delegate_to: 'Je prépare le tableau', add_widget: 'J’ajoute un graphique', configure_widget: 'Je règle le graphique', execute_query: 'Je fais les calculs', position_widget: 'Je place le graphique', remove_widget: 'Je retire un graphique', add_page_filter: 'Je filtre la page', remove_page_filter: 'Je retire un filtre', other: 'Je travaille' },
     starters: [
       ['Dépenses par semaine', 'Ajoute un graphique en colonnes de ce que j’ai payé par semaine.'],
       ['Plus gros paiements', 'Quels sont les cinq plus gros paiements, et pour quelle mission ?'],
@@ -164,7 +166,7 @@ function report(W, narrow) {
       widgetLayout: Object.fromEntries(Object.entries(pos).map(([k, [x, y, w, h]]) => [k, { xTrack: x, yTrack: y, xSpan: w, ySpan: h }])),
     }],
     selectedPageId: 'spending',
-    panels: { filters: { collapsed: true }, data: { collapsed: true }, edit: { collapsed: true }, ai: { collapsed: narrow, width: 320 } },
+    panels: { filters: { collapsed: true }, data: { collapsed: true }, edit: { collapsed: true }, ai: { collapsed: true } },
   };
 }
 
@@ -197,40 +199,49 @@ export async function mountInsights(el, { get, post, lang, license, compact = fa
   if (license) ag.AgStudioLicenseManager.setLicenseKey(license);
   const narrow = compact || innerWidth < 720;
   const adapter = mandatAdapter(post);
+  let harness = null;
+  // The agents: Studio's five on Mandat's model, the lead with a Mandat brief and the books tool. Built from
+  // the API as soon as the dashboard exists (Studio only builds the `ai` harness when its own panel shows,
+  // and here the conversation is Mandat's own UI).
+  const buildHarness = (api) => {
+    // The books, exactly as the app computes them (never added up by the model).
+    const books = api.defineAiTool({
+      name: 'mission_books',
+      description: 'The books of the user\'s missions, computed by Mandat: for each booking its full price, what was paid or held, the balance and when, what was cancelled or refunded, and the totals. Use it to explain an amount or to say what is still owed to whom.',
+      params: (s) => s.object({ mission_id: s.string({ description: 'One mission (missions.mission_id). Omit for every mission.' }).optional() }),
+      execute: async (args, ctx) => {
+        const r = await get('/api/me/books' + (args.mission_id ? '?mission=' + encodeURIComponent(args.mission_id) : ''));
+        return r.missions.length ? ctx.success(r.missions.map((m) => `${m.mission} (${m.mission_id})\n${m.books}`).join('\n\n')) : ctx.error('No mission with that id.');
+      },
+    });
+    harness = ag.createAiHarness(api, ({ builtIn }) => ({
+      agents: Object.values(builtIn).map((def) => ag.directLlmRunner({
+        ...def,
+        adapter,
+        instructions: (c, p) => `${W.brief}\n\n${def.instructions ? def.instructions(c, p) : ''}`,
+        ...(def.id === 'lead' ? { tools: (c, p) => [...(def.tools ? def.tools(c, p) : []), books] } : {}),
+      })),
+      primary: 'lead',
+      promptStarters: W.starters.map(([label, prompt]) => ({ label, prompt })),
+    }));
+    return harness;
+  };
   const api = ag.createStudioWithAi(el, {
     // A phone shows the report and the assistant; building by hand (compose, data) is for larger screens.
     mode: narrow ? 'view' : 'edit',
-    panels: narrow ? { view: { left: ['ai'], right: [] } } : { edit: { left: ['ai'], right: ['filters', 'edit', 'data'] }, view: { left: ['ai'], right: ['filters'] } },
+    // The conversation is shown by Mandat's own assistant (mountAssistant below), not by Studio's panel.
+    panels: narrow ? { view: { left: [], right: [] } } : { edit: { left: [], right: ['filters', 'edit', 'data'] }, view: { left: [], right: ['filters'] } },
     theme: theme(ag),
     data: sources(data, W),
     initialState: report(W, narrow),
     localeText: { ...(fr || {}), aiMessageInputPlaceholder: W.placeholder },
-    ai: ({ api }) => {
-      // The books, exactly as the app computes them (never added up by the model).
-      const books = api.defineAiTool({
-        name: 'mission_books',
-        description: 'The books of the user\'s missions, computed by Mandat: for each booking its full price, what was paid or held, the balance and when, what was cancelled or refunded, and the totals. Use it to explain an amount or to say what is still owed to whom.',
-        params: (s) => s.object({ mission_id: s.string({ description: 'One mission (missions.mission_id). Omit for every mission.' }).optional() }),
-        execute: async (args, ctx) => {
-          const r = await get('/api/me/books' + (args.mission_id ? '?mission=' + encodeURIComponent(args.mission_id) : ''));
-          return r.missions.length ? ctx.success(r.missions.map((m) => `${m.mission} (${m.mission_id})\n${m.books}`).join('\n\n')) : ctx.error('No mission with that id.');
-        },
-      });
-      return ag.createAiHarness(api, ({ builtIn }) => ({
-        agents: Object.values(builtIn).map((def) => ag.directLlmRunner({
-          ...def,
-          adapter,
-          instructions: (c, p) => `${W.brief}\n\n${def.instructions ? def.instructions(c, p) : ''}`,
-          ...(def.id === 'lead' ? { tools: (c, p) => [...(def.tools ? def.tools(c, p) : []), books] } : {}),
-        })),
-        primary: 'lead',
-        promptStarters: W.starters.map(([label, prompt]) => ({ label, prompt })),
-      }));
-    },
+    ai: ({ api }) => harness || buildHarness(api),
   });
+  if (!harness) buildHarness(api);
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => api.setProperty('theme', theme(ag)));
   return {
     api,
+    harness: () => harness,
     // New payments land in the same report without resetting what the user built.
     async refresh() { data = await get('/api/me/insights'); api.setProperty('data', sources(data, W)); },
     csv() {
@@ -239,4 +250,73 @@ export async function mountInsights(el, { get, post, lang, license, compact = fa
       return [cols.join(','), ...data.payments.map((p) => cols.map((c) => q(p[c])).join(','))].join('\n');
     },
   };
+}
+
+// Mandat's own assistant on top of the Studio Agent Framework: the same harness and agents as Studio's panel,
+// read through its session (messages, status) and drawn in the app's style: your words in a blue bubble,
+// the answer in plain text, each step of the agents in a few words with a spinner, then a check.
+const HIDDEN_STEPS = new Set(['rename_thread', 'update_plan', 'clear_plan', 'view_plan', 'complete_task']);
+const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+function md(text) {
+  const lines = escHtml(text).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').split('\n');
+  let out = '', list = false;
+  for (const l of lines) {
+    const item = l.match(/^\s*(?:[-•*]|\d+[.)])\s+(.*)/);
+    if (item) { if (!list) { out += '<ul>'; list = true; } out += `<li>${item[1]}</li>`; continue; }
+    if (list) { out += '</ul>'; list = false; }
+    if (l.trim()) out += `<p>${l}</p>`;
+  }
+  return out + (list ? '</ul>' : '');
+}
+export function mountAssistant(el, studio, { lang, onBoardChange } = {}) {
+  const W = WORDS[lang] || WORDS.en;
+  el.classList.add('sc');
+  el.innerHTML = `<div class="sc-log" role="log" aria-live="polite"><p class="sc-hello">${escHtml(W.hello)}</p></div>
+    <div class="sc-starters">${W.starters.map(([label, prompt]) => `<button type="button" data-p="${escHtml(prompt)}">${escHtml(label)}</button>`).join('')}</div>
+    <form class="sc-bar" autocomplete="off"><input aria-label="${escHtml(W.placeholder)}" placeholder="${escHtml(W.placeholder)}" enterkeyhint="send"><button type="submit" class="sc-send" aria-label="${escHtml(W.send)}"><svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg></button></form>`;
+  const log = el.querySelector('.sc-log'), input = el.querySelector('input'), form = el.querySelector('form');
+  let session = null, changedBoard = false;
+  const step = (call) => {
+    if (HIDDEN_STEPS.has(call.name)) return '';
+    const done = call.status === 'complete', bad = call.status === 'error' || call.status === 'cancelled';
+    if (['add_widget', 'configure_widget', 'position_widget', 'remove_widget', 'add_page_filter', 'remove_page_filter'].includes(call.name) || (call.name === 'delegate_to' && done)) changedBoard = true;
+    return `<div class="sc-step ${done ? 'done' : bad ? 'bad' : 'run'}"><i aria-hidden="true"></i>${escHtml(W.steps[call.name] || W.steps.other)}</div>`;
+  };
+  function render() {
+    const busy = session.status === 'running';
+    let html = '';
+    for (const m of session.messages) {
+      if (m.role === 'user') { html += `<div class="sc-me">${escHtml(m.parts.map((p) => p.text || '').join(''))}</div>`; continue; }
+      if (m.role !== 'assistant') continue;
+      for (const p of m.parts) {
+        if (p.type === 'text' && p.text.trim()) html += `<div class="sc-say">${md(p.text)}</div>`;
+        else if (p.type === 'tool_call') html += step(p.toolCall);
+        else if (p.type === 'error') html += `<div class="sc-err">${escHtml(W.failed)}</div>`;
+      }
+    }
+    if (busy) html += '<div class="sc-typing" aria-hidden="true"><i></i><i></i><i></i></div>';
+    else if (changedBoard && onBoardChange) html += `<button type="button" class="sc-board">${escHtml(W.seeBoard)}</button>`;
+    if (session.status === 'error') html += `<div class="sc-err">${escHtml(W.failed)}</div>`;
+    log.innerHTML = html;
+    log.querySelector('.sc-board')?.addEventListener('click', () => onBoardChange());
+    form.querySelector('button').disabled = busy;
+    log.scrollTop = log.scrollHeight;
+  }
+  async function send(text) {
+    text = String(text || '').trim();
+    if (!text || session?.status === 'running') return;
+    const harness = studio.harness();
+    if (!harness) { console.warn('[assistant] no harness yet'); return; }
+    el.querySelector('.sc-starters').hidden = true;
+    changedBoard = false;
+    if (!session) {
+      try { session = await harness.createThread({ agentId: 'lead' }); } catch (e) { console.warn('[assistant] createThread', e); return; }
+      session.addEventListener('changed', render);
+    }
+    session.sendMessage(text);
+    render();
+  }
+  form.addEventListener('submit', (e) => { e.preventDefault(); const v = input.value; input.value = ''; send(v); });
+  el.querySelectorAll('.sc-starters button').forEach((b) => b.addEventListener('click', () => send(b.dataset.p)));
+  return { focus: () => input.focus() };
 }

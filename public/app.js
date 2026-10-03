@@ -1223,13 +1223,15 @@ function wrapupCard(w) {
     const hm = /\d{2}:\d{2}/.test(x) ? String(x).match(/\d{2}:\d{2}/)[0] : '';
     return `${d.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })}${hm ? ' · ' + hm : ''}`;
   };
+  // Only something with a date goes to the calendar (a purchase delivered at home has none).
+  const dated = (w.lines || []).some((l) => /^\d{4}-\d{2}-\d{2}/.test(String(l.when || '')));
   const money = [w.paid ? t('{amount} paid', { amount: fmtC(w.paid, w.currency) }) : '', w.held ? t('{amount} held until confirmed', { amount: fmtC(w.held, w.currency) }) : ''].filter(Boolean).join(' · ');
   li.innerHTML = `<div class="wu-head"><span class="wu-check">${svg('check')}</span><div><b>${esc(t(w.headline))}</b><small>${esc(money || t('Nothing left to do'))}</small></div></div>
-    <ol class="wu-lines">${(w.lines || []).map((l) => `<li><span class="wu-when">${esc(day(l.when))}</span><span class="wu-what">${esc(l.what)}${l.where ? ` <i>· ${esc(l.where)}</i>` : ''}</span></li>`).join('')}</ol>
+    <ol class="wu-lines">${(w.lines || []).map((l) => `<li>${day(l.when) ? `<span class="wu-when">${esc(day(l.when))}</span>` : ''}<span class="wu-what">${esc(l.what)}${l.where ? ` <i>· ${esc(l.where)}</i>` : ''}</span></li>`).join('')}</ol>
     ${w.note ? `<p class="wu-note">${esc(w.note)}</p>` : ''}
     ${balanceList(w.balances, w.due, w.currency)}
     ${w.reminders?.length ? `<p class="wu-rem">⏰ ${esc(t('{times} · on your phone', { times: w.reminders.map((r) => new Date(r.at).toLocaleString(locale(), { weekday: 'short', hour: '2-digit', minute: '2-digit' })).join(' · ') }))}</p>` : ''}
-    <div class="wu-actions"><a class="pill-btn" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} ${t('Add all to Calendar')}</a><button type="button" class="wu-change">${t('Change something')}</button></div>`;
+    <div class="wu-actions">${dated ? `<a class="pill-btn" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} ${t('Add all to Calendar')}</a>` : ''}<button type="button" class="wu-change">${t('Change something')}</button></div>`;
   li.querySelector('.wu-change').addEventListener('click', () => { const box = $('#sayText'); box.value = t('I would like to change '); syncComposer(); box.focus(); });
   add(li);
 }
@@ -1615,43 +1617,87 @@ function renderActivity(d) {
     li.innerHTML = `<span class="m-ic" aria-hidden="true">${PAY_ICON[p.category] || '•'}</span>
       <span class="m-txt"><span class="m-l1"><b>${esc(p.merchant)}</b><span class="pay-amt ${line.off ? 'struck' : line.cls}">${line.amt}</span></span>
       <span class="m-l2"><span class="m-line">${esc(names[p.mission_id] || '')}${when ? ' · ' + when.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) : ''}</span><span class="pay-state ${line.cls}">${esc(line.state)}</span></span></span>`;
-    li.addEventListener('click', () => openMission(p.mission_id));
+    li.addEventListener('click', () => openReceipt(p, names[p.mission_id] || ''));
     list.append(li);
   }
   $('#payEmpty').hidden = d.payments.length > 0;
   $('#payHead').hidden = !d.payments.length;
 }
-async function mountStudio(host, compact) {
+// One payment's receipt: the essentials here, the printable receipt (save as PDF) one tap away.
+let rcPay = null;
+function openReceipt(p, mission) {
+  rcPay = { ...p, mission };
+  const line = payLine(p);
+  $('#rcIcon').textContent = PAY_ICON[p.category] || '•';
+  $('#rcMerchant').textContent = p.merchant;
+  $('#rcMission').textContent = mission;
+  $('#rcAmount').innerHTML = line.amt;
+  $('#rcAmount').className = line.off ? 'struck' : '';
+  $('#rcState').textContent = line.state;
+  $('#rcState').className = 'pay-state ' + line.cls;
+  const when = p.date ? new Date(p.date).toLocaleString(locale(), { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '';
+  const rows = [
+    [t('For'), p.what],
+    [t('Date'), when],
+    p.amount ? [t('Amount'), fmt(p.amount)] : null,
+    p.refunded ? [t('Refunded'), fmt(p.refunded)] : null,
+    p.full_price > p.amount + 0.5 ? [t('Full price'), fmt(p.full_price)] : null,
+    p.balance_due ? [t('Balance still to pay'), fmt(p.balance_due)] : null,
+    p.paypal_ref ? [t('PayPal reference'), p.paypal_ref] : null,
+  ].filter((r) => r && r[1]);
+  $('#rcRows').innerHTML = rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
+  $('#rcOpen').href = '/receipt/' + encodeURIComponent(p.payment_id) + '?lang=' + lang;
+  $('#scrim').hidden = false;
+  $('#rcSheet').hidden = false;
+}
+function closeReceipt() { $('#rcSheet').hidden = true; $('#scrim').hidden = true; rcPay = null; }
+$('#rcClose').addEventListener('click', closeReceipt);
+$('#scrim').addEventListener('click', () => { if (!$('#rcSheet').hidden) closeReceipt(); });
+$('#rcCsv').addEventListener('click', () => rcPay && downloadCsv([rcPay], `mandat-${rcPay.payment_id}.csv`));
+$('#rcShare').addEventListener('click', async () => {
+  if (!rcPay) return;
+  const url = location.origin + '/receipt/' + encodeURIComponent(rcPay.payment_id) + '?lang=' + lang;
+  const text = `${rcPay.merchant} · ${payLine(rcPay).state} · ${rcPay.paypal_ref || ''}`;
+  try { if (navigator.share) await navigator.share({ title: t('Payment receipt'), text, url }); else { await navigator.clipboard.writeText(url); flashLabel($('#rcShare'), t('Link copied')); } } catch {}
+});
+function downloadCsv(rows, name) {
+  const cols = ['date', 'mission', 'merchant', 'category', 'what', 'kind', 'status', 'amount', 'spent', 'held', 'refunded', 'balance_due', 'paypal_ref'];
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = [cols.join(','), ...rows.map((p) => cols.map((c) => q(p[c])).join(','))].join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  Object.assign(document.createElement('a'), { href: url, download: name }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+async function mountStudio(host, compact, chatHost, onBoardChange) {
   const m = await import('/insights.js');
-  return m.mountInsights(host, { get, post, lang, license: state.agStudioKey || '', compact });
+  const st = await m.mountInsights(host, { get, post, lang, license: state.agStudioKey || '', compact });
+  if (chatHost) m.mountAssistant(chatHost, st, { lang, onBoardChange });
+  return st;
 }
 async function openActivity() {
   insights = await get('/api/me/insights');
   renderActivity(insights);
   const wide = wideScreen();
   $('#analyseOpen').hidden = wide || !insights.payments.length;
-  $('#studio').hidden = !wide || !insights.payments.length;
+  $('#studioRow').hidden = !wide || !insights.payments.length;
   $('#activity').classList.toggle('has-studio', wide);
   if (!wide || !insights.payments.length) return;
   if (studio) return studio.refresh().catch(() => {});
   try {
-    studioTry ||= mountStudio($('#studio'), false);
+    studioTry ||= mountStudio($('#studio'), false, $('#assistant'));
     studio = await studioTry;
   } catch (e) {
     console.warn('[activity] analysis unavailable:', e.message);
     studioTry = null;
-    $('#studio').hidden = true;
+    $('#studioRow').hidden = true;
   }
 }
 // Phone: the analysis full screen. One thing at a time: the dashboard, or the assistant.
 let sheetStudio = null;
 function analyseView(v) {
   setSeg('#analyseSeg', v);
-  $('#analyseSheet').dataset.view = v;
-  const api = sheetStudio?.api;
-  if (!api) return;
-  const st = api.getState();
-  api.setState({ ...st, panels: { ...(st.panels || {}), ai: { collapsed: v !== 'ai', width: innerWidth } } });
+  $('#analyseBoard').hidden = v !== 'board';
+  $('#analyseChat').hidden = v !== 'ai';
 }
 $('#analyseOpen').addEventListener('click', async () => {
   $('#analyseSheet').hidden = false;
@@ -1659,22 +1705,16 @@ $('#analyseOpen').addEventListener('click', async () => {
   analyseView('board');
   if (!sheetStudio) {
     $('#analyseBody').classList.add('loading');
-    try { sheetStudio = await mountStudio($('#analyseBody'), true); } catch (e) { $('#analyseBody').textContent = t('The analysis could not load. Check your connection and try again.'); }
+    try { sheetStudio = await mountStudio($('#analyseBoard'), true, $('#analyseChat'), () => analyseView('board')); } catch (e) { $('#analyseBoard').textContent = t('The analysis could not load. Check your connection and try again.'); }
     $('#analyseBody').classList.remove('loading');
-    analyseView('board');
   } else sheetStudio.refresh().catch(() => {});
 });
 $('#analyseClose').addEventListener('click', () => { $('#analyseSheet').hidden = true; document.body.classList.remove('no-scroll'); });
 $$('#analyseSeg button').forEach((b) => b.addEventListener('click', () => analyseView(b.dataset.v)));
 $('#csvBtn').addEventListener('click', () => {
   if (!insights) return;
-  const cols = ['date', 'mission', 'merchant', 'category', 'what', 'kind', 'status', 'spent', 'held', 'refunded', 'balance_due', 'paypal_ref'];
   const names = Object.fromEntries(insights.missions.map((m) => [m.mission_id, m.mission]));
-  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const csv = [cols.join(','), ...insights.payments.map((p) => cols.map((c) => q(c === 'mission' ? names[p.mission_id] : p[c])).join(','))].join('\n');
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-  Object.assign(document.createElement('a'), { href: url, download: `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv` }).click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadCsv(insights.payments.map((p) => ({ ...p, mission: names[p.mission_id] })), `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv`);
 });
 
 function renderSettings() {

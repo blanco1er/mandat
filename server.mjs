@@ -3,6 +3,7 @@
 import express from 'express';
 import { shopEnabled } from './lib/shop.mjs';
 import { insightsData, studioTurn, booksOf } from './lib/studio.mjs';
+import { findPayment, receiptHtml } from './lib/receipt.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -534,6 +535,15 @@ app.get('/api/me/activity', api(async (req, res) => {
 }));
 // AG Studio: the spending dashboard's data, and its agent's model calls (the key stays on the server).
 app.get('/api/me/insights', api(async (req, res) => insightsData(me(req, res), getMission)));
+// One payment's receipt (printable, saved as PDF from the browser), only for its owner.
+app.get('/receipt/:id', (req, res) => {
+  try {
+    const u = getUser(cookie(req, 'mandat_uid'));
+    const found = u && findPayment(u, getMission, String(req.params.id).slice(0, 80));
+    if (!found) return res.status(404).type('text/plain').send('Receipt not found.');
+    res.set('Cache-Control', 'no-store').type('html').send(receiptHtml(found, u, reqLang(req) === 'fr' || u.lang === 'fr' || String(req.query.lang) === 'fr' ? 'fr' : 'en'));
+  } catch (e) { res.status(500).type('text/plain').send('Receipt unavailable.'); }
+});
 app.get('/api/me/agenda', api(async (req, res) => agendaOf(me(req, res), getMission)));
 app.get('/api/me/books', api(async (req, res) => ({ missions: booksOf(me(req, res), getMission, String(req.query.mission || '')) })));
 app.post('/api/studio/llm', api(async (req, res) => {
