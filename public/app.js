@@ -1571,7 +1571,6 @@ let sAutonomy = 'balanced';
 // The summary and the list are the app's own (light, instant). The analysis is AG Studio (public/insights.js):
 // inline on a large screen, full screen on a phone, where it is either the dashboard or its assistant.
 const PAY_ICON = { 'Food & drink': '🍽️', Stays: '🛏️', Transport: '🚆', Activities: '🎟️', Venues: '🏛️', Decoration: '🎈', Flowers: '💐', Repairs: '🔧', Shopping: '🛍️', 'Bill shares': '👥' };
-const PAY_STATE = { Paid: 'ok', 'Paid back': 'ok', Held: 'wait', 'Owed to you': 'wait', Refunded: 'back', Released: 'off', Failed: 'off' };
 let insights = null, studio = null, studioTry = null;
 const wideScreen = () => innerWidth >= 720;
 function dayLabel(d) {
@@ -1579,13 +1578,22 @@ function dayLabel(d) {
   const diff = Math.round((today - day) / 864e5);
   return diff === 0 ? t('Today') : diff === 1 ? t('Yesterday') : d.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' });
 }
-function payAmount(p) {
-  if (p.status === 'Held') return t('{amount} held', { amount: fmt(p.held) });
-  if (p.status === 'Owed to you') return t('{amount} to receive', { amount: fmt(p.owed_to_you) });
-  if (p.status === 'Paid back') return '+' + fmt(p.paid_back);
-  if (p.status === 'Released') return '—';
-  if (p.status === 'Refunded') return '+' + fmt(p.refunded || p.spent);
-  return '−' + fmt(p.spent);
+// Read like a bank statement: what really left (or came back), and where each payment stands. A payment
+// refunded in full or released before being charged is shown struck through: it costs nothing.
+function payLine(p) {
+  const was = `<s>${esc(fmt(p.amount || 0))}</s>`;
+  switch (p.status) {
+    case 'Paid': return { amt: '−' + esc(fmt(p.spent)), state: t('Paid'), cls: 'ok' };
+    case 'Refunded':
+      return p.spent > 0.004
+        ? { amt: '−' + esc(fmt(p.spent)), state: t('Partly refunded'), cls: 'ok' } // what is still paid, after the refund
+        : { amt: was, state: t('Refunded'), cls: 'refund', off: true };
+    case 'Held': return { amt: esc(fmt(p.held)), state: t('Held'), cls: 'wait' };
+    case 'Released': return { amt: was, state: t('Not charged'), cls: 'off', off: true };
+    case 'Owed to you': return { amt: '+' + esc(fmt(p.owed_to_you)), state: t('Owed to you'), cls: 'wait' };
+    case 'Paid back': return { amt: '+' + esc(fmt(p.paid_back)), state: t('Paid back'), cls: 'ok' };
+    default: return { amt: esc(fmt(p.amount || 0)), state: t(p.status || ''), cls: 'off' };
+  }
 }
 function renderActivity(d) {
   const sum = (rows, k) => Math.round(rows.reduce((x, r) => x + (Number(r[k]) || 0), 0) * 100) / 100;
@@ -1603,9 +1611,10 @@ function renderActivity(d) {
     if (label !== last) { list.append(el('li', 'pay-day', label)); last = label; }
     const li = el('li', 'pay-row');
     li.tabIndex = 0;
+    const line = payLine(p);
     li.innerHTML = `<span class="m-ic" aria-hidden="true">${PAY_ICON[p.category] || '•'}</span>
-      <span class="m-txt"><span class="m-l1"><b>${esc(p.merchant)}</b><span class="pay-amt ${PAY_STATE[p.status] || ''}">${esc(payAmount(p))}</span></span>
-      <span class="m-l2"><span class="m-line">${esc(names[p.mission_id] || '')}${when ? ' · ' + when.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) : ''}</span><span class="pay-state ${PAY_STATE[p.status] || ''}">${esc(t(p.status))}</span></span></span>`;
+      <span class="m-txt"><span class="m-l1"><b>${esc(p.merchant)}</b><span class="pay-amt ${line.off ? 'struck' : line.cls}">${line.amt}</span></span>
+      <span class="m-l2"><span class="m-line">${esc(names[p.mission_id] || '')}${when ? ' · ' + when.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) : ''}</span><span class="pay-state ${line.cls}">${esc(line.state)}</span></span></span>`;
     li.addEventListener('click', () => openMission(p.mission_id));
     list.append(li);
   }

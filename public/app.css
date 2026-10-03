@@ -1462,7 +1462,10 @@ html.on-live #live { position: fixed; inset: 0; max-width: none; margin: 0; over
 .pay-amt { flex: none; font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .pay-amt.wait { color: var(--held); }
 .pay-amt.off { color: var(--ink-3); font-weight: 500; }
-.pay-amt.back, .pay-state.back { color: var(--ok); }
+.pay-state.refund { color: var(--ok); }
+.pay-amt.struck { color: var(--ink-3); font-weight: 500; }
+.pay-amt s { text-decoration-thickness: 1.5px; }
+.pay-amt, .pay-state { white-space: nowrap; }
 .pay-state { flex: none; font-size: 12px; font-weight: 600; color: var(--ink-3); }
 .pay-state.ok { color: var(--ok); }
 .pay-state.wait { color: var(--held); }
