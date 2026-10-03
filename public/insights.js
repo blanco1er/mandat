@@ -134,10 +134,6 @@ function sources(data, W) {
 function report(W, narrow) {
   const sum = (id) => ({ id, aggregation: 'sum' });
   const widgets = {
-    'kpi-paid': { type: 'value', dataMapping: { value: [sum('payments.spent')] }, format: { caption: { enabled: true, text: W.paid } } },
-    'kpi-held': { type: 'value', dataMapping: { value: [sum('payments.held')] }, format: { caption: { enabled: true, text: W.held } } },
-    'kpi-due': { type: 'value', dataMapping: { value: [sum('missions.still_to_pay')] }, format: { caption: { enabled: true, text: W.due } } },
-    'kpi-left': { type: 'value', dataMapping: { value: [sum('missions.left')] }, format: { caption: { enabled: true, text: W.left } } },
     'by-category': {
       type: 'donut-chart',
       dataMapping: { categoryKey: [{ id: 'payments.category' }], valueKey: [sum('payments.spent')], tooltipKey: [] },
@@ -158,14 +154,8 @@ function report(W, narrow) {
       format: { title: { enabled: true, text: W.payments } },
     },
   };
-  const wide = {
-    'kpi-paid': [0, 0, 6, 5], 'kpi-held': [6, 0, 6, 5], 'kpi-due': [12, 0, 6, 5], 'kpi-left': [18, 0, 6, 5],
-    'by-category': [0, 5, 10, 14], 'by-mission': [10, 5, 14, 14], payments: [0, 19, 24, 16],
-  };
-  const phone = {
-    'kpi-paid': [0, 0, 24, 4], 'kpi-held': [0, 4, 24, 4], 'kpi-due': [0, 8, 24, 4], 'kpi-left': [0, 12, 24, 4],
-    'by-category': [0, 16, 24, 14], 'by-mission': [0, 30, 24, 14], payments: [0, 44, 24, 18],
-  };
+  const wide = { 'by-category': [0, 0, 10, 14], 'by-mission': [10, 0, 14, 14], payments: [0, 14, 24, 16] };
+  const phone = { 'by-category': [0, 0, 24, 13], 'by-mission': [0, 13, 24, 13], payments: [0, 26, 24, 18] };
   const pos = narrow ? phone : wide;
   return {
     pages: [{
@@ -197,7 +187,7 @@ function theme(ag) {
   });
 }
 
-export async function mountInsights(el, { get, post, lang, license }) {
+export async function mountInsights(el, { get, post, lang, license, compact = false }) {
   const W = WORDS[lang] || WORDS.en;
   let [ag, data, fr] = await Promise.all([
     loadStudio(),
@@ -205,7 +195,7 @@ export async function mountInsights(el, { get, post, lang, license }) {
     lang === 'fr' ? fetch('/ag-studio-fr.json').then((r) => r.json()).catch(() => null) : null,
   ]);
   if (license) ag.AgStudioLicenseManager.setLicenseKey(license);
-  const narrow = innerWidth < 720;
+  const narrow = compact || innerWidth < 720;
   const adapter = mandatAdapter(post);
   const api = ag.createStudioWithAi(el, {
     // A phone shows the report and the assistant; building by hand (compose, data) is for larger screens.

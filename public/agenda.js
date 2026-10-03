@@ -13,12 +13,16 @@ const WORDS = {
     resize: (what, from, to) => `Please change "${what}" to ${from} – ${to}. Check with the merchant, and tell me if the price changes.`,
     asked: 'Mandat is asking the merchant. The new time shows here once it is confirmed.',
     waiting: 'Waiting for an answer', empty: 'Nothing dated yet. When Mandat books something, it appears here.',
+    allDay: 'All day', upcoming: (n) => `${n} booking${n > 1 ? 's' : ''}`,
+    status: { confirmed: 'Confirmed', held: 'Deposit held', requested: 'Asked', awaiting_approval: 'To approve', negotiating: 'Negotiating', searching: 'Searching', pending: 'Asked' },
   },
   fr: {
-    move: (what, when) => `Peux-tu décaler « ${what} » au ${when} ? Vois-le avec le prestataire, et dis-moi si le prix ou autre chose change.`,
-    resize: (what, from, to) => `Peux-tu changer « ${what} » pour ${from} – ${to} ? Vois-le avec le prestataire, et dis-moi si le prix change.`,
+    move: (what, when) => `Décaler « ${what} » au ${when}, en voyant avec le prestataire. Me dire si le prix ou autre chose change.`,
+    resize: (what, from, to) => `Changer « ${what} » pour ${from} – ${to}, en voyant avec le prestataire. Me dire si le prix change.`,
     asked: 'Mandat le demande au prestataire. Le nouvel horaire s’affiche ici dès qu’il est confirmé.',
     waiting: 'En attente de réponse', empty: 'Rien de daté pour l’instant. Dès que Mandat réserve, ça apparaît ici.',
+    allDay: 'Journée', upcoming: (n) => `${n} rendez-vous`,
+    status: { confirmed: 'Confirmé', held: 'Acompte bloqué', requested: 'Demandé', awaiting_approval: 'À valider', negotiating: 'En négociation', searching: 'En recherche', pending: 'Demandé' },
   },
 };
 
@@ -63,6 +67,23 @@ export async function mountAgenda(el, { get, post, lang, onOpen, onAsked }) {
   const asked = new Set();
   const shape = (e) => ({ ...e, cls: PENDING.has(e.status) ? 'mandat-pending' : '', draggable: !e.allDay, resizable: !e.allDay });
 
+  const several = data.missions.length > 1;
+  const price = (r) => (r.total ? Number(r.total).toLocaleString(loc, { style: 'currency', currency: r.currency || 'EUR', maximumFractionDigits: Number(r.total) % 1 ? 2 : 0 }) : '');
+  const state = (r) => (r.status === 'confirmed' || r.status === 'held' ? 'ok' : 'wait');
+  // One booking per row: who (in bold), then what was booked, the price and the mission, and where it stands.
+  const card = ({ eventRecord: r, renderData }) => {
+    renderData.showBullet = false;
+    const title = r.where || r.name;
+    const sub = [r.where ? r.name : '', price(r), several ? r.mission : ''].filter(Boolean).join(' · ');
+    return {
+      className: 'm-ev',
+      children: [
+        { className: 'm-ev-title', text: title },
+        { className: 'm-ev-sub', children: [{ tag: 'span', className: `m-ev-state ${state(r)}`, text: W.status[r.status] || r.status }, sub ? { tag: 'span', text: ' · ' + sub } : null].filter(Boolean) },
+      ],
+    };
+  };
+  const times = (r) => (r.allDay ? { className: 'm-ev-time', text: W.allDay } : { className: 'm-ev-time', children: [{ tag: 'b', text: hour(r.startDate) }, { tag: 'span', text: hour(r.endDate) }] });
   const cal = new B.Calendar({
     appendTo: el,
     date: next,
@@ -70,7 +91,20 @@ export async function mountAgenda(el, { get, post, lang, onOpen, onAsked }) {
     sidebar: narrow ? false : { items: { datePicker: { showEvents: 'dots' } } },
     resources: data.missions,
     events: data.events.map(shape),
-    modes: { day: true, week: true, month: true, year: false, agenda: true },
+    modes: {
+      day: { eventRenderer: ({ eventRecord: r }) => `${r.where ? r.where + ' · ' : ''}${r.name}` },
+      week: true,
+      month: true,
+      year: false,
+      agenda: {
+        range: 'year',
+        settingsButton: null,
+        eventHeight: 58,
+        eventRenderer: card,
+        eventTimeRenderer: times,
+        descriptionRenderer: (view) => `${view.date.getFullYear()} · ${W.upcoming(cal.eventStore.count)}`,
+      },
+    },
     features: {
       eventEdit: false, // times change through Mandat, never behind the merchant's back
       eventMenu: false,

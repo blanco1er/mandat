@@ -102,6 +102,7 @@ async function boot() {
   restorePending();
   if (open) openMission(open).catch(() => { history.replaceState(null, '', '/'); refreshHome(); show('home'); }); // a mission that no longer exists: back to the list
   else if (back?.view === 'settings') { TABS.settings(); show('settings'); requestAnimationFrame(() => scrollTo({ top: back.y || 0 })); }
+  else if (TABS[p.get('tab')]) { TABS[p.get('tab')](); show(p.get('tab')); requestAnimationFrame(() => placeLens()); } // a link straight to a tab (/?tab=agenda)
   else show('home');
 }
 
@@ -1566,157 +1567,105 @@ $('#sheetLater').addEventListener('click', closeSheet);
 
 // ---------- settings ----------
 let sAutonomy = 'balanced';
-// ---------- activity: AG Grid ledger ----------
-const AG = 'https://cdn.jsdelivr.net/npm/ag-grid-community@36.2.0/dist/ag-grid-community.min.js';
-let agReady, ledger;
-function loadAgGrid() {
-  return (agReady ||= new Promise((ok, ko) => {
-    const s = document.createElement('script');
-    s.src = AG;
-    s.onload = () => ok(window.agGrid);
-    s.onerror = () => { agReady = null; ko(new Error('grid unavailable')); };
-    document.head.append(s);
-  }));
+// ---------- activity: a clear summary, every payment, and the AG Studio analysis ----------
+// The summary and the list are the app's own (light, instant). The analysis is AG Studio (public/insights.js):
+// inline on a large screen, full screen on a phone, where it is either the dashboard or its assistant.
+const PAY_ICON = { 'Food & drink': '🍽️', Stays: '🛏️', Transport: '🚆', Activities: '🎟️', Venues: '🏛️', Decoration: '🎈', Flowers: '💐', Repairs: '🔧', Shopping: '🛍️', 'Bill shares': '👥' };
+const PAY_STATE = { Paid: 'ok', 'Paid back': 'ok', Held: 'wait', 'Owed to you': 'wait', Refunded: 'back', Released: 'off', Failed: 'off' };
+let insights = null, studio = null, studioTry = null;
+const wideScreen = () => innerWidth >= 720;
+function dayLabel(d) {
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()), today = new Date(new Date().toDateString());
+  const diff = Math.round((today - day) / 864e5);
+  return diff === 0 ? t('Today') : diff === 1 ? t('Yesterday') : d.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' });
 }
-// The grid wears the app's materials, in light and dark.
-function ledgerTheme(ag) {
-  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
-  return ag.themeQuartz.withParams({
-    fontFamily: '-apple-system, "SF Pro Text", system-ui, sans-serif',
-    fontSize: 14,
-    headerFontSize: 12,
-    headerFontWeight: 600,
-    accentColor: '#0a84ff',
-    backgroundColor: dark ? '#1c1d22' : '#ffffff',
-    foregroundColor: dark ? '#f2f2f7' : '#1c1c1e',
-    headerBackgroundColor: dark ? '#22232a' : '#f7f6f3',
-    headerTextColor: dark ? '#9a9aa2' : '#6e6e73',
-    borderColor: dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.07)',
-    rowHoverColor: dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)',
-    wrapperBorderRadius: 16,
-    spacing: 6,
-    rowVerticalPaddingScale: 0.9,
-  });
+function payAmount(p) {
+  if (p.status === 'Held') return t('{amount} held', { amount: fmt(p.held) });
+  if (p.status === 'Owed to you') return t('{amount} to receive', { amount: fmt(p.owed_to_you) });
+  if (p.status === 'Paid back') return '+' + fmt(p.paid_back);
+  if (p.status === 'Released') return '—';
+  if (p.status === 'Refunded') return '+' + fmt(p.refunded || p.spent);
+  return '−' + fmt(p.spent);
 }
-const STATUS_CLS = { Held: 'wait', Paid: 'paid', 'Paid back': 'paid', Released: 'off', Refunded: 'part', 'Owed to you': 'wait', Failed: 'off' };
-// Statuses and kinds stay in English in the data (the plain-words filter uses them); only their display is translated.
-const kindLabel = (k) => t(k === 'Share' ? 'Bill share' : k || '');
-const dayMonth = (d) => d.toLocaleDateString(locale(), { day: 'numeric', month: 'short' });
-function ledgerColumns(narrow) {
-  return [
-    { field: 'at', headerName: t('When'), filter: 'agDateColumnFilter', sort: 'desc', width: 112, minWidth: 96, hide: narrow,
-      valueGetter: (p) => (p.data?.at ? new Date(p.data.at) : null),
-      valueFormatter: (p) => (p.value ? dayMonth(p.value) + ' · ' + p.value.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) : ''),
-      filterParams: { comparator: (d, v) => { const x = new Date(v); x.setHours(0, 0, 0, 0); return x < d ? -1 : x > d ? 1 : 0; } } },
-    { field: 'who', headerName: narrow ? t('Who') : t('Merchant / friend'), filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110,
-      // On a phone the date sits under the name, so three columns are enough: who, status, amount.
-      cellRenderer: (p) => (p.data ? `<span class="led-who"><span class="led-emoji">${p.data.kind === 'Share' ? '👥' : esc(p.data.emoji)}</span><span class="led-name">${esc(p.value)}${innerWidth < 720 && p.data.at ? `<small>${dayMonth(new Date(p.data.at))}</small>` : ''}</span></span>` : esc(p.value)) },
-    { field: 'mission', headerName: t('Mission'), filter: 'agTextColumnFilter', flex: 1.2, minWidth: 110, hide: narrow },
-    { field: 'what', headerName: t('What'), filter: 'agTextColumnFilter', flex: 1.4, minWidth: 110, hide: narrow },
-    { field: 'kind', headerName: t('Type'), filter: 'agTextColumnFilter', width: 100, hide: narrow, valueFormatter: (p) => kindLabel(p.value) },
-    { field: 'status', headerName: t('Status'), filter: 'agTextColumnFilter', width: narrow ? 84 : 128, minWidth: 76,
-      cellRenderer: (p) => (p.value ? `<span class="chip ${STATUS_CLS[p.value] || 'off'}">${esc(t(narrow ? { 'Owed to you': 'Owed', 'Paid back': 'Back' }[p.value] || p.value : p.value))}</span>` : '') },
-    { field: 'amount', headerName: t('Amount'), filter: 'agNumberColumnFilter', type: 'rightAligned', width: narrow ? 92 : 112, minWidth: 84,
-      valueFormatter: (p) => (p.value ? (p.value > 0 ? '+' : '−') + fmt(Math.abs(p.value)) : p.data?.owed ? fmt(p.data.owed) : '—'),
-      // A cellClass function replaces the rightAligned type's class, so keep it explicitly.
-      cellClass: (p) => ['ag-right-aligned-cell', p.value > 0 ? 'led-in' : p.value < 0 ? 'led-out' : 'led-zero'] },
-    { field: 'ref', headerName: t('PayPal reference'), filter: 'agTextColumnFilter', flex: 1, minWidth: 120, hide: narrow, cellClass: 'led-ref', tooltipField: 'ref' },
-  ];
+function renderActivity(d) {
+  const sum = (rows, k) => Math.round(rows.reduce((x, r) => x + (Number(r[k]) || 0), 0) * 100) / 100;
+  $('#sPaid').textContent = fmt(sum(d.payments, 'spent'));
+  $('#sHeld').textContent = fmt(sum(d.payments, 'held'));
+  $('#sDue').textContent = fmt(sum(d.missions, 'still_to_pay'));
+  $('#sLeft').textContent = fmt(sum(d.missions, 'left'));
+  const names = Object.fromEntries(d.missions.map((m) => [m.mission_id, m.mission]));
+  const list = $('#payList');
+  list.textContent = '';
+  let last = '';
+  for (const p of d.payments.slice(0, 80)) {
+    const when = p.date ? new Date(p.date) : null;
+    const label = when ? dayLabel(when) : '';
+    if (label !== last) { list.append(el('li', 'pay-day', label)); last = label; }
+    const li = el('li', 'pay-row');
+    li.tabIndex = 0;
+    li.innerHTML = `<span class="m-ic" aria-hidden="true">${PAY_ICON[p.category] || '•'}</span>
+      <span class="m-txt"><span class="m-l1"><b>${esc(p.merchant)}</b><span class="pay-amt ${PAY_STATE[p.status] || ''}">${esc(payAmount(p))}</span></span>
+      <span class="m-l2"><span class="m-line">${esc(names[p.mission_id] || '')}${when ? ' · ' + when.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' }) : ''}</span><span class="pay-state ${PAY_STATE[p.status] || ''}">${esc(t(p.status))}</span></span></span>`;
+    li.addEventListener('click', () => openMission(p.mission_id));
+    list.append(li);
+  }
+  $('#payEmpty').hidden = d.payments.length > 0;
+  $('#payHead').hidden = !d.payments.length;
 }
-// The spending dashboard (AG Studio, public/insights.js) is the Activity tab; the plain ledger below is kept
-// as the fallback when the dashboard cannot load.
-let studio, studioTry;
+async function mountStudio(host, compact) {
+  const m = await import('/insights.js');
+  return m.mountInsights(host, { get, post, lang, license: state.agStudioKey || '', compact });
+}
 async function openActivity() {
-  if (studio) { studio.refresh().catch(() => {}); return; }
-  if (studioTry !== false) {
-    try {
-      studioTry ||= import('/insights.js').then((m) => m.mountInsights($('#studio'), { get, post, lang, license: state.agStudioKey || '' }));
-      $('#studio').hidden = false;
-      $('#activity').classList.add('has-studio');
-      studio = await studioTry;
-      return;
-    } catch (e) {
-      console.warn('[activity] dashboard unavailable, plain ledger instead:', e.message);
-      studioTry = false;
-      $('#studio').hidden = true;
-      $('#activity').classList.remove('has-studio');
-    }
-  }
-  return openLedger();
-}
-async function openLedger() {
-  const [data, ag] = await Promise.all([get('/api/me/activity'), loadAgGrid().catch(() => null)]);
-  $('#tPaid').textContent = fmt(data.totals.paid);
-  $('#tHeld').textContent = fmt(data.totals.held);
-  $('#tOwed').textContent = fmt(data.totals.owed);
-  $('#tBack').textContent = fmt(data.totals.back);
-  $('#ledgerEmpty').hidden = data.rows.length > 0;
-  $('#ledger').hidden = !data.rows.length || !ag;
-  $('#ledgerCount').textContent = data.rows.length ? tn(data.rows.length, '{n} movement', '{n} movements') : '';
-  if (!ag || !data.rows.length) return;
-  const narrow = innerWidth < 720;
-  if (!ledger) {
-    ledger = ag.createGrid($('#ledger'), {
-      theme: ledgerTheme(ag),
-      columnDefs: ledgerColumns(narrow),
-      rowData: data.rows,
-      getRowId: (p) => p.data.id,
-      domLayout: 'autoHeight',
-      rowHeight: 46,
-      headerHeight: 38,
-      animateRows: true,
-      defaultColDef: { sortable: true, resizable: true, suppressHeaderMenuButton: false, floatingFilter: false },
-      rowSelection: undefined,
-      onRowClicked: (e) => e.data?.missionId && openMission(e.data.missionId),
-      onFilterChanged: () => {
-        const n = ledger.getDisplayedRowCount();
-        $('#ledgerCount').textContent = t('{n} of {total}', { n, total: data.rows.length });
-      },
-      overlayNoRowsTemplate: `<span class="led-none">${t('No movement matches this filter.')}</span>`,
-    });
-    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => ledger.setGridOption('theme', ledgerTheme(ag)));
-    let wasNarrow = narrow;
-    addEventListener('resize', () => {
-      const n = innerWidth < 720;
-      if (n !== wasNarrow) { wasNarrow = n; ledger.setGridOption('columnDefs', ledgerColumns(n)); }
-    }, { passive: true });
-  } else ledger.setGridOption('rowData', data.rows);
-}
-// Plain words → grid filters (one small AI call); the chip shows what is applied.
-$('#askForm').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const q = $('#askText').value.trim();
-  if (!q || !ledger) return;
-  $('#askBtn').disabled = true;
-  $('#askForm').classList.add('busy');
+  insights = await get('/api/me/insights');
+  renderActivity(insights);
+  const wide = wideScreen();
+  $('#analyseOpen').hidden = wide || !insights.payments.length;
+  $('#studio').hidden = !wide || !insights.payments.length;
+  $('#activity').classList.toggle('has-studio', wide);
+  if (!wide || !insights.payments.length) return;
+  if (studio) return studio.refresh().catch(() => {});
   try {
-    const r = await post('/api/me/activity/ask', { q });
-    ledger.setFilterModel(r.filterModel);
-    ledger.setGridOption('quickFilterText', r.quickFilter || '');
-    $('#filterText').textContent = r.summary;
-    $('#filterChip').hidden = false;
-  } catch (err) {
-    $('#filterText').textContent = t('Could not understand that. Try other words.');
-    $('#filterChip').hidden = false;
-  } finally {
-    $('#askBtn').disabled = false;
-    $('#askForm').classList.remove('busy');
+    studioTry ||= mountStudio($('#studio'), false);
+    studio = await studioTry;
+  } catch (e) {
+    console.warn('[activity] analysis unavailable:', e.message);
+    studioTry = null;
+    $('#studio').hidden = true;
   }
+}
+// Phone: the analysis full screen. One thing at a time: the dashboard, or the assistant.
+let sheetStudio = null;
+function analyseView(v) {
+  setSeg('#analyseSeg', v);
+  $('#analyseSheet').dataset.view = v;
+  const api = sheetStudio?.api;
+  if (!api) return;
+  const st = api.getState();
+  api.setState({ ...st, panels: { ...(st.panels || {}), ai: { collapsed: v !== 'ai', width: innerWidth } } });
+}
+$('#analyseOpen').addEventListener('click', async () => {
+  $('#analyseSheet').hidden = false;
+  document.body.classList.add('no-scroll');
+  analyseView('board');
+  if (!sheetStudio) {
+    $('#analyseBody').classList.add('loading');
+    try { sheetStudio = await mountStudio($('#analyseBody'), true); } catch (e) { $('#analyseBody').textContent = t('The analysis could not load. Check your connection and try again.'); }
+    $('#analyseBody').classList.remove('loading');
+    analyseView('board');
+  } else sheetStudio.refresh().catch(() => {});
 });
-$('#filterClear').addEventListener('click', () => {
-  ledger?.setFilterModel(null);
-  ledger?.setGridOption('quickFilterText', '');
-  $('#filterChip').hidden = true;
-  $('#askText').value = '';
-});
+$('#analyseClose').addEventListener('click', () => { $('#analyseSheet').hidden = true; document.body.classList.remove('no-scroll'); });
+$$('#analyseSeg button').forEach((b) => b.addEventListener('click', () => analyseView(b.dataset.v)));
 $('#csvBtn').addEventListener('click', () => {
-  if (studio) {
-    const url = URL.createObjectURL(new Blob([studio.csv()], { type: 'text/csv' }));
-    Object.assign(document.createElement('a'), { href: url, download: `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv` }).click();
-    return setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-  ledger?.exportDataAsCsv({ fileName: `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv`, columnKeys: ['at', 'mission', 'who', 'what', 'kind', 'status', 'amount', 'ref'],
-  processCellCallback: (p) => (p.column.getColId() === 'kind' ? kindLabel(p.value) : p.column.getColId() === 'status' ? t(p.value || '') : p.value instanceof Date ? p.value.toISOString() : p.value) });
+  if (!insights) return;
+  const cols = ['date', 'mission', 'merchant', 'category', 'what', 'kind', 'status', 'spent', 'held', 'refunded', 'balance_due', 'paypal_ref'];
+  const names = Object.fromEntries(insights.missions.map((m) => [m.mission_id, m.mission]));
+  const q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = [cols.join(','), ...insights.payments.map((p) => cols.map((c) => q(c === 'mission' ? names[p.mission_id] : p[c])).join(','))].join('\n');
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  Object.assign(document.createElement('a'), { href: url, download: `mandat-activity-${new Date().toISOString().slice(0, 10)}.csv` }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
 function renderSettings() {

@@ -65,16 +65,16 @@ app.use('/api', (req, res, next) => {
   next();
 });
 // Daily AI allowance: per person and for the whole app (each agent turn or ledger question counts once).
-const LIMITS = { turns: Number(process.env.MANDAT_TURNS_PER_USER_DAY || 150), missions: Number(process.env.MANDAT_MISSIONS_PER_USER_DAY || 30), studio: Number(process.env.MANDAT_STUDIO_TURNS_PER_USER_DAY || 200), global: Number(process.env.MANDAT_TURNS_PER_DAY || 3000) };
+const LIMITS = { turns: Number(process.env.MANDAT_TURNS_PER_USER_DAY || 150), missions: Number(process.env.MANDAT_MISSIONS_PER_USER_DAY || 30), studio: Number(process.env.MANDAT_STUDIO_TURNS_PER_USER_DAY || 200), studioGlobal: Number(process.env.MANDAT_STUDIO_TURNS_PER_DAY || 1500), global: Number(process.env.MANDAT_TURNS_PER_DAY || 3000) };
 let usage = { day: '', global: 0, users: new Map() };
 function allowance(u, kind = 'turns') {
   const day = new Date().toISOString().slice(0, 10);
-  if (usage.day !== day) usage = { day, global: 0, users: new Map() };
+  if (usage.day !== day) usage = { day, global: 0, studio: 0, users: new Map() };
   const mine = usage.users.get(u.id) || { turns: 0, missions: 0, studio: 0 };
   if (usage.global >= LIMITS.global) throw Object.assign(new Error(tr(u.lang, 'Mandat has reached its daily demo limit. Please come back tomorrow.')), { status: 429 });
   if (mine[kind] >= LIMITS[kind]) throw Object.assign(new Error(kind === 'missions' ? tr(u.lang, "That's {n} new missions today, the demo limit. Continue an existing one, or come back tomorrow.", { n: LIMITS.missions }) : tr(u.lang, "You reached today's demo limit for the AI. It resets at midnight (UTC).")), { status: 429 });
   mine[kind]++;
-  if (kind !== 'missions') usage.global++;
+  if (kind === 'turns') usage.global++;
   usage.users.set(u.id, mine);
 }
 // The app's own files are always checked with the server before a stored copy is used: an app installed on
@@ -181,6 +181,7 @@ function pushFor(b, { type, data }) {
   const title = s.title || 'Mandat';
   const L = langFor(s);
   if (type === 'approval' && data.status !== 'approved' && data.status !== 'declined') pushTo(s, { title, body: tr(L, 'Approve {amount} at {merchant}? Tap to review.', { amount: EUR(data.amount, s, L), merchant: data.merchant }), tag: 'ap-' + data.id });
+  else if (type === 'request' && data.moved) pushTo(s, { title, body: data.moved === 'yes' ? tr(L, '{merchant} moved your booking to {slot}.', { merchant: data.merchant, slot: data.slot }) : tr(L, "{merchant} can't move it. Your booking stays as it was.", { merchant: data.merchant }), tag: 'rq-' + data.id });
   else if (type === 'request' && data.status === 'accepted') pushTo(s, { title, body: tr(L, data.slot ? '{merchant} accepted your booking for {slot}.' : '{merchant} accepted your booking.', { merchant: data.merchant, slot: data.slot }), tag: 'rq-' + data.id });
   else if (type === 'request' && data.status === 'declined') pushTo(s, { title, body: tr(L, "{merchant} can't take it. Mandat is looking for another option.", { merchant: data.merchant }), tag: 'rq-' + data.id });
   else if (type === 'request' && data.status === 'countered') pushTo(s, { title, body: tr(L, '{merchant} proposes {slot} instead. Does that work?', { merchant: data.merchant, slot: data.counterSlot }), tag: 'rq-' + data.id });
@@ -538,8 +539,12 @@ app.get('/api/me/books', api(async (req, res) => ({ missions: booksOf(me(req, re
 app.post('/api/studio/llm', api(async (req, res) => {
   const u = me(req, res);
   allowance(u, 'studio');
+  // The dashboard's agent has its own daily allowance, so it can never eat the missions' one, and only
+  // requests shaped like AG Studio's (bounded conversation, tools and instructions) reach the model.
+  if ((usage.studio || 0) >= LIMITS.studioGlobal) throw Object.assign(new Error(tr(u.lang, 'Mandat has reached its daily demo limit. Please come back tomorrow.')), { status: 429 });
+  usage.studio = (usage.studio || 0) + 1;
   const body = req.body || {};
-  if (!Array.isArray(body.input)) throw new Error('Bad request');
+  if (!Array.isArray(body.input) || body.input.length > 160 || (body.tools || []).length > 40 || String(body.instructions || '').length > 30000 || JSON.stringify(body).length > 400000) throw new Error('Bad request');
   return studioTurn(body);
 }));
 // "Refunds in October", "what Sam still owes"… → an AG Grid filter model, in one small call.
@@ -900,7 +905,8 @@ app.post('/api/merchants/:mid/requests/:rid', api(async (req) => {
   if (action === 'counter' && !String(req.body?.slot || '').trim()) throw new Error('Say which time you can do');
   const s = missionsOnDisk().find((x) => x.requests?.[req.params.rid]?.merchant_id === m.id);
   if (!s) throw Object.assign(new Error('Unknown request'), { status: 404 });
-  if (s.requests[req.params.rid].status !== 'pending') throw Object.assign(new Error('This request was already answered.'), { status: 409 });
+  const rq = s.requests[req.params.rid];
+  if (rq.status !== 'pending' && !rq.move) throw Object.assign(new Error('This request was already answered.'), { status: 409 });
   const b = box(s.id);
   if (b.s.userId) b.s._user = getUser(b.s.userId);
   run(b, (emit) => resolveRequest(b.s, req.params.rid, { action, slot: req.body.slot, message: req.body.message }, emit));
@@ -921,6 +927,7 @@ async function collectRequest(m, s, r) {
   if (b.s.userId) b.s._user = getUser(b.s.userId);
   r = b.s.requests[r.id];
   const entry = b.s.envelope.entries.find((e) => e.id === r.paymentId);
+  if (r.status !== 'accepted') throw Object.assign(new Error('This booking is not waiting for confirmation.'), { status: 409 });
   if (!entry || entry.state !== 'held') throw Object.assign(new Error('No deposit is waiting to be collected.'), { status: 409 });
   // Collect now (the merchant sees it at once), then let the customer's agent tell them.
   const emit = emitter(b);
@@ -948,6 +955,21 @@ async function demoMerchants() {
     for (const r of Object.values(s0.requests || {})) {
       let m;
       try { m = merchant(r.merchant_id); } catch { continue; }
+      if (r.move && !handled.has(r.id + ':move:' + r.move.at) && now - Date.parse(r.move.at) > delayFor(r.id + r.move.at, 20000, 30000)) {
+        handled.add(r.id + ':move:' + r.move.at);
+        let act = { action: 'accept', message: '' };
+        try {
+          const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, json: true, temperature: 0.4, maxTokens: 1500, timeoutMs: 30000, messages: [{ role: 'system', content: `You are ${m.name} (${m.category}, ${m.city}), a small business. A customer you already booked asks to move the booking to another time. Your house rules: ${m.rules}. Accept unless your rules make it impossible. JSON only: {"action":"accept|counter|decline","slot":"only for counter: the time you can do","message":"one short friendly sentence, in the language of the note"}` }, { role: 'user', content: `Booking: ${r.items.map((i) => i.qty + ' x ' + i.label).join(', ')}. Now booked for ${r.move.from}; asked to move to ${r.move.to}. Note: ${r.note || '(none)'}` }] });
+          const o = JSON.parse(message.content || '{}');
+          if (['accept', 'counter', 'decline'].includes(o.action)) act = { action: o.action, slot: o.slot, message: String(o.message || '').slice(0, 300) };
+        } catch {}
+        const b = box(s0.id);
+        if (!b.deleted && b.s.requests?.[r.id]?.move) {
+          if (b.s.userId) b.s._user = getUser(b.s.userId);
+          run(b, (emit) => resolveRequest(b.s, r.id, act, emit).catch(() => {}));
+        }
+        continue;
+      }
       const key = r.id + ':' + r.status;
       if (handled.has(key)) continue;
       if (r.status === 'pending' && now - Date.parse(r.createdAt) > delayFor(r.id, 20000, 30000)) {

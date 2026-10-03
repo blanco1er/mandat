@@ -27,11 +27,12 @@ async function load() {
   $('#mName').textContent = m.name;
   $('#mMeta').textContent = `${t(m.category[0].toUpperCase() + m.category.slice(1))} · ${m.city} · ${t('requests from AI shopping agents')}`;
   // Re-render only when something changed, so a half-typed counter-proposal is never wiped.
-  const sig = JSON.stringify(data.requests.map((x) => [x.id, x.status, x.deposit_state]));
+  const sig = JSON.stringify(data.requests.map((x) => [x.id, x.status, x.deposit_state, x.move?.at]));
   if (sig === shown) return;
   shown = sig;
-  const pending = data.requests.filter((x) => x.status === 'pending');
-  const done = data.requests.filter((x) => x.status !== 'pending');
+  // a time change on an accepted booking waits for an answer like a new request
+  const pending = data.requests.filter((x) => x.status === 'pending' || x.move);
+  const done = data.requests.filter((x) => x.status !== 'pending' && !x.move);
   $('#pending').innerHTML = pending.length ? '' : `<div class="empty-box">${t('No request waiting. New ones appear here by themselves.')}</div>`;
   for (const x of pending) $('#pending').append(card(x, m));
   $('#doneTitle').hidden = !done.length;
@@ -55,11 +56,11 @@ function card(x, m) {
   el.className = 'req-card';
   el.innerHTML = `<div class="req-top"><b>${esc(x.customer)}</b><time>${when(x.createdAt)}</time></div>
     <div class="req-via">${t('Sent by their Mandat agent · pays with PayPal')}</div>
-    ${x.slot ? `<span class="req-when">🕒 ${esc(x.slot)}</span>` : ''}
+    ${x.move ? `<span class="req-when">🕒 ${esc(t('Time change: {from} → {to}', { from: x.move.from, to: x.move.to }))}</span>` : x.slot ? `<span class="req-when">🕒 ${esc(x.slot)}</span>` : ''}
     ${x.where ? `<span class="req-when">📍 ${esc(x.where)}</span>` : ''}
     <ul class="req-lines">${x.items.map((i) => `<li><span>${esc(i.qty)}× ${esc(i.label)}</span><span>${fmt(i.qty * i.unit_price)}</span></li>`).join('')}<li class="total"><span>${t('Total')}</span><span>${fmt(x.total)}</span></li></ul>
     ${x.note ? `<p class="req-note">${esc(t('“{text}”', { text: x.note }))}</p>` : ''}
-    <p class="req-deposit">${esc(t('Deposit {amount} ({pct}%), held with PayPal as soon as you accept and paid to you when the booking is confirmed.', { amount: fmt(x.deposit), pct: Math.round(m.deposit * 100) }))}</p>
+    <p class="req-deposit">${esc(x.move ? t('Same booking and price; only the time changes.') : t('Deposit {amount} ({pct}%), held with PayPal as soon as you accept and paid to you when the booking is confirmed.', { amount: fmt(x.deposit), pct: Math.round(m.deposit * 100) }))}</p>
     <div class="req-actions"><button class="btn accept" data-a="accept">${t('Accept')}</button><button class="btn other" data-a="other">${t('Other time')}</button><button class="btn decline" data-a="decline">${t('Decline')}</button></div>
     <div class="counter" hidden><input placeholder="${esc(t('e.g. Tomorrow 9:00'))}" aria-label="${esc(t('The time you can do'))}"><button class="btn accept" data-a="counter">${t('Propose')}</button></div>`;
   const send = async (action, slot) => {
