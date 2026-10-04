@@ -387,7 +387,7 @@ function onCompose() {
     else if (compose.auto) setBudget(compose.suggested, { auto: false, touched: false }); // the amount was deleted
   }
   // One button, as in a mission: the voice orb while empty, the send arrow as soon as there is something.
-  const has = !!text.trim() || compose.photos.length > 0;
+  const has = !!text.trim(); // a photo alone keeps the voice button: you say what it is about
   $('#compose').classList.toggle('has-text', has);
   $('#cGo').setAttribute('aria-label', has ? t('Start mission') : t('Talk to Mandat'));
   $('#cText').style.height = 'auto';
@@ -2422,8 +2422,8 @@ function listen(onText, button, onLive) {
 }
 // One button: send when there is text, otherwise talk.
 $('#orb').addEventListener('click', () => {
-  if ($('#sayText').value.trim() || state.attach.length) return $('#say').requestSubmit();
-  vmOpen();
+  if ($('#sayText').value.trim()) return $('#say').requestSubmit();
+  vmOpen(); // a photo alone waits for what you say about it
 });
 // ---------- voice conversation: you talk, it answers, it listens again; tap the circle to cut in ----------
 const vm = { on: false, awaiting: false, phase: 'idle', rec: null, queue: [], buf: '', used: 0, quiet: 0, mute: false, liveLi: null, noMeter: false, voiceOff: false };
@@ -2867,7 +2867,10 @@ function vmSend(text) {
   vmSet('thinking');
   vm.buf = '';
   vm.used = 0;
-  send(text, [], { voice: true });
+  // photos added before talking go with what you say ("look at the photo")
+  const images = state.attach.splice(0);
+  if (images.length) { renderTray(); syncComposer(); }
+  send(text, images, { voice: true });
 }
 // The reply is spoken as it arrives: each finished sentence goes to the voice right away.
 function vmFeed(chunk) {
@@ -3024,7 +3027,7 @@ function vmVoice(off) {
 $('#callMute').addEventListener('click', () => vmVoice(!vm.voiceOff));
 
 function syncComposer() {
-  const has = (!!$('#sayText').value.trim() || state.attach.length > 0) && !state.listening;
+  const has = !!$('#sayText').value.trim() && !state.listening; // with only a photo, the button stays the voice: you say what it is
   const ta = $('#sayText');
   ta.style.height = 'auto';
   ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
