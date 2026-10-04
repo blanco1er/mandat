@@ -933,7 +933,7 @@ function handle({ type, data }) {
         }
         li.append(g);
       } else if (data.image) li.append(el('span', 'u-legacy', '📷 ' + t('Photo')));
-      if (data.text) li.append(el('div', 'u-text', data.text));
+      if (data.text) li.append(el('div', 'u-text', maskPhone(data.text)));
       return add(li, { stick: true }); // your own message always brings you to the bottom
     }
     case 'photo_read': return addStep(data.summary, 'seen');
@@ -1845,7 +1845,8 @@ function renderSettings() {
   $('#sStop').checked = u.frozen;
   $('#pName').value = u.profile.name;
   $('#pEmail').value = u.profile.email;
-  $('#pPhone').value = u.profile.phone;
+  $('#pPhone').dataset.real = u.profile.phone || '';
+  $('#pPhone').value = maskPhone(u.profile.phone);
   renderPrefs(u.profile);
   locState().then(locRender);
   $('#sVoice').checked = u.voice.on;
@@ -2244,9 +2245,13 @@ async function saveProfile(profile) {
 async function saveRules(rules) {
   state.me = (await post('/api/me', { rules })).user;
 }
-for (const [id, key] of [['#pName', 'name'], ['#pEmail', 'email'], ['#pPhone', 'phone']]) {
+for (const [id, key] of [['#pName', 'name'], ['#pEmail', 'email']]) {
   $(id).addEventListener('change', () => saveProfile({ [key]: $(id).value }));
 }
+// The phone shows masked; tapping the field shows it in full to edit it, leaving masks it again.
+$('#pPhone').addEventListener('focus', (e) => { e.target.value = e.target.dataset.real || ''; });
+$('#pPhone').addEventListener('change', (e) => { e.target.dataset.real = e.target.value.trim(); saveProfile({ phone: e.target.dataset.real }); });
+$('#pPhone').addEventListener('blur', (e) => { e.target.value = maskPhone(e.target.dataset.real); });
 segmented('#sAutonomy', (v) => {
   sAutonomy = v;
   $('#sAutonomyHelp').textContent = t(state.me.autonomyLevels[v].help);
@@ -3182,7 +3187,17 @@ function typing(on) {
 }
 
 // Light, safe formatting for replies: paragraphs, "- " lists, numbered lists, **bold**, *italic*, links.
+// Phone numbers never show in full on screen (screenshots, screen recordings): "06 •• •• •• 78".
+const PHONE = /(?<![\d+])(?:\+1[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}|(?:\+\d{2,3}[\s.]?(?:\(0\)[\s.]?)?[1-9]|0[1-9])(?:[\s.-]?\d{2}){4})(?!\d)/g;
+function maskPhone(text) {
+  return String(text || '').replace(PHONE, (m) => {
+    const n = (m.match(/\d/g) || []).length;
+    let i = 0;
+    return m.replace(/\d/g, (d) => (++i <= 2 || i > n - 2 ? d : '•'));
+  });
+}
 function md(text) {
+  text = maskPhone(text);
   const inline = (t) => esc(t)
     .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
     .replace(/(^|[\s(])\*(?!\s)(.+?)\*(?=[\s).,!?]|$)/g, '$1<i>$2</i>')
