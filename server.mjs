@@ -21,7 +21,7 @@ import { emojiFor, isEmoji } from './lib/emoji.mjs';
 import { budgetFromText, currencyFromText } from './lib/budget.mjs';
 import * as Push from './lib/push.mjs';
 import { tr, trn, langOf, money } from './lib/i18n-server.mjs';
-import { merchant, inboxAccess, inboxUrl } from './lib/merchants.mjs';
+import { merchant, inboxAccess, inboxUrl, placeOf } from './lib/merchants.mjs';
 import { newUser, getUser, userWithSetup, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
 const app = express();
@@ -906,7 +906,9 @@ app.get('/api/missions/:id/events', (req, res) => {
   }
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   for (const evt of b.log) res.write(`data: ${JSON.stringify(evt)}\n\n`);
-  res.write(`data: ${JSON.stringify({ type: 'ready', data: { busy: !!b.running } })}\n\n`); // end of the replayed history
+  // payments waiting for the user are always sent, even when their card has left the replayed history
+  const waiting = Object.values(b.s.approvals || {}).filter((x) => x.status === 'pending').map((x) => { try { return { ...x, place: placeOf(merchant(x.merchant_id)) }; } catch { return x; } });
+  res.write(`data: ${JSON.stringify({ type: 'ready', data: { busy: !!b.running, approvals: waiting } })}\n\n`); // end of the replayed history
   b.clients.add(res);
   const ping = setInterval(() => res.write(': ping\n\n'), 20000);
   req.on('close', () => {

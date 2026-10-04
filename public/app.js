@@ -964,9 +964,10 @@ function handle({ type, data }) {
       state.live = true;
       closeSteps();
       typing(data?.busy);
-      // a payment waiting for you is shown at once: no hunting for its card up the conversation
-      const waiting = Object.values(state.cards).filter((c) => c.data?.id?.startsWith?.('a_') && (c.data.status === 'pending' || !c.data.status)).pop();
-      if (waiting) setTimeout(() => openSheet(waiting.data), 300);
+      // a payment waiting for you is shown at once (its card is added if it left the replayed history)
+      for (const a of data?.approvals || []) { if (a.place) state.places[a.merchant] = a.place; approvalCard(a); }
+      const waiting = (data?.approvals || []).slice(-1)[0];
+      if (waiting) setTimeout(() => openSheet(state.cards['a:' + waiting.id]?.data || waiting), 300);
       return requestAnimationFrame(() => toBottom()); // land on the latest, no animation
     }
     case 'closed': if (state.live) paintStop('done'); return addStep(t('Mission closed'));
