@@ -15,7 +15,7 @@ export default {
   "Deposit held with PayPal": "Acompte bloqué avec PayPal",
   "Paid only when Lumière confirms": "Payé seulement quand Lumière confirme",
   "All set · Sat 7:30 pm": "Tout est calé · sam. 19 h 30",
-  "Reminder Friday 8 pm · in your calendar": "Rappel vendredi 20 h · dans votre agenda",
+  "Reminder Friday 8 pm · in your agenda": "Rappel vendredi 20 h · dans votre agenda",
   "Missions": "Missions",
   "Stop this mission": "Arrêter cette mission",
   "New mission": "Nouvelle mission",
@@ -716,4 +716,6 @@ export default {
   "Back to my previous account": "Revenir au compte précédent",
   "Open a new, empty account on this device? This account is kept: you can come back to it from Settings.": "Ouvrir un nouveau compte vide sur cet appareil ? Celui-ci est conservé : vous pourrez y revenir depuis les Réglages.",
   "No previous account on this device.": "Aucun compte précédent sur cet appareil.",
+  "See in the agenda": "Voir dans l’agenda",
+  "See the whole trip in the agenda": "Voir tout le voyage dans l’agenda",
 };

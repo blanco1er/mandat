@@ -63,7 +63,7 @@ function playStory() {
     () => list.append(storyRow('found', t('3 restaurants compared'), t('Lumière · Paris 11 · ★ 4.6'))),
     () => list.append(storyRow('deal', t('Negotiated −10% for the group'), t('€144 instead of €160'))),
     () => { list.append(storyRow('hold', t('Deposit held with PayPal'), t('Paid only when Lumière confirms'))); budget(28.8); },
-    () => list.append(storyRow('done', t('All set · Sat 7:30 pm'), t('Reminder Friday 8 pm · in your calendar'))),
+    () => list.append(storyRow('done', t('All set · Sat 7:30 pm'), t('Reminder Friday 8 pm · in your agenda'))),
   ];
   const reset = () => { list.innerHTML = ''; budget(0); $('#story').classList.remove('fading'); };
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) { reset(); steps.forEach((f) => f()); return; }
@@ -802,14 +802,30 @@ $('#brand').addEventListener('click', () => {
   if (!state.mission || $('#live').hidden) return;
   $('#topbar').classList.toggle('expanded');
 });
-$('#back').addEventListener('click', () => {
+function leaveMission() {
   if (state.es) state.es.close();
   stopWatchingShares();
   state.mission = null;
   if (vm.on) vmClose();
   stopSpeaking();
+}
+$('#back').addEventListener('click', () => {
+  leaveMission();
   refreshHome();
   show('home');
+});
+// Every dated booking is already in the app's Agenda: this opens it on the mission's own dates.
+async function showInAgenda(id) {
+  leaveMission();
+  TABS.agenda();
+  show('agenda');
+  requestAnimationFrame(() => placeLens());
+  await agendaTry?.catch(() => {});
+  setTimeout(() => $(`#agenda .ab-chip[data-m="${CSS.escape(id)}"]`)?.click(), 200);
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('.see-agenda');
+  if (b) { e.preventDefault(); showInAgenda(b.dataset.m || state.mission); }
 });
 // The mission's state at a glance: live (a pulsing dot, tap to pause) or paused (tap to resume).
 // A finished mission has nothing to pause: the control goes away.
@@ -1285,7 +1301,7 @@ function wrapupCard(w) {
     ${w.note ? `<p class="wu-note">${esc(w.note)}</p>` : ''}
     ${balanceList(w.balances, w.due, w.currency)}
     ${w.reminders?.length ? `<p class="wu-rem">⏰ ${esc(t('{times} · on your phone', { times: w.reminders.map((r) => new Date(r.at).toLocaleString(locale(), { weekday: 'short', hour: '2-digit', minute: '2-digit' })).join(' · ') }))}</p>` : ''}
-    <div class="wu-actions">${dated ? `<a class="pill-btn" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} ${t('Add all to Calendar')}</a>` : ''}<button type="button" class="wu-change">${t('Change something')}</button></div>`;
+    <div class="wu-actions">${dated ? `<button type="button" class="pill-btn see-agenda" data-m="${esc(state.mission)}">${svg('cal')} ${t('See in the agenda')}</button>` : ''}<button type="button" class="wu-change">${t('Change something')}</button></div>`;
   li.querySelector('.wu-change').addEventListener('click', () => { const box = $('#sayText'); box.value = t('I would like to change '); syncComposer(); box.focus(); });
   add(li);
 }
@@ -1432,7 +1448,7 @@ function planCard({ items }) {
         <div class="tl-main"><b>${esc(it.what)}${it.nights ? ` · ${esc(tn(Number(it.nights) || 0, '{n} night', '{n} nights'))}` : ''}</b><small>${[it.merchant, time].filter(Boolean).map(esc).join(' · ')}</small></div>
         <div class="tl-side">${it.total ? `<span class="tl-amt">${fmt(it.total)}</span>` : ''}<span class="chip ${cls}">${esc(t(st))}</span></div></div>`;
     }).join('')}</section>`).join('')}</div>
-    ${items.some((i) => /^\d{4}-\d{2}-\d{2}/.test(i.when || '') && i.status !== 'cancelled') ? `<a class="tl-cal" href="/api/missions/${state.mission}/calendar.ics">${svg('cal')} ${multiDay ? t('Add the whole trip') : t('Add to Calendar')}</a>` : ''}
+    ${items.some((i) => /^\d{4}-\d{2}-\d{2}/.test(i.when || '') && i.status !== 'cancelled') ? `<button type="button" class="tl-cal see-agenda" data-m="${esc(state.mission)}">${svg('cal')} ${multiDay ? t('See the whole trip in the agenda') : t('See in the agenda')}</button>` : ''}
     ${planned ? `<div class="tl-total"><span>${budget ? t('Planned {amount} of {total}', { amount: fmt(planned), total: fmt(budget) }) : t('Planned {amount}', { amount: fmt(planned) })}</span>${budget ? `<span class="${planned > budget ? 'over' : ''}">${esc(planned > budget ? t('Over by {amount}', { amount: fmt(planned - budget) }) : t('{amount} left for food & extras', { amount: fmt(budget - planned) }))}</span>` : ''}</div>
     <div class="tl-bar"><i style="width:${budget ? Math.min(100, (100 * planned) / budget) : 0}%"></i></div>` : ''}`;
   fold(card);
