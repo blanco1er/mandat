@@ -19,13 +19,14 @@ const emit = (type, d) => {
   if (type === 'tool') { tools++; console.log(`🔧 ${d.name} ${JSON.stringify(d.args).slice(0, 120)}`); }
   if (type === 'say') { said = d.text; console.log(`🗣  ${String(d.text).slice(0, 220)}`); }
   if (type === 'choices') asked++;
-  if (type === 'payment') console.log(`💳 ${d.kind} ${d.entry.merchant} ${d.entry.amount}`);
+  if (type === 'payment') console.log(`💳 ${d.kind} ${d.entry.merchant} ${d.entry.amount} → ${d.entry.state}`);
   if (type === 'approval') queue.push(['approval', d.id]);
   if (type === 'request' && d.status === 'pending') queue.push(['request', d.id]);
 };
 const t0 = Date.now();
 await userTurn(s, sc.ask, emit);
-for (let round = 0; round < 3 && asked; round++) { asked = 0; await userTurn(s, 'Decide for me and go ahead, I trust you.', emit); }
+// A question asked with tap answers or in plain words gets the same answer: decide and go on.
+for (let round = 0; round < 3 && (asked || /\?\s*$|\?\s*>>/m.test(said)); round++) { asked = 0; said = ''; await userTurn(s, 'Decide for me and go ahead, I trust you.', emit); }
 for (let i = 0; i < 14 && queue.length; i++) {
   const [kind, id] = queue.shift();
   if (kind === 'approval') await resolveApproval(s, id, true, emit);
