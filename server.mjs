@@ -105,8 +105,8 @@ function me(req, res) {
   return u;
 }
 function publicUser(u) {
-  const { paypal, push, ...rest } = u;
-  return { ...rest, notifications: (push || []).length, paypal: { connected: paypal.connected, payerName: paypal.payerName, payerEmail: paypal.payerEmail, verified: paypal.verified, mandate: paypal.mandate ? { active: true, mode: paypal.mandate.mode, signedAt: paypal.mandate.signedAt } : null }, knows: agentBrief(u), autonomyLevels: AUTONOMY };
+  const { paypal, push, forgotten, ...rest } = u;
+  return { ...rest, canRestore: !!(forgotten && Date.now() - forgotten.at < 7 * 864e5), notifications: (push || []).length, paypal: { connected: paypal.connected, payerName: paypal.payerName, payerEmail: paypal.payerEmail, verified: paypal.verified, mandate: paypal.mandate ? { active: true, mode: paypal.mandate.mode, signedAt: paypal.mandate.signedAt } : null }, knows: agentBrief(u), autonomyLevels: AUTONOMY };
 }
 
 // ---------- missions in memory, persisted after every agent run ----------
@@ -451,8 +451,21 @@ app.delete('/api/me/memory/:id', api(async (req, res) => {
 // Forget everything the agent knows about me (profile and memory), keep PayPal connection and missions.
 app.post('/api/me/forget', api(async (req, res) => {
   const u = me(req, res);
+  // kept for a week, so a tap by mistake can be undone from Settings
+  u.forgotten = { profile: u.profile, memory: u.memory, at: Date.now() };
   u.profile = newUser().profile;
   u.memory = [];
+  delete u.knowledge;
+  saveUser(u);
+  return { user: publicUser(u) };
+}));
+app.post('/api/me/forget/undo', api(async (req, res) => {
+  const u = me(req, res);
+  if (!u.forgotten || Date.now() - u.forgotten.at > 7 * 864e5) throw Object.assign(new Error('Nothing to restore.'), { status: 404 });
+  u.profile = u.forgotten.profile;
+  u.memory = [...u.forgotten.memory, ...(u.memory || [])];
+  delete u.forgotten;
+  delete u.knowledge;
   saveUser(u);
   return { user: publicUser(u) };
 }));

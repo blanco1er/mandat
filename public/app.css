@@ -784,6 +784,8 @@ body.no-scroll { overflow: hidden; }
 .knows-box[open] summary::after { transform: rotate(90deg); }
 .knows { padding: 0 0 12px; font-size: 12.5px; line-height: 18px; }
 .settings-fine { margin: 10px 16px 0; font-size: 12px; color: var(--ink-3); }
+.danger-zone { margin-top: 28px; }
+#sRestore:not([hidden]) + #sForget { border-top: 0.5px solid var(--card-line); }
 /* ===== Activity: one strip of numbers, a slim search, the ledger ===== */
 .page-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .head-link { font-size: 15px; font-weight: 600; color: var(--accent); background: none; }

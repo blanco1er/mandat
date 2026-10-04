@@ -1821,6 +1821,7 @@ $('#csvBtn').addEventListener('click', () => {
 });
 
 function renderSettings() {
+  $('#sRestore').hidden = !state.me?.canRestore;
   const u = state.me;
   const name = u.paypal.payerName || u.profile.name || t('PayPal account');
   const mail = u.paypal.payerEmail || (state.paypalMode === 'sandbox' ? '' : t('Demo account'));
@@ -2322,8 +2323,12 @@ $('#sVoice').addEventListener('change', async () => {
   state.me = (await post('/api/me', { voice: { on: $('#sVoice').checked } })).user;
 });
 $('#sForget').addEventListener('click', async () => {
-  if (!confirm(t('Forget everything Mandat knows about you? Your PayPal connection and missions stay.'))) return;
+  if (!confirm(t('Erase your address, sizes, diet, people and everything Mandat remembered about you? Your PayPal connection and missions stay. You can undo it for 7 days.'))) return;
   state.me = (await post('/api/me/forget', {})).user;
+  renderSettings();
+});
+$('#sRestore').addEventListener('click', async () => {
+  state.me = (await post('/api/me/forget/undo', {})).user;
   renderSettings();
 });
 // Another account on this phone: a fresh one from the first screen, and back to the one left behind.
