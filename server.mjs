@@ -30,7 +30,7 @@ const BASE = () => process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || 
 const live = new Map(); // missionId -> { s, clients:Set, busy:Promise, log:[] }
 
 app.set('trust proxy', 1); // behind Render / a tunnel: the client IP is in X-Forwarded-For
-app.use(express.json({ limit: '3mb' })); // photos arrive as data URLs, resized to 1280 px by the app
+app.use(express.json({ limit: '12mb' })); // photos arrive as data URLs, resized to 2048 px by the app (4 at most, 2.5 MB each)
 
 // The app sends the person's time zone and interface language: reminders and "tomorrow at 5" are understood
 // in the first, notifications and the agent's replies follow the second.

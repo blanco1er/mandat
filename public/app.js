@@ -2410,7 +2410,7 @@ function shrink(file) {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
-      const k = Math.min(1, 1280 / Math.max(img.width, img.height));
+      const k = Math.min(1, 2048 / Math.max(img.width, img.height)); // sharp enough to read a brand or a model printed on the item
       const c = document.createElement('canvas');
       c.width = Math.round(img.width * k);
       c.height = Math.round(img.height * k);
