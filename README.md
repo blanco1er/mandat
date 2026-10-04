@@ -73,9 +73,17 @@ No sign-up: each browser gets its own private space through an HTTP-only cookie.
 
 ## How AI is used
 
-- **The agent: DeepSeek with tool calling** (`lib/agent.mjs`, `lib/deepseek.mjs`). DeepSeek is OpenAI-compatible, and the agent loop runs up to 14 tool steps per user turn. Tools: `find_real_places`, `find_network_merchants`, `verify_merchant`, `negotiate`, `request_booking`, `hold_deposit`, `cancel_hold`, `split_bill`, `update_plan`. Every step is emitted as an event and streamed to the browser with Server-Sent Events, so you watch the agent work.
+- **The agent: DeepSeek with tool calling** (`lib/agent.mjs`, `lib/deepseek.mjs`). DeepSeek is OpenAI-compatible, and the agent loop runs up to 24 tool steps per user turn. It has 30 tools:
+  - *find:* `find_real_places`, `find_top_places`, `find_network_merchants`, `inspect_place`, `find_products`, `estimate_trip`, `check_schedule`;
+  - *deal:* `verify_merchant`, `negotiate`, `ask_quote`, `request_booking`, `move_booking`;
+  - *pay:* `hold_deposit`, `cancel_hold`, `refund_payment`, `buy_product`, `split_bill`, `set_budget`, `calculate`;
+  - *show and remind:* `show_place_preview`, `show_booking`, `notify_user`, `set_reminder`;
+  - *remember:* `remember`, `forget`, `save_sizes`, `suggest_get_to_know`;
+  - *plan:* `update_plan`, `wrap_up`, `close_mission`.
+
+  Capture is not a tool: the code captures a held deposit once the merchant confirms. Every step is emitted as an event and streamed to the browser with Server-Sent Events, so you watch the agent work.
 - **Guardrails live in code, not in the prompt.** Even if the model asks, `hold_deposit` checks the envelope and the approval threshold, `request_booking` rejects items a merchant does not sell and requests the mandate cannot pay, and `doHold` refuses when a stop switch is on.
-- **Vision.** A photo is sent once to the model as image input. A precise text description (names, prices, dates, addresses) is kept in the conversation instead of the image.
+- **Vision.** A photo is sent once to the model as image input. A precise text description (names, prices, dates, addresses) is kept in the conversation instead of the image. A name printed on the item is read five times in parallel and the majority spelling is kept (`readPrinted`), so the agent never names a brand it did not read.
 - **Merchant agents** (`lib/merchants.mjs`). Each demo merchant with `hasAgent: true` is a DeepSeek agent with its own catalogue and private floor rules. It replies in JSON with a structured offer (items, discount, total, deposit, slot, conditions).
 - **Natural-language ledger filter** (`POST /api/me/activity/ask` in `server.mjs`). A request in plain words becomes an AG Grid filter model in JSON mode, limited to a whitelist of columns.
 - **Mission titles.** The fast model writes a 2–5 word title in the background, and a plain title is shown instantly in the meantime.
