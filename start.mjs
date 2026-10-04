@@ -27,7 +27,7 @@ await import('./server.mjs');
 
 // Stay awake on the free host: Render sleeps after 15 minutes without a visit, and waking takes up to a minute.
 // The server visits its own public address every 9 minutes (one always-on instance fits the 750 free hours a month).
-const SELF = process.env.RENDER_EXTERNAL_URL;
+const SELF = process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL; // Render, or any host given a PUBLIC_URL (Hugging Face Spaces)
 if (SELF && process.env.MANDAT_KEEPALIVE !== 'off') {
   setInterval(() => {
     fetch(`${SELF}/api/health`, { signal: AbortSignal.timeout(20000) }).catch(() => {});
