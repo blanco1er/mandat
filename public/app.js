@@ -20,6 +20,7 @@ function show(view) {
   if (view !== 'activity' && studio) { try { studio.destroy(); } catch {} studio = null; studioTry = null; $('#studio').textContent = ''; $('#assistant').textContent = ''; $('#assistant').className = 'assistant-col'; }
   $('#tabbar').hidden = !['home', 'agenda', 'activity', 'settings'].includes(view);
   $('#composer').hidden = view !== 'live';
+  $('#toEnd').hidden = true;
   document.documentElement.classList.toggle('on-live', view === 'live'); // the conversation scrolls inside, the page never moves
   $('#bottomFade').hidden = view !== 'live';
   $('#tray').hidden = view !== 'live' || !state.attach?.length;
@@ -3168,7 +3169,16 @@ function add(node, { stick = false } = {}) {
   else $('#feed').append(node);
   if (!state.live) return; // replaying history: one jump at the end, not a scroll per item
   if (follow) requestAnimationFrame(() => toBottom(true));
-  else $('#newPill').hidden = false;
+  else { $('#toEnd').classList.add('fresh'); syncEnd(); } // something new below: the arrow gets a dot
+}
+// The round arrow: shown as soon as you scroll up in a conversation, one tap takes you back to the latest
+// message, and it goes away once you are there.
+function syncEnd() {
+  const b = $('#toEnd');
+  const on = document.documentElement.classList.contains('on-live') && !$('#live').hidden && !nearBottom();
+  if (on) b.style.bottom = `calc(${($('#composer').offsetHeight || 64) + 26}px + env(safe-area-inset-bottom))`;
+  else b.classList.remove('fresh');
+  b.hidden = !on;
 }
 function keepBottom() {
   if (nearBottom()) toBottom();
@@ -3187,12 +3197,13 @@ function streamText(t) {
   state.streamLi.firstChild.textContent = state.streamRaw.split(/\n?\s*>>/)[0];
   if (follow) toBottom();
 }
-$('#newPill').addEventListener('click', () => {
-  $('#newPill').hidden = true;
+$('#toEnd').addEventListener('click', () => {
   toBottom(true);
+  $('#toEnd').hidden = true;
+  $('#toEnd').classList.remove('fresh');
 });
-addEventListener('scroll', () => { if (nearBottom()) $('#newPill').hidden = true; }, { passive: true });
-$('#live').addEventListener('scroll', () => { if (nearBottom()) $('#newPill').hidden = true; }, { passive: true });
+$('#live').addEventListener('scroll', syncEnd, { passive: true });
+addEventListener('resize', syncEnd, { passive: true });
 function step(text) { return el('li', 'step', text); }
 
 // "…" bubble while the agent works; it always stays last in the feed.

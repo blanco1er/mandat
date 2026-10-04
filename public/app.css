@@ -175,6 +175,10 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
 .say.streaming .say-text::after { content: ""; display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -2px; background: var(--accent); animation: caret 0.9s steps(1) infinite; }
 @keyframes caret { 50% { opacity: 0; } }
 .feed > li.settled { animation: none; }
+.to-end { position: fixed; left: 50%; margin-left: -21px; z-index: 19; width: 42px; height: 42px; border-radius: 21px; display: grid; place-items: center; color: var(--ink); animation: end-in 0.3s var(--spring) both; }
+.to-end svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.to-end.fresh::after { content: ''; position: absolute; top: 3px; right: 3px; width: 10px; height: 10px; border-radius: 5px; background: var(--accent); box-shadow: 0 0 0 2px var(--bg, #fff); }
+@keyframes end-in { from { opacity: 0; transform: translateY(8px) scale(0.9); } to { opacity: 1; transform: none; } }
 .new-pill { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(max(10px, calc(env(safe-area-inset-bottom) - 10px)) + 72px); z-index: 19; height: 36px; padding: 0 16px; border-radius: 18px; font-size: 14px; font-weight: 600; color: var(--accent); animation: pill-in 0.4s var(--spring) both; }
 @keyframes pill-in { from { opacity: 0; transform: translate(-50%, 10px); } }
 /* Map: soft placeholder, then a fade-in once drawn */
