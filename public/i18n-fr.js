@@ -214,6 +214,7 @@ export default {
   "To schedule": "À planifier",
   "Day {n}": "Jour {n}",
   "Your trip, day by day": "Votre voyage, jour par jour",
+  "Your plan, day by day": "Votre programme, jour par jour",
   "Your plan": "Votre programme",
   "{done}/{total} booked": "{done}/{total} réservés",
   "{amount} of {total}": "{amount} sur {total}",

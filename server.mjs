@@ -906,6 +906,8 @@ app.get('/api/missions/:id/events', (req, res) => {
   }
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   for (const evt of b.log) res.write(`data: ${JSON.stringify(evt)}\n\n`);
+  // the budget recorded in the history is as it was then: the books are counted again now
+  try { res.write(`data: ${JSON.stringify({ type: 'envelope', data: envelopeView(b.s) })}\n\n`); } catch {}
   // payments waiting for the user are always sent, even when their card has left the replayed history
   const waiting = Object.values(b.s.approvals || {}).filter((x) => x.status === 'pending').map((x) => { try { return { ...x, place: placeOf(merchant(x.merchant_id)) }; } catch { return x; } });
   res.write(`data: ${JSON.stringify({ type: 'ready', data: { busy: !!b.running, approvals: waiting } })}\n\n`); // end of the replayed history

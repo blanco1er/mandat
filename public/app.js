@@ -1302,7 +1302,10 @@ function choicesRow({ choices }) {
 }
 function clearChoices() { state.cards.choices?.remove(); state.cards.choices = null; }
 // "All set": the whole result at a glance, the money, the reminders — and an easy way to change anything.
+// What is left of the model's JSON around a sentence ('…rechange."]'): never shown.
+const tidy = (x) => { let v = String(x ?? '').trim().replace(/^[\["'{\s]+(?=\S)/, '').replace(/["']?[\]}]+\s*$/, ''); if (/"$/.test(v) && (v.match(/"/g) || []).length % 2) v = v.slice(0, -1); return v.trim(); };
 function wrapupCard(w) {
+  w = { ...w, headline: tidy(w.headline), note: tidy(w.note), lines: (w.lines || []).map((l) => ({ ...l, what: tidy(l.what), where: tidy(l.where) })) };
   state.cards.wrap?.remove();
   const li = state.cards.wrap = el('li', 'card wrapup');
   const day = (x) => {
@@ -1448,17 +1451,19 @@ function planCard({ items }) {
     if (!groups.length || groups[groups.length - 1].key !== key) groups.push({ key, items: [] });
     groups[groups.length - 1].items.push(it);
   }
+  // A trip (travel or a night away) reads as a trip; a repair, a party or a move is a plan, not a trip.
+  const trip = items.some((i) => i.status !== 'cancelled' && (i.kind === 'stay' || /(\btrain|flight|\bvols?\b|avion|plane|\bbus\b|→|nights?\b|nuits?\b|hostel|h[oô]tel|auberge)/i.test(i.what || '')));
   const label = (d) => {
     if (d === 'later') return t('To schedule');
     const dt = new Date(d + 'T12:00:00');
     const n = first ? Math.round((dt - new Date(first + 'T12:00:00')) / 864e5) + 1 : 0;
-    return `${dt.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })}${n > 0 && groups.length > 1 ? ' · ' + t('Day {n}', { n }) : ''}`;
+    return `${dt.toLocaleDateString(locale(), { weekday: 'short', day: 'numeric', month: 'short' })}${trip && n > 0 && groups.length > 1 ? ' · ' + t('Day {n}', { n }) : ''}`;
   };
   const planned = items.filter((i) => i.status !== 'cancelled' && i.total > 0).reduce((t, i) => t + i.total, 0);
   const budget = state.envTotal || 0;
   const multiDay = groups.filter((g) => g.key !== 'later').length > 1;
   const booked = items.filter((i) => i.status === 'confirmed' || i.status === 'held').length;
-  card.innerHTML = `<header><span class="avatar plan-ic">${svg('route')}</span><div><b>${multiDay ? t('Your trip, day by day') : t('Your plan')}</b><small>${t('{done}/{total} booked', { done: booked, total: items.length })}${planned ? ` · ${budget ? t('{amount} of {total}', { amount: fmt(planned), total: fmt(budget) }) : fmt(planned)}` : ''}</small></div></header>
+  card.innerHTML = `<header><span class="avatar plan-ic">${svg('route')}</span><div><b>${multiDay ? (trip ? t('Your trip, day by day') : t('Your plan, day by day')) : t('Your plan')}</b><small>${t('{done}/{total} booked', { done: booked, total: items.length })}${planned ? ` · ${budget ? t('{amount} of {total}', { amount: fmt(planned), total: fmt(budget) }) : fmt(planned)}` : ''}</small></div></header>
     <div class="timeline">${groups.map((g) => `<section class="tl-day"><h3>${label(g.key)}</h3>${g.items.map((it) => {
       const [st, cls] = PLAN_STATUS[it.status] || [it.status, 'off'];
       const time = /\d{2}:\d{2}/.test(it.when || '') ? it.when.match(/\d{2}:\d{2}/)[0] : !it.d && it.when ? it.when : '';
@@ -1466,8 +1471,8 @@ function planCard({ items }) {
         <div class="tl-main"><b>${esc(it.what)}${it.nights ? ` · ${esc(tn(Number(it.nights) || 0, '{n} night', '{n} nights'))}` : ''}</b><small>${[it.merchant, time].filter(Boolean).map(esc).join(' · ')}</small></div>
         <div class="tl-side">${it.total ? `<span class="tl-amt">${fmt(it.total)}</span>` : ''}<span class="chip ${cls}">${esc(t(st))}</span></div></div>`;
     }).join('')}</section>`).join('')}</div>
-    ${items.some((i) => /^\d{4}-\d{2}-\d{2}/.test(i.when || '') && i.status !== 'cancelled') ? `<button type="button" class="tl-cal see-agenda" data-m="${esc(state.mission)}">${svg('cal')} ${multiDay ? t('See the whole trip in the agenda') : t('See in the agenda')}</button>` : ''}
-    ${planned ? `<div class="tl-total"><span>${budget ? t('Planned {amount} of {total}', { amount: fmt(planned), total: fmt(budget) }) : t('Planned {amount}', { amount: fmt(planned) })}</span>${budget ? `<span class="${planned > budget ? 'over' : ''}">${esc(planned > budget ? t('Over by {amount}', { amount: fmt(planned - budget) }) : t('{amount} left for food & extras', { amount: fmt(budget - planned) }))}</span>` : ''}</div>
+    ${items.some((i) => /^\d{4}-\d{2}-\d{2}/.test(i.when || '') && i.status !== 'cancelled') ? `<button type="button" class="tl-cal see-agenda" data-m="${esc(state.mission)}">${svg('cal')} ${multiDay && trip ? t('See the whole trip in the agenda') : t('See in the agenda')}</button>` : ''}
+    ${planned ? `<div class="tl-total"><span>${budget ? t('Planned {amount} of {total}', { amount: fmt(planned), total: fmt(budget) }) : t('Planned {amount}', { amount: fmt(planned) })}</span>${budget ? `<span class="${planned > budget ? 'over' : ''}">${esc(planned > budget ? t('Over by {amount}', { amount: fmt(planned - budget) }) : (trip ? t('{amount} left for food & extras', { amount: fmt(budget - planned) }) : t('{amount} left', { amount: fmt(budget - planned) })))}</span>` : ''}</div>
     <div class="tl-bar"><i style="width:${budget ? Math.min(100, (100 * planned) / budget) : 0}%"></i></div>` : ''}`;
   fold(card);
   if (!card.isConnected) add(card);
