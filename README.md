@@ -13,7 +13,7 @@ Built for the PayPal AI Hackathon (Devpost, 2026). Everything runs on the **PayP
 
 Open **https://mandat-qb77.onrender.com** on a phone (it installs as an app) or a desktop browser. No sign-up: your browser gets its own private space.
 
-1. **Sign the mandate.** Tap *Sign mandate with PayPal* and log in with the **sandbox buyer account given in the Devpost testing instructions** (never a real PayPal login). Pick a monthly limit and an autonomy level (*Balanced* is a good start).
+1. **Sign the mandate.** Tap *Continue with PayPal* and log in on the PayPal sandbox page with **any PayPal sandbox Personal account** (developer.paypal.com → *Testing Tools* → *Sandbox Accounts*; never a real PayPal login). Approving once saves the mandate. Pick a monthly limit and an autonomy level (*Balanced* is a good start).
 2. **Give it an errand.** Tap one of the examples or type your own, in English or French, in any city. Some that show different parts of the app:
    - *"Dinner for 4 in Paris on Friday around 8pm, 200 € max, and a ride home"*: real places, negotiation with merchant agents, a deposit **held** with PayPal (not charged).
    - *"A birthday present for my 8-year-old niece who loves unicorns, under $40"*: real products from Channel3, photos checked, two options, then a PayPal payment.
@@ -156,8 +156,8 @@ flowchart LR
 **Requirements:** Node.js 20 or newer, a DeepSeek API key, and (optionally) a PayPal sandbox app.
 
 ```bash
-git clone <this repo>
-cd PayPalCreatorAgent
+git clone https://github.com/blanco1er/mandat.git
+cd mandat
 npm install
 cp .env.example .env    # then fill in the values (see below)
 set -a; source .env; set +a
@@ -185,7 +185,7 @@ Open `http://localhost:8790`.
 
 Local alternative to environment variables: `PAYPAL_KEY_FILE` and `DEEPSEEK_KEY_FILE` can point to JSON files (`{"client_id","client_secret"}` and `{"api_key"}`). The server refuses to read them unless they are `chmod 600`.
 
-**Signing the mandate in the sandbox.** "Sign mandate with PayPal" opens the PayPal sandbox. Log in with a **sandbox personal (buyer) account**: either the one given in the Devpost testing instructions, or one you create under *Testing Tools → Sandbox Accounts* on developer.paypal.com. Never use a real PayPal login.
+**Signing the mandate in the sandbox.** "Continue with PayPal" (or "Sign mandate with PayPal" in Settings) opens the PayPal sandbox. Log in with a **sandbox personal (buyer) account**, for example one you create under *Testing Tools → Sandbox Accounts* on developer.paypal.com. Never use a real PayPal login.
 
 **Try it without the UI.** `node scripts/scenario.mjs` runs a full "birthday evening" mission in the terminal (search, negotiation, booking requests, approvals, holds). It approves payments and accepts merchant requests automatically. It needs `DEEPSEEK_API_KEY` and runs with PayPal in offline mode.
 
