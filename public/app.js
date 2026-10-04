@@ -1208,14 +1208,18 @@ function productsCard(d) {
     if (on) { detail.hidden = true; return; }
     b.classList.add('on');
     const p = list[Number(b.dataset.i)];
-    detail.innerHTML = `${p.photo || p.image ? `<img class="zoomable pr-hero" src="${esc(p.photo || p.image)}" alt="${esc(p.title)}" referrerpolicy="no-referrer">` : ''}
+    const pics = p.images?.length ? p.images : [p.photo || p.image].filter(Boolean);
+    detail.innerHTML = `${pics.length ? `<div class="pr-gallery-wrap"><div class="pr-gallery" data-gallery>${pics.map((u, k) => `<img class="zoomable pr-hero" src="${esc(u)}" alt="${esc(p.title)}" ${k ? 'loading="lazy"' : ''} referrerpolicy="no-referrer">`).join('')}</div>${pics.length > 1 ? `<span class="pr-count">1 / ${pics.length}</span>` : ''}</div>` : ''}
       <div class="tp-info"><b>${esc(p.title)}</b><small>${esc([p.brand, p.category].filter(Boolean).join(' · '))}</small>
       ${p.look ? `<p class="pr-look">${esc(p.look)}</p>` : ''}
       ${p.features?.length ? `<ul class="op-hl">${p.features.map((f) => `<li>${esc(f)}</li>`).join('')}</ul>` : ''}
       <ul class="pr-offers">${p.offers.map((o) => `<li><span>${esc(o.retailer)}</span><b>${esc(fmtC(o.price, o.currency))}</b></li>`).join('')}</ul>
       <div class="pv-actions"><button type="button" class="pill-btn pr-buy">${t('Choose this one')}</button><a href="${esc(p.url)}" target="_blank" rel="noopener sponsored">${esc(t('See it at {shop}', { shop: p.retailer }))}</a></div></div>`;
     detail.hidden = false;
-    detail.querySelector('img')?.addEventListener('error', (e) => e.target.remove());
+    // swipe through the product's photos; the counter follows
+    const gal = detail.querySelector('.pr-gallery'), count = detail.querySelector('.pr-count');
+    gal?.querySelectorAll('img').forEach((im) => im.addEventListener('error', () => { im.remove(); if (count) count.textContent = `1 / ${gal.children.length}`; if (gal.children.length < 2) count?.remove(); }));
+    gal?.addEventListener('scroll', () => { if (count) count.textContent = `${Math.round(gal.scrollLeft / gal.clientWidth) + 1} / ${gal.children.length}`; }, { passive: true });
     detail.querySelector('.pr-buy').addEventListener('click', () => { const text = t('I choose {title} ({price})', { title: p.title, price: fmtC(p.price, p.currency) }); if (vm.on) vmAnswer(text); else send(text); });
   }));
   li.querySelectorAll('.tp-tile img').forEach((im) => im.addEventListener('error', () => im.replaceWith(Object.assign(document.createElement('span'), { className: 'tp-ph', textContent: '🛍️' }))));
@@ -3291,7 +3295,12 @@ async function post(url, body, { signal } = {}) {
 boot();
 
 // ---------- image viewer: open, zoom, save, copy, share ----------
-function openLightbox(src) {
+// A photo from a gallery opens with its neighbours: swipe (or the arrow keys) to go through them.
+const lb = { list: [], i: 0 };
+function openLightbox(src, list = []) {
+  lb.list = list.length > 1 ? list : [];
+  lb.i = Math.max(0, lb.list.indexOf(src));
+  $('#lbCount').textContent = lb.list.length ? `${lb.i + 1} / ${lb.list.length}` : '';
   $('#lbImg').src = src;
   $('#lbSave').href = src;
   $('#lbStage').classList.remove('zoomed');
@@ -3304,8 +3313,18 @@ function closeLightbox() {
 }
 document.addEventListener('click', (e) => {
   const img = e.target.closest('img.zoomable, .qr-box img');
-  if (img) { e.preventDefault(); openLightbox(img.currentSrc || img.src); }
+  if (img) { e.preventDefault(); const gal = img.closest('[data-gallery]'); openLightbox(img.currentSrc || img.src, gal ? [...gal.querySelectorAll('img')].map((x) => x.currentSrc || x.src) : []); }
 });
+function lbStep(d) {
+  if (!lb.list.length || $('#lbStage').classList.contains('zoomed')) return;
+  lb.i = (lb.i + d + lb.list.length) % lb.list.length;
+  $('#lbImg').src = $('#lbSave').href = lb.list[lb.i];
+  $('#lbCount').textContent = `${lb.i + 1} / ${lb.list.length}`;
+}
+let lbX = null;
+$('#lbStage').addEventListener('touchstart', (e) => { lbX = e.touches.length === 1 ? e.touches[0].clientX : null; }, { passive: true });
+$('#lbStage').addEventListener('touchend', (e) => { if (lbX == null) return; const dx = e.changedTouches[0].clientX - lbX; lbX = null; if (Math.abs(dx) > 50) lbStep(dx < 0 ? 1 : -1); });
+addEventListener('keydown', (e) => { if ($('#lightbox').hidden) return; if (e.key === 'ArrowRight') lbStep(1); if (e.key === 'ArrowLeft') lbStep(-1); });
 $('#lbClose').addEventListener('click', closeLightbox);
 $('#lbStage').addEventListener('click', (e) => {
   if (e.target === $('#lbStage')) return closeLightbox();

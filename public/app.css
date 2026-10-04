@@ -1386,6 +1386,12 @@ html.on-live #live { position: fixed; inset: 0; max-width: none; margin: 0; over
 .card.shop .tp-tile small strong { color: var(--ink); }
 .card.shop .tp-tile small s { color: var(--ink-3); }
 .card.shop .pr-hero { object-fit: contain; background: #fff; }
+.pr-gallery-wrap { position: relative; }
+.pr-gallery { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; border-radius: 12px; background: #fff; }
+.pr-gallery::-webkit-scrollbar { display: none; }
+.tp-detail .pr-gallery img { flex: 0 0 100%; width: 100%; height: 220px; object-fit: contain; border-radius: 0; scroll-snap-align: start; background: #fff; }
+.pr-count { position: absolute; right: 8px; bottom: 8px; padding: 2px 8px; border-radius: 10px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none; }
+.lb-count { color: rgba(255, 255, 255, 0.8); font-size: 14px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
 .pr-offers { list-style: none; margin: 8px 0 0; padding: 0; }
 .pr-offers li { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; border-top: 0.5px solid var(--card-line); }
 .pr-offers li:first-child { border-top: 0; }
