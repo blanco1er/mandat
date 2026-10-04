@@ -3144,7 +3144,13 @@ function setSeg(sel, v) {
   $$(sel + ' button').forEach((x) => x.setAttribute('aria-checked', String(x.dataset.v === v)));
 }
 // The amount field grows with its digits: 400, 20000 or 250000 always show in full.
-function fitStep(i) { i.style.width = Math.max(3, String(i.value || '').length + 0.6) + 'ch'; }
+const measure = document.createElement('canvas').getContext('2d');
+function fitStep(i) {
+  // the real width of the digits in the field's own font (tabular digits are wider than an average character)
+  const cs = getComputedStyle(i);
+  measure.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  i.style.width = Math.ceil(measure.measureText('0'.repeat(Math.max(3, String(i.value || '').length))).width + 8) + 'px'; // '0' is as wide as any tabular digit
+}
 for (const i of $$('.stepper input')) { i.addEventListener('input', () => fitStep(i)); i.addEventListener('change', () => fitStep(i)); }
 const fitSteppers = () => $$('.stepper input').forEach(fitStep);
 for (const b of $$('.stepper button')) {

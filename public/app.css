@@ -101,7 +101,8 @@ button { cursor: pointer; border: 0; background: none; -webkit-tap-highlight-col
 .mandate-card { padding: 6px 16px 14px; margin-bottom: 20px; }
 .mandate-card .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 0.5px solid var(--card-line); flex-wrap: wrap; }
 .mandate-card label { color: var(--ink-2); font-size: 15px; }
-.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.stepper input { min-width: 0; padding: 0; }
 .stepper button { width: 34px; height: 34px; border-radius: 17px; background: var(--card-line); font-size: 20px; }
 .stepper input { width: 88px; text-align: right; border: 0; outline: 0; background: none; font: 600 28px/34px -apple-system, "SF Pro Display", system-ui; font-variant-numeric: tabular-nums; }
 .stepper .cur { font: 600 22px/34px inherit; color: var(--ink-2); margin-right: 6px; }
