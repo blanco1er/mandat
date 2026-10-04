@@ -777,6 +777,7 @@ body.no-scroll { overflow: hidden; }
 .row-btn { display: block; width: 100%; min-height: 46px; text-align: left; font-size: 15px; color: var(--accent); background: none; }
 .row-btn.danger { color: var(--warn); }
 #people:not(:empty) + .row-btn { border-top: 0.5px solid var(--card-line); }
+#sFresh + #sPrevious:not([hidden]) { border-top: 0.5px solid var(--card-line); }
 .knows-box summary { list-style: none; display: flex; align-items: center; min-height: 46px; font-size: 15px; cursor: pointer; }
 .knows-box summary::-webkit-details-marker { display: none; }
 .knows-box summary::after { content: ""; margin-left: auto; width: 16px; height: 16px; background: currentColor; color: var(--ink-3); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 6 6 6-6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 6 6 6-6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat; transition: transform 0.25s var(--spring); }

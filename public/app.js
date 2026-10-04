@@ -92,6 +92,7 @@ async function boot() {
   state.me = r.user;
   state.paypalMode = r.paypalMode;
   state.agStudioKey = r.agStudioKey || '';
+  $('#sPrevious').hidden = !r.hasPrevious;
   $('#demoNote').textContent = r.paypalMode === 'sandbox' ? t('PayPal sandbox: no real money moves.') : t('Demo mode: PayPal sandbox keys are not set up yet.');
   const p = new URLSearchParams(location.search);
   history.replaceState(null, '', '/');
@@ -2303,6 +2304,16 @@ $('#sForget').addEventListener('click', async () => {
   if (!confirm(t('Forget everything Mandat knows about you? Your PayPal connection and missions stay.'))) return;
   state.me = (await post('/api/me/forget', {})).user;
   renderSettings();
+});
+// Another account on this phone: a fresh one from the first screen, and back to the one left behind.
+$('#sFresh').addEventListener('click', async () => {
+  if (!confirm(t('Open a new, empty account on this device? This account is kept: you can come back to it from Settings.'))) return;
+  await post('/api/me/switch', { to: 'new' });
+  location.replace('/');
+});
+$('#sPrevious').addEventListener('click', async () => {
+  await post('/api/me/switch', { to: 'previous' });
+  location.replace('/');
 });
 $('#sRevoke').addEventListener('click', async () => {
   if (!confirm(t('Revoke the PayPal mandate? Your agent will not be able to hold any deposit.'))) return;

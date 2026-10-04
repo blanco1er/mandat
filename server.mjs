@@ -259,7 +259,7 @@ app.get('/api/me', api(async (req, res) => {
   const u = me(req, res);
   const missions = u.missions.map((id) => getMission(id)).filter(Boolean).map((s) => missionSummary(live.get(s.id)?.s || s, { busy: !!live.get(s.id)?.running }));
   // AG Studio's licence key is a client-side key by design (it only removes the watermark), so it is sent as is.
-  return { user: publicUser(u), missions, paypalMode: PayPal.MODE, agStudioKey: process.env.AG_STUDIO_LICENSE_KEY || '' };
+  return { user: publicUser(u), missions, paypalMode: PayPal.MODE, agStudioKey: process.env.AG_STUDIO_LICENSE_KEY || '', hasPrevious: !!getUser(cookie(req, 'mandat_prev')) };
 }));
 
 const cleanFit = (f) => Object.fromEntries(['cut', 'top', 'bottom', 'shoes', 'height', 'style', 'age'].map((k) => [k, String(f[k] ?? '').trim().slice(0, 80)]).filter(([, v]) => v));
@@ -455,6 +455,26 @@ app.post('/api/me/forget', api(async (req, res) => {
   u.memory = [];
   saveUser(u);
   return { user: publicUser(u) };
+}));
+
+// Another account on this device: a fresh one (to start over, or to show the app from the first screen), and back.
+// The account left behind is kept on the server and its id kept in a second cookie, so one tap brings it back.
+const idCookie = (name, id) => `${name}=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`;
+app.post('/api/me/switch', api(async (req, res) => {
+  const u = me(req, res);
+  if (req.body?.to === 'previous') {
+    const prev = getUser(cookie(req, 'mandat_prev'));
+    if (!prev || prev.id === u.id) throw Object.assign(new Error('No previous account on this device.'), { status: 404 });
+    res.setHeader('Set-Cookie', [idCookie('mandat_uid', prev.id), idCookie('mandat_prev', u.id)]);
+    return { ok: true };
+  }
+  const hour = new Date().toISOString().slice(0, 13), key = req.ip + '|' + hour;
+  if ((created.get(key) || 0) >= 40) throw Object.assign(new Error('Too many new visitors from this network. Please try again later.'), { status: 429 });
+  created.set(key, (created.get(key) || 0) + 1);
+  const fresh = newUser();
+  saveUser(fresh);
+  res.setHeader('Set-Cookie', [idCookie('mandat_uid', fresh.id), idCookie('mandat_prev', u.id)]);
+  return { ok: true };
 }));
 
 // Stop switch: freezes every mission's payments instantly.

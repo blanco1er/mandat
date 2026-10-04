@@ -712,4 +712,8 @@ export default {
   "Shoe size (EU)": "Pointure (EU)",
   "top {size}": "haut {size}",
   "clothes {size}": "vêtements {size}",
+  "Start over with a new account": "Recommencer avec un nouveau compte",
+  "Back to my previous account": "Revenir au compte précédent",
+  "Open a new, empty account on this device? This account is kept: you can come back to it from Settings.": "Ouvrir un nouveau compte vide sur cet appareil ? Celui-ci est conservé : vous pourrez y revenir depuis les Réglages.",
+  "No previous account on this device.": "Aucun compte précédent sur cet appareil.",
 };
