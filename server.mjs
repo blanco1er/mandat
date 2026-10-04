@@ -7,7 +7,7 @@ import { findPayment, receiptHtml } from './lib/receipt.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { setLiveLookup, createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary, wrapCard, autoReminders } from './lib/agent.mjs';
+import { setLiveLookup, createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary, wrapCard, autoReminders, settleApprovals } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
 import { geocode, searchAddress, reverseAddress } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
@@ -135,6 +135,8 @@ function box(id, user) {
     for (const e of s.feed) if (e.type === 'request' && e.data?.id && e.data.merchant_id) e.data.inbox = inboxUrl(e.data.merchant_id, e.data.id);
     b = { s, clients: new Set(), busy: Promise.resolve(), log: s.feed };
     live.set(id, b);
+    // approvals that no longer stand (already paid, replaced, dropped from the plan) are closed on load
+    if (settleApprovals(s, (type, data) => s.feed.push({ type, data, at: Date.now() })).length) saveMission(s);
   }
   if (user && b.s.userId !== user.id) throw Object.assign(new Error('Not your mission'), { status: 403 });
   if (user) b.s._user = user;
@@ -257,7 +259,7 @@ app.get('/api/health', (req, res) => { res.set('Cache-Control', 'no-store'); res
 
 app.get('/api/me', api(async (req, res) => {
   const u = me(req, res);
-  const missions = u.missions.map((id) => getMission(id)).filter(Boolean).map((s) => missionSummary(live.get(s.id)?.s || s, { busy: !!live.get(s.id)?.running }));
+  const missions = u.missions.map((id) => getMission(id)).filter(Boolean).map((s) => { const m = live.get(s.id)?.s || s; if (settleApprovals(m, (type, data) => (m.feed ||= []).push({ type, data, at: Date.now() })).length) saveMission(m); return missionSummary(m, { busy: !!live.get(s.id)?.running }); });
   // AG Studio's licence key is a client-side key by design (it only removes the watermark), so it is sent as is.
   return { user: publicUser(u), missions, paypalMode: PayPal.MODE, agStudioKey: process.env.AG_STUDIO_LICENSE_KEY || '', hasPrevious: !!getUser(cookie(req, 'mandat_prev')) };
 }));
@@ -292,7 +294,7 @@ app.post('/api/me', api(async (req, res) => {
   }
   if (rules) {
     if (AUTONOMY[rules.autonomy]) u.rules.autonomy = rules.autonomy;
-    for (const k of ['approveAbove', 'monthlyCap', 'dailyCap']) if (Number.isFinite(rules[k]) && rules[k] >= 0 && rules[k] <= 20000) u.rules[k] = rules[k];
+    for (const k of ['approveAbove', 'monthlyCap', 'dailyCap']) if (Number.isFinite(rules[k]) && rules[k] >= 0 && rules[k] <= 1000000) u.rules[k] = rules[k];
   }
   if (voice && typeof voice.on === 'boolean') u.voice.on = voice.on;
   if (req.body?.onboarded === true) u.onboarded = true;
@@ -655,7 +657,7 @@ app.post('/api/missions', api(async (req, res) => {
   const total = source === 'pill' || source === 'suggested' ? Math.round(budget) : source === 'words' ? said.amount : Math.min(u.rules.dailyCap || 300, Math.max(0, u.rules.monthlyCap - used));
   const L = reqLang(req);
   if (source === 'limit' && total < 1) throw Object.assign(new Error(tr(L, 'Your monthly limit ({cap}) is already planned. Raise it in Settings, or say a budget.', { cap: money(L, u.rules.monthlyCap) })), { status: 400, code: 'monthly_limit' });
-  if (!(total > 0 && total <= 20000)) throw new Error('A mission budget goes from 1 to 20,000 €.');
+  if (!(total > 0 && total <= 1000000)) throw new Error(tr(L, 'A mission budget goes from 1 to 1,000,000.'));
   if (used + total > u.rules.monthlyCap) throw Object.assign(new Error(tr(L, 'This would exceed your monthly limit ({cap}, {used} already planned).', { cap: money(L, u.rules.monthlyCap), used: money(L, used) })), { status: 400, code: 'monthly_limit' });
   allowance(u, 'missions');
   allowance(u, 'turns');

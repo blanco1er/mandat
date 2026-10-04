@@ -116,6 +116,7 @@ let mAutonomy = 'balanced';
 function mandateView({ why = false } = {}) {
   $('#mandateWhy').hidden = !why;
   $('#mCap').value = state.me.rules.monthlyCap;
+  fitSteppers();
   setSeg('#mAutonomy', state.me.rules.autonomy);
   mAutonomy = state.me.rules.autonomy;
   $('#mAutonomyHelp').textContent = t(state.me.autonomyLevels[mAutonomy].help);
@@ -958,11 +959,16 @@ function handle({ type, data }) {
     }
     case 'say_delta': return streamText(data.t); // written live; in a voice conversation only the final reply is spoken
     case 'say_reset': if (vm.on) vmReset(); state.streamLi?.remove(); state.streamLi = null; return typing(state.busy);
-    case 'ready':
+    case 'ready': {
       state.live = true;
       closeSteps();
       typing(data?.busy);
+      // a payment waiting for you is shown at once: no hunting for its card up the conversation
+      const waiting = Object.values(state.cards).filter((c) => c.data?.id?.startsWith?.('a_') && (c.data.status === 'pending' || !c.data.status)).pop();
+      if (waiting) setTimeout(() => openSheet(waiting.data), 300);
       return requestAnimationFrame(() => toBottom()); // land on the latest, no animation
+    }
+    case 'closed': if (state.live) paintStop('done'); return addStep(t('Mission closed'));
     case 'title': $('#topTitle').textContent = data.title; if (data.emoji) setTopEmoji(data.emoji); return;
     case 'memory': return memoryStep(data);
     case 'budget_changed': return addStep(t('Budget changed · {from} → {to}', { from: fmtC(data.from, data.currency), to: fmtC(data.to, data.currency) }));
@@ -990,7 +996,10 @@ function handle({ type, data }) {
     case 'negotiation': return negotiation(data);
     case 'request': return requestCard(data);
     case 'approval': if (data.place) state.places[data.merchant] = data.place; approvalCard(data); return state.live && openSheet(data); // history replay: show the card, don't pop the sheet
-    case 'approval_resolved': approvalCard({ id: data.id, status: data.approved ? 'approved' : 'declined' }); return pending?.id === data.id && closeSheet();
+    case 'approval_resolved':
+      // replaced by a newer request, already paid, or dropped from the plan: the card goes away
+      if (data.superseded) { state.cards['a:' + data.id]?.remove(); delete state.cards['a:' + data.id]; return pending?.id === data.id && closeSheet(); }
+      approvalCard({ id: data.id, status: data.approved ? 'approved' : 'declined' }); return pending?.id === data.id && closeSheet();
     case 'payment': if (data.place) state.places[data.entry.merchant] = data.place; return paymentCard(data);
     case 'envelope': return envelope(data);
     case 'plan': return planCard(data);
@@ -1844,6 +1853,7 @@ function renderSettings() {
   $('#sApprove').value = u.rules.approveAbove;
   $('#sDaily').value = u.rules.dailyCap;
   $('#sMonthly').value = u.rules.monthlyCap;
+  fitSteppers();
   $('#sStop').checked = u.frozen;
   $('#pName').value = u.profile.name;
   $('#pEmail').value = u.profile.email;
@@ -2900,6 +2910,9 @@ async function micSend(chunks) {
 
 // A tapped answer in a voice conversation counts as said out loud.
 function vmAnswer(text) {
+  // a choice tapped while Mandat is still reading: it stops at once and goes on with your choice
+  vm.queue = [];
+  stopSpeaking();
   clearTimeout(vm.commit);
   vm.said = '';
   vm.base = vm.len || 0;
@@ -3128,10 +3141,15 @@ function segmented(sel, onPick) {
 function setSeg(sel, v) {
   $$(sel + ' button').forEach((x) => x.setAttribute('aria-checked', String(x.dataset.v === v)));
 }
+// The amount field grows with its digits: 400, 20000 or 250000 always show in full.
+function fitStep(i) { i.style.width = Math.max(3, String(i.value || '').length + 0.6) + 'ch'; }
+for (const i of $$('.stepper input')) { i.addEventListener('input', () => fitStep(i)); i.addEventListener('change', () => fitStep(i)); }
+const fitSteppers = () => $$('.stepper input').forEach(fitStep);
 for (const b of $$('.stepper button')) {
   b.addEventListener('click', () => {
     const i = b.parentElement.querySelector('input');
-    i.value = Math.max(0, Math.min(20000, (Number(i.value) || 0) + Number(b.dataset.step)));
+    i.value = Math.max(0, Math.min(1000000, (Number(i.value) || 0) + Number(b.dataset.step)));
+    fitStep(i);
     i.dispatchEvent(new Event('change'));
   });
 }

@@ -723,4 +723,5 @@ export default {
   "Restore what Mandat knew about you": "Rétablir ce que Mandat savait de vous",
   "Erase your address, sizes, diet, people and everything Mandat remembered about you? Your PayPal connection and missions stay. You can undo it for 7 days.": "Effacer votre adresse, vos tailles, votre régime, vos proches et tout ce que Mandat a retenu sur vous ? Votre connexion PayPal et vos missions restent. Vous pourrez annuler pendant 7 jours.",
   "Nothing to restore.": "Rien à rétablir.",
+  "Mission closed": "Mission terminée",
 };
