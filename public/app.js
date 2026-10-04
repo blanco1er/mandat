@@ -977,6 +977,7 @@ function handle({ type, data }) {
     case 'notify': return addStep(t('Sent to your phone · {text}', { text: data.text }), 'step mem');
     case 'choices': return choicesRow(data);
     case 'reminder': return reminderCard(data);
+    case 'reminder_off': { const c = state.cards['rm:' + data.id]; if (c) c.remove(); return; } // its booking was cancelled
     case 'wrapup': return wrapupCard(data);
     case 'reminder_due': {
       const card = state.cards['rm:' + data.id];
