@@ -407,6 +407,8 @@ for (const v of [50, 100, 200, 400, 700, 1000]) {
   $('#cChips').append(b);
 }
 // The amount is edited right inside the pill; a thin row of quick amounts shows underneath.
+// in French the currency comes after the amount (« 1500 € »)
+if (lang === 'fr') $('#cBudgetIn').after($('#cBudgetBtn .b-cur'));
 const fitBudgetIn = () => { const i = $('#cBudgetIn'); i.style.width = Math.max(2, i.value.length + 0.4) + 'ch'; };
 function toggleBudget(open = $('#cBudgetEdit').hidden) {
   $('#cBudgetEdit').hidden = !open;
@@ -426,7 +428,7 @@ $('#cBudgetIn').addEventListener('input', () => {
   const raw = $('#cBudgetIn').value.replace(/[^\d.,]/g, '');
   if (raw !== $('#cBudgetIn').value) $('#cBudgetIn').value = raw; // digits only
   const v = Math.round(Number(raw.replace(/\s/g, '').replace(',', '.')));
-  if (!raw) setBudget(compose.suggested, { touched: false });
+  if (!raw) { setBudget(null, { touched: true }); $('#cBudgetIn').value = ''; } // emptied to type another amount: it stays empty
   if (v > 0 && v < 100000) {
     const keep = $('#cBudgetIn').value;
     setBudget(v, { touched: true });

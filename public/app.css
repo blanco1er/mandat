@@ -909,6 +909,7 @@ a.pv-none:hover { filter: brightness(1.06); }
 .budget-pill.editing #cBudget, .budget-pill.editing .b-pen, .budget-pill.editing #cBudgetAuto { display: none; }
 .budget-pill.editing .b-inline { display: inline-flex; }
 .b-inline .b-cur { font-weight: 600; }
+.b-inline input + .b-cur { margin-left: 3px; }
 .b-inline input { width: 4ch; padding: 0; border: 0; outline: 0; background: none; font: inherit; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; caret-color: var(--accent); }
 .budget-edit { display: flex; justify-content: flex-end; margin: 8px 0 0; padding: 0; background: none; animation: rise 0.25s var(--spring) both; }
 .budget-edit .b-chips { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; scrollbar-width: none; }
