@@ -87,6 +87,22 @@ function stopStory() { clearTimeout(storyTimer); storyTimer = null; }
 for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) {
   document.addEventListener(ev, (e) => { if (!e.target.closest?.('#lightbox')) e.preventDefault(); }, { passive: false });
 }
+// Like a native messaging app, swiping down closes the keyboard (tapping outside it still works too).
+// Not from inside the field itself, so a long message can still be scrolled.
+{
+  let y0 = null, x0 = 0;
+  document.addEventListener('touchstart', (e) => {
+    const f = document.activeElement;
+    const typing = f && (f.tagName === 'TEXTAREA' || (f.tagName === 'INPUT' && !/^(checkbox|radio|range|button|submit)$/.test(f.type)));
+    y0 = typing && e.touches.length === 1 && !f.contains(e.target) && !e.target.closest?.('#lightbox') ? e.touches[0].clientY : null;
+    x0 = e.touches[0]?.clientX || 0;
+  }, { passive: true });
+  document.addEventListener('touchmove', (e) => {
+    if (y0 == null) return;
+    const dy = e.touches[0].clientY - y0, dx = Math.abs(e.touches[0].clientX - x0);
+    if (dy > 36 && dy > dx * 1.5) { document.activeElement?.blur(); y0 = null; }
+  }, { passive: true });
+}
 history.scrollRestoration = 'manual'; // every screen opens at its top
 async function boot() {
   const r = await get('/api/me');
