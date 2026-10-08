@@ -3424,7 +3424,7 @@ function closeLightbox() {
 }
 document.addEventListener('click', (e) => {
   const img = e.target.closest('img.zoomable, .qr-box img');
-  if (img) { e.preventDefault(); const gal = img.closest('[data-gallery]'); openLightbox(img.currentSrc || img.src, gal ? [...gal.querySelectorAll('img')].map((x) => x.currentSrc || x.src) : []); }
+  if (img) { e.preventDefault(); const gal = img.closest('[data-gallery], .pv-photos, .u-imgs'); openLightbox(img.currentSrc || img.src, gal ? [...gal.querySelectorAll('img')].map((x) => x.currentSrc || x.src) : []); } // the card's other photos come along: swipe through them
 });
 function lbStep(d) {
   if (!lb.list.length || $('#lbStage').classList.contains('zoomed')) return;
