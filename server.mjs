@@ -884,7 +884,15 @@ app.post('/api/missions/:id/stop', api(async (req, res) => {
   b.s.frozen = !!req.body?.stopped;
   emitter(b)('stopped', { stopped: b.s.frozen, scope: 'mission' });
   emitter(b)('summary', missionSummary(b.s));
+  if (b.s.frozen) delete b.s._pauseSaid;
   saveMission(b.s);
+  if (was && !b.s.frozen) {
+    // Bookings a merchant confirmed during the pause are collected now, not before.
+    for (const r of Object.values(b.s.requests || {}).filter((x) => x.collectOnResume)) {
+      delete r.collectOnResume;
+      await collectRequest(merchant(r.merchant_id), b.s, r).catch((e) => console.warn('[resume collect]', e.message));
+    }
+  }
   // Resumed: Mandat really picks up where it stopped (unless everything was already settled).
   if (was && !b.s.frozen && missionSummary(b.s).status !== 'done') run(b, (emit) => userTurn(b.s, '[system] The user resumed the mission. Continue exactly where you stopped; if nothing is left to do, say so in one short sentence.', emit));
   return { ok: true };
@@ -1011,6 +1019,12 @@ async function collectRequest(m, s, r) {
   const entry = b.s.envelope.entries.find((e) => e.id === r.paymentId);
   if (r.status !== 'accepted') throw Object.assign(new Error('This booking is not waiting for confirmation.'), { status: 409 });
   if (!entry || entry.state !== 'held') throw Object.assign(new Error('No deposit is waiting to be collected.'), { status: 409 });
+  // Paused: nothing is paid. The deposit stays held and is collected when the user resumes.
+  if (b.s.frozen) {
+    r.collectOnResume = true;
+    saveMission(b.s);
+    return { ok: true, deferred: true };
+  }
   // Collect now (the merchant sees it at once), then let the customer's agent tell them.
   const emit = emitter(b);
   await captureEntry(b.s, entry.id, emit, "Confirmed from their inbox");
