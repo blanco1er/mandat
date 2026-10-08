@@ -1074,6 +1074,7 @@ const TOOL_LABEL = {
   find_real_places: (a) => t('Looking for real {places} nearby', { places: many(a.category) }),
   find_network_merchants: (a) => t('Checking {places} I can book and pay', { places: many(a.category) }),
   cancel_hold: () => t('Releasing a hold'),
+  open_approval: () => t('Opening the payment to approve'),
   split_bill: () => t('Preparing PayPal links for your friends'),
 };
 function toolStep({ name, args }) {
