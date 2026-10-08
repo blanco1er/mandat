@@ -803,6 +803,28 @@ function placeLens(x) {
   lens.style.transform = `translateX(${left}px)`;
 }
 addEventListener('resize', () => placeLens(), { passive: true });
+// A light tap felt in the hand. Android: the vibration API. iPhone (Safari has none): toggling a hidden
+// system switch plays the system haptic (iOS 18 and later); elsewhere it simply does nothing.
+const haptic = (() => {
+  let label = null;
+  return (ms = 12) => {
+    try {
+      if (navigator.vibrate) { navigator.vibrate(ms); return; }
+      if (!label) {
+        label = document.createElement('label');
+        label.setAttribute('aria-hidden', 'true');
+        label.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none';
+        const sw = document.createElement('input');
+        sw.type = 'checkbox';
+        sw.setAttribute('switch', '');
+        sw.tabIndex = -1;
+        label.append(sw);
+        document.body.append(label);
+      }
+      label.click();
+    } catch {}
+  };
+})();
 (() => {
   const bar = $('#tabbar');
   let x0 = null, moved = false;
@@ -812,7 +834,11 @@ addEventListener('resize', () => placeLens(), { passive: true });
     if (!moved && Math.abs(e.clientX - x0) < 6) return;
     moved = true;
     bar.classList.add('dragging');
-    placeLens(e.clientX - bar.getBoundingClientRect().left);
+    const x = e.clientX - bar.getBoundingClientRect().left;
+    placeLens(x);
+    // a little tick each time the lens passes onto another tab
+    const over = [...bar.querySelectorAll('button')].find((b) => x >= b.offsetLeft && x <= b.offsetLeft + b.offsetWidth);
+    if (over && over !== bar._over) { if (bar._over) haptic(8); bar._over = over; }
   });
   const end = (e) => {
     if (x0 === null) return;
@@ -821,7 +847,8 @@ addEventListener('resize', () => placeLens(), { passive: true });
     x0 = null;
     // Settle on the tab under the finger (a plain tap is handled the same way).
     const target = [...bar.querySelectorAll('button')].find((b) => x >= b.offsetLeft && x <= b.offsetLeft + b.offsetWidth) || null;
-    if (target && target.getAttribute('aria-current') == null) { TABS[target.dataset.tab](); show(target.dataset.tab); checkBuild(); }
+    bar._over = null;
+    if (target && target.getAttribute('aria-current') == null) { haptic(10); TABS[target.dataset.tab](); show(target.dataset.tab); checkBuild(); }
     else placeLens();
   };
   bar.addEventListener('pointerup', end);
@@ -1717,7 +1744,9 @@ $('#sheetLater').addEventListener('click', closeSheet);
     e.preventDefault();
     if (!pending) return;
     btn.classList.add('holding');
+    haptic(10); // felt as the hold starts
     timer = setTimeout(async () => {
+      haptic(30); // and again when it is approved
       btn.classList.add('done');
       btn.querySelector('.label').textContent = t('Approved');
       const id = pending.id;
