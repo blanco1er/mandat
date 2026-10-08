@@ -1426,8 +1426,10 @@ function wuPreview(p, cur, day) {
   const pics = (p.images?.length ? p.images : [p.photo]).filter(Boolean).slice(0, 5);
   const photos = pics.length ? `<div class="pv-photos wu-pics">${pics.map((u) => `<img class="zoomable" src="${esc(u)}" alt="${esc(p.title)}" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>` : '';
   if (p.kind === 'product') {
-    const price = p.qty > 1 ? `${p.qty} × ${fmtC(p.price, cur)} = <b>${fmtC(p.total, cur)}</b>` : `<b>${fmtC(p.total ?? p.price, cur)}</b>`;
-    return `<div class="wu-pv">${photos}<p class="wu-pv-title">${esc(p.title)}</p><p>${price}${p.options ? ` · ${esc(p.options)}` : ''}${p.retailer ? ` · ${esc(p.retailer)}` : ''}</p>${p.from ? `<p class="wu-pv-sub">${esc(t('Estimated delivery: {from} to {to}', { from: day(p.from), to: day(p.to) }))}</p>` : ''}${p.url ? `<a class="wu-pv-link" href="${esc(p.url)}" target="_blank" rel="noopener">${t('View the product')} ↗</a>` : ''}</div>`;
+    const total = Number(p.total ?? p.price) || 0;
+    const price = !total ? '' : p.qty > 1 && p.price ? `${p.qty} × ${fmtC(p.price, cur)} = <b>${fmtC(total, cur)}</b>` : `<b>${fmtC(total, cur)}</b>`; // no amount known: none shown (never "0 €")
+    const facts = [price, p.options ? esc(p.options) : '', p.retailer ? esc(p.retailer) : ''].filter(Boolean).join(' · ');
+    return `<div class="wu-pv">${photos}<p class="wu-pv-title">${esc(p.title)}</p>${facts ? `<p>${facts}</p>` : ''}${p.from ? `<p class="wu-pv-sub">${esc(t('Estimated delivery: {from} to {to}', { from: day(p.from), to: day(p.to) }))}</p>` : ''}${p.url ? `<a class="wu-pv-link" href="${esc(p.url)}" target="_blank" rel="noopener">${t('View the product')} ↗</a>` : ''}</div>`;
   }
   return `<div class="wu-pv">${photos}<p class="wu-pv-title">${esc(p.title)}${p.rating ? ` <span class="wu-pv-sub">★ ${esc(String(p.rating).replace('.', lang === 'fr' ? ',' : '.'))}</span>` : ''}</p>${p.address ? `<p><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}" target="_blank" rel="noopener">${esc(p.address)}</a></p>` : ''}${p.paid ? `<p class="wu-pv-sub">${esc(t('{amount} paid', { amount: fmtC(p.paid, cur) }))}</p>` : ''}</div>`;
 }

@@ -7,7 +7,7 @@ import { findPayment, receiptHtml } from './lib/receipt.mjs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import { setLiveLookup, createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary, wrapCard, autoReminders, settleApprovals } from './lib/agent.mjs';
+import { setLiveLookup, createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary, wrapCard, autoReminders, settleApprovals, refreshRecaps } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
 import { geocode, searchAddress, reverseAddress } from './lib/places.mjs';
 import { chat, MODELS, probe } from './lib/deepseek.mjs';
@@ -149,6 +149,7 @@ function box(id, user) {
     }
     for (const r of Object.values(s.requests || {})) r.inbox = inboxUrl(r.merchant_id, r.id); // private link per request
     for (const e of s.feed) if (e.type === 'request' && e.data?.id && e.data.merchant_id) e.data.inbox = inboxUrl(e.data.merchant_id, e.data.id);
+    refreshRecaps(s);
     b = { s, clients: new Set(), busy: Promise.resolve(), log: s.feed };
     live.set(id, b);
     // approvals that no longer stand (already paid, replaced, dropped from the plan) are closed on load
