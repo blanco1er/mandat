@@ -519,6 +519,8 @@ export default {
   "Speaking. Tap to interrupt.": "Je parle · touchez pour couper",
   "Tap the circle to talk.": "Touchez le cercle pour parler.",
   "Allow it for this site in your phone settings to talk to Mandat.": "Autorisez-le pour ce site dans les réglages du téléphone pour parler à Mandat.",
+  "Estimated delivery: {from} to {to}": "Livraison estimée : du {from} au {to}",
+  "View the product": "Voir le produit",
   "The microphone is off for Mandat.": "Le micro est désactivé pour Mandat.",
   "End": "Terminer",
   "Talk or interrupt": "Parler ou interrompre",

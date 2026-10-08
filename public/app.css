@@ -1597,3 +1597,16 @@ body.kb-open .analyse-sheet .sc-bar { margin-bottom: 8px; }
 .calendar-host .b-calendar-view-desc-text { text-transform: none !important; }
 
 .calendar-host .b-cal-event-wrap.b-selected > .b-cal-event, .calendar-host .b-cal-event-wrap.b-active > .b-cal-event { background: rgba(10, 108, 255, 0.08) !important; color: var(--ink) !important; }
+
+/* Recap lines unfold to show what was bought or booked */
+.wu-lines li.has-pv { cursor: pointer; position: relative; padding-right: 22px; flex-wrap: wrap; }
+.wu-chev { position: absolute; right: 2px; top: 14px; color: var(--ink-3); font-size: 18px; line-height: 1; transition: transform 0.2s var(--smooth); }
+.wu-lines li.has-pv.open .wu-chev { transform: rotate(90deg); }
+.wu-pv { display: none; flex-basis: 100%; width: 100%; margin-top: 10px; }
+.wu-lines li.has-pv.open .wu-pv { display: block; animation: fade 0.2s ease both; }
+.wu-pv p { margin: 4px 0; font-size: 14px; line-height: 20px; color: var(--ink-2, var(--ink)); }
+.wu-pv-title { font-weight: 600; color: var(--ink) !important; }
+.wu-pv-sub { color: var(--ink-3) !important; font-size: 13px !important; }
+.wu-pv-link { display: inline-block; margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--accent); text-decoration: none; }
+.wu-pics { display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x mandatory; margin-bottom: 8px; -webkit-overflow-scrolling: touch; }
+.wu-pics img { height: 120px; width: auto; max-width: 180px; object-fit: cover; border-radius: 10px; scroll-snap-align: start; background: var(--card-line); flex: none; }

@@ -1380,13 +1380,29 @@ function wrapupCard(w) {
   const dated = (w.lines || []).some((l) => /^\d{4}-\d{2}-\d{2}/.test(String(l.when || '')));
   const money = [w.paid ? t('{amount} paid', { amount: fmtC(w.paid, w.currency) }) : '', w.held ? t('{amount} held until confirmed', { amount: fmtC(w.held, w.currency) }) : ''].filter(Boolean).join(' · ');
   li.innerHTML = `<div class="wu-head"><span class="wu-check">${svg('check')}</span><div><b>${esc(t(w.headline))}</b><small>${esc(money || t('Nothing left to do'))}</small></div></div>
-    <ol class="wu-lines">${(w.lines || []).map((l) => `<li>${day(l.when) ? `<span class="wu-when">${esc(day(l.when))}</span>` : ''}<span class="wu-what">${esc(l.what)}${l.where ? ` <i>· ${esc(l.where)}</i>` : ''}</span></li>`).join('')}</ol>
+    <ol class="wu-lines">${(w.lines || []).map((l) => `<li class="${l.preview ? 'has-pv' : ''}"${l.preview ? ' role="button" tabindex="0" aria-expanded="false"' : ''}>${day(l.when) ? `<span class="wu-when">${esc(day(l.when))}</span>` : ''}<span class="wu-what">${esc(l.what)}${l.where ? ` <i>· ${esc(l.where)}</i>` : ''}</span>${l.preview ? `<span class="wu-chev" aria-hidden="true">›</span>${wuPreview(l.preview, w.currency, day)}` : ''}</li>`).join('')}</ol>
     ${w.note ? `<p class="wu-note">${esc(w.note)}</p>` : ''}
     ${balanceList(w.balances, w.due, w.currency)}
     ${w.reminders?.length ? `<p class="wu-rem">⏰ ${esc(t('{times} · on your phone', { times: w.reminders.map((r) => new Date(r.at).toLocaleString(locale(), { weekday: 'short', hour: '2-digit', minute: '2-digit' })).join(' · ') }))}</p>` : ''}
     <div class="wu-actions">${dated ? `<button type="button" class="pill-btn see-agenda" data-m="${esc(state.mission)}">${svg('cal')} ${t('See in the agenda')}</button>` : ''}<button type="button" class="wu-change">${t('Change something')}</button></div>`;
+  // Tap a line to unfold what was bought or booked (photos, price, address, link); tap again to fold it.
+  li.querySelectorAll('.wu-lines li.has-pv').forEach((row) => row.addEventListener('click', (e) => {
+    if (e.target.closest('a, img')) return; // a link or a photo does its own thing
+    const open = row.classList.toggle('open');
+    row.setAttribute('aria-expanded', String(open));
+  }));
   li.querySelector('.wu-change').addEventListener('click', () => { const box = $('#sayText'); box.value = t('I would like to change '); syncComposer(); box.focus(); });
   add(li);
+}
+// The unfolded part of a recap line: the product (photos, price, options, retailer, delivery, link) or the place.
+function wuPreview(p, cur, day) {
+  const pics = (p.images?.length ? p.images : [p.photo]).filter(Boolean).slice(0, 5);
+  const photos = pics.length ? `<div class="pv-photos wu-pics">${pics.map((u) => `<img class="zoomable" src="${esc(u)}" alt="${esc(p.title)}" loading="lazy" referrerpolicy="no-referrer">`).join('')}</div>` : '';
+  if (p.kind === 'product') {
+    const price = p.qty > 1 ? `${p.qty} × ${fmtC(p.price, cur)} = <b>${fmtC(p.total, cur)}</b>` : `<b>${fmtC(p.total ?? p.price, cur)}</b>`;
+    return `<div class="wu-pv">${photos}<p class="wu-pv-title">${esc(p.title)}</p><p>${price}${p.options ? ` · ${esc(p.options)}` : ''}${p.retailer ? ` · ${esc(p.retailer)}` : ''}</p>${p.from ? `<p class="wu-pv-sub">${esc(t('Estimated delivery: {from} to {to}', { from: day(p.from), to: day(p.to) }))}</p>` : ''}${p.url ? `<a class="wu-pv-link" href="${esc(p.url)}" target="_blank" rel="noopener">${t('View the product')} ↗</a>` : ''}</div>`;
+  }
+  return `<div class="wu-pv">${photos}<p class="wu-pv-title">${esc(p.title)}${p.rating ? ` <span class="wu-pv-sub">★ ${esc(String(p.rating).replace('.', lang === 'fr' ? ',' : '.'))}</span>` : ''}</p>${p.address ? `<p><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.address)}" target="_blank" rel="noopener">${esc(p.address)}</a></p>` : ''}${p.paid ? `<p class="wu-pv-sub">${esc(t('{amount} paid', { amount: fmtC(p.paid, cur) }))}</p>` : ''}</div>`;
 }
 // Still to pay: each merchant, the deposit already paid, the balance and when. Set aside in the budget.
 function balanceList(list, due, cur) {
