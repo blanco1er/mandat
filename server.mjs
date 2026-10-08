@@ -901,6 +901,12 @@ app.post('/api/missions/:id/stop', api(async (req, res) => {
 app.post('/api/missions/:id/approvals/:aid', api(async (req, res) => {
   const u = me(req, res);
   const b = box(req.params.id, u);
+  // The answer is recorded at once (the card closes and is never offered again), even if Mandat is busy;
+  // the payment itself runs in turn. A second tap on the same approval does nothing.
+  const ap = b.s.approvals?.[req.params.aid];
+  if (!ap || ap.status !== 'pending') return { ok: true, already: true };
+  ap.status = 'deciding';
+  emitter(b)('approval_resolved', { id: ap.id || req.params.aid, approved: !!req.body?.approved });
   run(b, (emit) => resolveApproval(b.s, req.params.aid, !!req.body?.approved, emit));
   return { queued: true };
 }));
