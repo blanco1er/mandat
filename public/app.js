@@ -1678,6 +1678,8 @@ $('#sheetLater').addEventListener('click', closeSheet);
 (() => {
   const btn = $('#sheetApprove');
   let timer = null;
+  // Holding the button never opens the phone's Copy / Look up menu.
+  btn.addEventListener('contextmenu', (e) => e.preventDefault());
   btn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     if (!pending) return;
