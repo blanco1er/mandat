@@ -1784,10 +1784,35 @@ function renderActivity(d) {
   $('#sDue').textContent = sum(d.missions, 'still_to_pay');
   $('#sLeft').textContent = sum(d.missions, 'left');
   const names = Object.fromEntries(d.missions.map((m) => [m.mission_id, m.mission]));
+  payData = { d, names };
+  drawPayments();
+}
+// The list of payments, filtered by period (7 days, 28 days, 3 months, 12 months, all), 50 at a time.
+const PAY_PERIODS = [['7d', 'Last 7 days', 7], ['28d', 'Last 28 days', 28], ['3m', 'Last 3 months', 91], ['12m', 'Last 12 months', 365], ['all', 'All', 0]];
+let payData = null, payShown = 50;
+let payPeriod = (() => { try { return localStorage.getItem('mandat.payPeriod') || 'all'; } catch { return 'all'; } })();
+function drawPayments() {
+  if (!payData) return;
+  const { d, names } = payData;
+  const box = $('#payFilter');
+  box.innerHTML = '';
+  for (const [id, label] of PAY_PERIODS) {
+    const b = el('button', 'ob-chip' + (id === payPeriod ? ' on' : ''), t(label));
+    b.type = 'button';
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(id === payPeriod));
+    b.addEventListener('click', () => { payPeriod = id; payShown = 50; try { localStorage.setItem('mandat.payPeriod', id); } catch {} drawPayments(); });
+    box.append(b);
+  }
+  box.hidden = !d.payments.length;
+  const days = PAY_PERIODS.find((x) => x[0] === payPeriod)?.[2] || 0;
+  const since = days ? Date.now() - days * 864e5 : 0;
+  const rows = d.payments.filter((p) => !since || (p.date && new Date(p.date).getTime() >= since));
   const list = $('#payList');
   list.textContent = '';
+  if (!rows.length && d.payments.length) list.append(el('li', 'pay-day', t('No payment in this period.')));
   let last = '';
-  for (const p of d.payments.slice(0, 80)) {
+  for (const p of rows.slice(0, payShown)) {
     const when = p.date ? new Date(p.date) : null;
     const label = when ? dayLabel(when) : '';
     if (label !== last) { list.append(el('li', 'pay-day', label)); last = label; }
@@ -1800,9 +1825,11 @@ function renderActivity(d) {
     li.addEventListener('click', () => openReceipt(p, names[p.mission_id] || ''));
     list.append(li);
   }
+  $('#payMore').hidden = rows.length <= payShown;
   $('#payEmpty').hidden = d.payments.length > 0;
   $('#payHead').hidden = !d.payments.length;
 }
+$('#payMore').addEventListener('click', () => { payShown += 50; drawPayments(); });
 // One payment's receipt: the essentials here, the printable receipt (save as PDF) one tap away.
 let rcPay = null;
 function openReceipt(p, mission) {
