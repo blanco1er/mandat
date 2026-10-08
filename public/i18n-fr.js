@@ -131,6 +131,7 @@ export default {
   "Checking your schedule": "Je vérifie votre agenda",
   "Looking for real {places} nearby": "Je cherche des {places} à proximité",
   "Checking {places} I can book and pay": "Je vérifie les {places} où réserver et payer",
+  "Opening the payment to approve": "J’ouvre le paiement à approuver",
   "Releasing a hold": "Je débloque un acompte",
   "Preparing PayPal links for your friends": "Je prépare les liens PayPal pour vos amis",
   "bakeries": "boulangeries",
