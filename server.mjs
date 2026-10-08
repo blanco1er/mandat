@@ -131,6 +131,22 @@ function box(id, user) {
         else if (m.role === 'assistant' && m.content?.trim()) s.feed.push({ type: 'say', data: { text: m.content.trim() }, at });
       }
     }
+    // A feed that lost its beginning (it used to be cut at 400 events): the start of the conversation is
+    // rebuilt from the saved messages, which are never cut.
+    const firstUser = s.feed.find((e) => e.type === 'user' && e.data?.text);
+    if (firstUser) {
+      const head = (m) => String(m.content).split('\n[Photo')[0].trim();
+      const idx = s.messages.findIndex((m) => m.role === 'user' && head(m) === String(firstUser.data.text).trim());
+      if (idx > 0) {
+        const at = Math.min(Date.parse(s.createdAt) || Infinity, (s.feed[0]?.at || Date.now()) - 1);
+        const lost = [];
+        for (const m of s.messages.slice(0, idx)) {
+          if (m.role === 'user' && !String(m.content).startsWith('[system]')) lost.push({ type: 'user', data: { text: head(m), image: String(m.content).includes('[Photo') }, at });
+          else if (m.role === 'assistant' && m.content?.trim()) lost.push({ type: 'say', data: { text: m.content.trim() }, at });
+        }
+        s.feed.unshift(...lost);
+      }
+    }
     for (const r of Object.values(s.requests || {})) r.inbox = inboxUrl(r.merchant_id, r.id); // private link per request
     for (const e of s.feed) if (e.type === 'request' && e.data?.id && e.data.merchant_id) e.data.inbox = inboxUrl(e.data.merchant_id, e.data.id);
     b = { s, clients: new Set(), busy: Promise.resolve(), log: s.feed };
@@ -144,12 +160,17 @@ function box(id, user) {
 }
 // Streaming pieces are shown live but not kept: the history keeps only the finished reply.
 const EPHEMERAL = new Set(['say_delta', 'say_reset']);
+const KEEP_IN_FEED = new Set(['user', 'say', 'payment', 'approval', 'approval_resolved', 'request', 'wrapup', 'shares', 'share_paid']);
 function emitter(b) {
   return (type, data) => {
     const evt = { type, data, at: Date.now() };
     if (!EPHEMERAL.has(type)) {
       b.log.push(evt);
-      if (b.log.length > 400) b.log.shift();
+      // Room is made with the small technical events first: the conversation and the payments always stay.
+      if (b.log.length > 1500) {
+        const i = b.log.findIndex((e) => !KEEP_IN_FEED.has(e.type));
+        b.log.splice(i >= 0 ? i : 0, 1);
+      }
     }
     for (const res of b.clients) res.write(`data: ${JSON.stringify(evt)}\n\n`);
     pushFor(b, evt);
