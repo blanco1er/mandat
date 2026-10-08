@@ -44,6 +44,11 @@
 html { background: var(--bg); }
 html, body { margin: 0; min-height: 100%; color: var(--ink); -webkit-font-smoothing: antialiased; }
 body { background: transparent; min-height: 100vh; }
+/* An app, not a page: a long press never selects text or opens the Copy menu (it broke "Hold to approve").
+   Fields stay selectable; replies are copied with their Copy button. */
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+button, [role="button"] { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 /* The top bar floats (fixed), so its height changes never move the page; --top-h reserves its full height. */
 body { padding: calc(env(safe-area-inset-top) + var(--top-h, 60px)) 0 env(safe-area-inset-bottom); overflow-x: hidden; }
 button, input, textarea { font: inherit; color: inherit; }
