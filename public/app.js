@@ -3139,7 +3139,9 @@ function vmVoice(off) {
 $('#callMute').addEventListener('click', () => vmVoice(!vm.voiceOff));
 
 function syncComposer() {
-  const has = !!$('#sayText').value.trim() && !state.listening; // with only a photo, the button stays the voice: you say what it is
+  // Text typed: the button sends. Only a dictation running in this very composer keeps it as the mic
+  // (a voice session elsewhere that did not reset its flag must never block sending).
+  const has = !!$('#sayText').value.trim() && !$('#orb').classList.contains('listening'); // with only a photo, the button stays the voice: you say what it is
   const ta = $('#sayText');
   ta.style.height = 'auto';
   ta.style.height = Math.min(ta.scrollHeight, 140) + 'px';
