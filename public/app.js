@@ -954,7 +954,15 @@ function send(text, images = [], { voice = false } = {}) {
   return post(`/api/missions/${state.mission}/messages`, { text, images, voice }).catch((e) => add(el('li', 'step error', e.message)));
 }
 
-function handle({ type, data }) {
+// When each message was written (kept in the history), shown under it: today the time, before that the day too.
+let evtAt = 0;
+function msgTime(at) {
+  const d = new Date(at || Date.now());
+  const today = d.toDateString() === new Date().toDateString();
+  return d.toLocaleString(locale(), today ? { hour: '2-digit', minute: '2-digit' } : { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+function handle({ type, data, at }) {
+  evtAt = at || Date.now();
   switch (type) {
     case 'user': {
       vmLiveDrop();
@@ -974,6 +982,7 @@ function handle({ type, data }) {
         li.append(g);
       } else if (data.image) li.append(el('span', 'u-legacy', '📷 ' + t('Photo')));
       if (data.text) li.append(el('div', 'u-text', maskPhone(data.text)));
+      li.append(el('time', 'u-time', msgTime(evtAt)));
       return add(li, { stick: true }); // your own message always brings you to the bottom
     }
     case 'photo_read': return addStep(data.summary, 'seen');
@@ -3354,6 +3363,7 @@ function sayBubble(text) {
     if (navigator.share) return navigator.share({ title: 'Mandat', text: plain(text) }).catch(() => {});
     try { await navigator.clipboard.writeText(plain(text)); flash(b, 'share'); } catch {}
   });
+  bar.append(el('time', 'msg-time', msgTime(evtAt)));
   li.append(bar);
   return li;
 }
