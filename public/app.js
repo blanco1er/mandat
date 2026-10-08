@@ -2534,16 +2534,33 @@ function listen(onText, button, onLive) {
     if (onLive) onLive(finalText);
     else if (!button) $('#sayText').value = finalText;
   };
-  rec.onend = () => {
+  // Always ends cleanly, whatever happens (refused microphone, start failure, a tap to stop): the button
+  // never keeps animating on its own.
+  let ended = false;
+  const end = () => {
+    if (ended) return;
+    ended = true;
     state.listening = false;
+    state.dictStop = null;
     orbState('idle');
-    button?.classList.remove('listening');
+    button?.classList.remove('listening', 'thinking');
+    homeSmokeOff();
     if (finalText.trim()) onText(finalText.trim());
   };
+  rec.onend = end;
+  rec.onerror = (e) => {
+    if (/not-allowed|service-not-allowed/.test(e.error)) { finalText = ''; micRefused(); }
+    end();
+  };
+  state.dictStop = () => { try { rec.stop(); } catch {} end(); }; // tap again: stop
   state.listening = true;
   if (button) button.classList.add('listening');
   else orbState('listening');
-  rec.start();
+  try { rec.start(); } catch { end(); }
+}
+// The microphone was refused: say it once, plainly, and how to turn it back on.
+function micRefused() {
+  alert(t('The microphone is off for Mandat.') + ' ' + t('Allow it for this site in your phone settings to talk to Mandat.'));
 }
 // One button: send when there is text, otherwise talk.
 $('#orb').addEventListener('click', () => {
@@ -2955,7 +2972,11 @@ function dictate(onText, button, onLive) {
     };
     src.connect(node);
     node.connect(mic.ctx.destination);
-  }).catch(() => { stop(); listen(onText, button, onLive); });
+  }).catch((err) => {
+    stop();
+    if (/NotAllowed|Security/.test(err?.name || '')) return micRefused(); // refused: no second try, no endless animation
+    listen(onText, button, onLive);
+  });
 }
 async function micSend(chunks) {
   mic.sending = true;
