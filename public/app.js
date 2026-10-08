@@ -212,15 +212,49 @@ const OB_LIKES = ['Quiet places', 'Terraces', 'Local spots', 'Fine dining', 'Goo
 let obStep = 0;
 let obFit = {};
 let obHomeSel = null; // the address picked from the suggestions or from the location
+const obFold = (s) => String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+function obChip(label, on) {
+  const b = el('button', 'ob-chip' + (on ? ' on' : ''), label);
+  b.type = 'button';
+  b.setAttribute('aria-pressed', String(on));
+  b.addEventListener('click', () => b.setAttribute('aria-pressed', String(b.classList.toggle('on'))));
+  return b;
+}
 function obChips(box, labels, saved) {
   box.innerHTML = '';
-  for (const l of labels) {
-    const b = el('button', 'ob-chip' + (saved.toLowerCase().includes(t(l).toLowerCase()) ? ' on' : ''), t(l));
-    b.type = 'button';
-    b.setAttribute('aria-pressed', String(b.classList.contains('on')));
-    b.addEventListener('click', () => b.setAttribute('aria-pressed', String(b.classList.toggle('on'))));
-    box.append(b);
+  const known = labels.map((l) => t(l));
+  for (const l of known) box.append(obChip(l, saved.toLowerCase().includes(l.toLowerCase())));
+  // The person's own words come back as chips too, already chosen.
+  for (const x of String(saved || '').split(/\s*[,;]\s*/).filter(Boolean)) {
+    if (!known.some((k) => obFold(k) === obFold(x))) box.append(obChip(x, true));
   }
+}
+// "Something else": what is typed becomes a chosen chip (Enter, a comma, or the "Add" chip), as many as wanted.
+function obMore(boxSel, inputSel) {
+  const box = $(boxSel), input = $(inputSel);
+  let add = null;
+  const refresh = () => {
+    const v = input.value.trim();
+    if (!v) { add?.remove(); add = null; return; }
+    if (!add) {
+      add = el('button', 'ob-chip add', '');
+      add.type = 'button';
+      add.addEventListener('click', () => { commit(); input.focus(); });
+    }
+    add.textContent = t('Add “{x}”', { x: v });
+    box.append(add);
+  };
+  const commit = () => {
+    const v = input.value.replace(/[,;]+\s*$/, '').trim();
+    if (!v) { input.value = ''; refresh(); return; }
+    const hit = [...box.querySelectorAll('.ob-chip:not(.add)')].find((b) => obFold(b.textContent) === obFold(v));
+    if (hit) { hit.classList.add('on'); hit.setAttribute('aria-pressed', 'true'); }
+    else box.insertBefore(obChip(v, true), add);
+    input.value = '';
+    refresh();
+  };
+  input.addEventListener('input', () => (/[,;]\s*$/.test(input.value) ? commit() : refresh()));
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
 }
 const obPicked = (box, more) => [...$$(box + ' .ob-chip.on')].map((b) => b.textContent).concat($(more).value.trim() ? [$(more).value.trim()] : []).join(', ');
 function onboardView() {
@@ -310,6 +344,8 @@ $('#obLocate').addEventListener('click', async () => {
   } catch {}
 });
 $('#obHome').addEventListener('input', () => { obHomeSel = null; });
+obMore('#obDiet', '#obDietMore');
+obMore('#obLikes', '#obLikesMore');
 addressSuggest('#obHome', '#obHomeList', (h) => { obHomeSel = h; $('#obHome').value = h.label; });
 $('#obPush').addEventListener('click', async () => {
   try { await enablePush(); } catch {}
