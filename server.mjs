@@ -11,6 +11,7 @@ import { setLiveLookup, createSession, userTurn, resolveApproval, resolveRequest
 import * as PayPal from './lib/paypal.mjs';
 import { geocode, searchAddress, reverseAddress } from './lib/places.mjs';
 import { chat, MODELS, probe, aiLabel } from './lib/deepseek.mjs';
+import { textLang } from './lib/guards.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
 import { ics, planEvents, validTz, localToUtc, agendaOf } from './lib/calendar.mjs';
 import { KINDS, remember, forget, memoryBrief, missionsBrief } from './lib/memory.mjs';
@@ -716,12 +717,14 @@ function plainTitle(intent) {
 async function titleFor(intent) {
   const fallback = { title: plainTitle(intent), emoji: emojiFor(intent) };
   if (!intent.trim()) return fallback;
+  const L = textLang(intent); // the request's own language: an English errand gets an English title, whatever the phone
   try {
-    const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, maxTokens: 1500, temperature: 0.3, messages: [{ role: 'user', content: `For this errand: "${intent.slice(0, 300)}"\nReply with exactly one line: a single emoji that best shows what it is about (e.g. 🍽️ dinner, 💍 wedding, 🚆 train trip, 🎂 birthday, 🔧 repair), one space, then a 2-5 word title in the same language as the errand. No quotes, no final period.` }] });
+    const { message } = await chat({ model: MODELS.fast, fallback: MODELS.smart, maxTokens: 1500, temperature: 0.3, messages: [{ role: 'user', content: `For this errand: "${intent.slice(0, 300)}"\nReply with exactly one line: a single emoji that best shows what it is about (e.g. 🍽️ dinner, 💍 wedding, 🚆 train trip, 🎂 birthday, 🔧 repair), one space, then a 2-5 word title in ${L === 'fr' ? 'French' : 'English'} (the language of the errand). No quotes, no final period.` }] });
     const line = (message.content || '').trim().split('\n')[0];
     const m = line.match(/^(\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier}|\u200D\p{Extended_Pictographic}\uFE0F?)*)\s*(.*)$/u);
     const title = (m ? m[2] : line).trim().replace(/^["'«]|["'»]$/g, '').slice(0, 42);
-    return { title: title || fallback.title, emoji: m && isEmoji(m[1]) ? m[1] : fallback.emoji };
+    const ok = title && textLang(title, L) === L; // a title in the wrong language falls back to the request's own words
+    return { title: ok ? title : fallback.title, emoji: m && isEmoji(m[1]) ? m[1] : fallback.emoji };
   } catch {
     return fallback;
   }
@@ -1071,7 +1074,9 @@ async function collectRequest(m, s, r) {
 // note, then accepts (most of the time), proposes another time, or declines, with a short message; once the
 // deposit is held it confirms the booking. Nothing waits for the user to play the merchant.
 const handled = new Set();
-const delayFor = (id, min, span) => min + (parseInt(crypto.createHash('md5').update(id).digest('hex').slice(0, 6), 16) % span);
+// MANDAT_MERCHANT_DELAY scales how long the demo merchants take to answer (1 = 20 to 50 s; 0.4 for a filmed demo).
+const DELAY = Math.min(2, Math.max(0.1, Number(process.env.MANDAT_MERCHANT_DELAY) || 1));
+const delayFor = (id, min, span) => Math.round(DELAY * (min + (parseInt(crypto.createHash('md5').update(id).digest('hex').slice(0, 6), 16) % span)));
 async function demoMerchants() {
   if (process.env.MANDAT_MERCHANTS_AUTO === '0') return;
   const now = Date.now();
