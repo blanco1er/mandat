@@ -1,6 +1,7 @@
 // French for every English string of the interface (gettext style: the key is the exact English text).
 // Typography: narrow no-break space before ? ! : ; and %, no-break space before €.
 export default {
+  "Runs on {model} via {host}": "Propulsé par {model} via {host}",
   "PayPal sandbox": "Sandbox PayPal",
   "Say what you need.<br>Set what you’ll spend.": "Dites ce qu’il vous faut.<br>Fixez ce que vous dépensez.",
   "Mandat finds the place, negotiates, books and pays with PayPal. It never goes a cent over.": "Mandat trouve, négocie, réserve et paie avec PayPal. Sans dépasser d’un centime.",

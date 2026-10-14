@@ -471,6 +471,10 @@ a.cta { display: grid; place-items: center; text-decoration: none; }
 .b-own input { width: 64px; border: 0; outline: 0; background: none; font-size: 14px; font-weight: 600; text-align: right; color: var(--ink); }
 .c-rule { margin: 8px 2px 0; font-size: 12px; color: var(--ink-3); }
 .c-rule.error { color: var(--warn); }
+/* Which open model runs the agent, and who serves it. */
+.ai-tag { margin: 10px 4px 0; font-size: 12px; line-height: 17px; color: var(--ink-3); text-align: center; }
+.ai-tag b { font-weight: 600; color: var(--ink-2); }
+.ai-tag::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #76b900; margin-right: 6px; vertical-align: 1px; }
 .c-photo { position: relative; display: inline-block; margin: 6px 4px 0; }
 .c-photo img { width: 72px; height: 72px; object-fit: cover; border-radius: 14px; display: block; }
 .c-photo button { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; border-radius: 11px; background: var(--ink); color: var(--bg); font-size: 11px; }

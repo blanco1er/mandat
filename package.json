@@ -6,7 +6,8 @@
   "main": "server.mjs",
   "scripts": {
     "start": "node start.mjs",
-    "dev": "node --watch server.mjs"
+    "dev": "node --watch server.mjs",
+    "test": "node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=20"

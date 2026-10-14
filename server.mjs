@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import { setLiveLookup, createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary, wrapCard, autoReminders, settleApprovals, refreshRecaps } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
 import { geocode, searchAddress, reverseAddress } from './lib/places.mjs';
-import { chat, MODELS, probe } from './lib/deepseek.mjs';
+import { chat, MODELS, probe, aiLabel } from './lib/deepseek.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
 import { ics, planEvents, validTz, localToUtc, agendaOf } from './lib/calendar.mjs';
 import { KINDS, remember, forget, memoryBrief, missionsBrief } from './lib/memory.mjs';
@@ -277,7 +277,7 @@ const api = (h) => async (req, res) => {
 
 // The build the server runs: the app compares it with its own and reloads when a newer one is live.
 const BUILD = (process.env.RENDER_GIT_COMMIT || '').slice(0, 12) || String(Date.now());
-app.get('/api/health', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ok: true, paypal: PayPal.MODE, build: BUILD, shop: shopEnabled() }); }); // shop: whether product search is on (never the key)
+app.get('/api/health', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ok: true, paypal: PayPal.MODE, build: BUILD, shop: shopEnabled(), ai: aiLabel() }); }); // shop: whether product search is on (never the key)
 
 app.get('/api/me', api(async (req, res) => {
   const u = me(req, res);
