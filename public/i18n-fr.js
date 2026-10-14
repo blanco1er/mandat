@@ -1,6 +1,7 @@
 // French for every English string of the interface (gettext style: the key is the exact English text).
 // Typography: narrow no-break space before ? ! : ; and %, no-break space before €.
 export default {
+  "The AI budget for this demo is used up: the agent is paused.": "Le budget d’IA de cette démo est épuisé : l’agent est en pause.",
   "Runs on {model} via {host}": "Propulsé par {model} via {host}",
   "PayPal sandbox": "Sandbox PayPal",
   "Say what you need.<br>Set what you’ll spend.": "Dites ce qu’il vous faut.<br>Fixez ce que vous dépensez.",

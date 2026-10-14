@@ -2740,7 +2740,7 @@ let buildSeen = '';
 async function checkBuild() {
   try {
     const { build, ai } = await fetch('/api/health', { cache: 'no-store' }).then((r) => r.json());
-    if (ai?.model) for (const p of document.querySelectorAll('[data-ai]')) { p.innerHTML = t('Runs on {model} via {host}', { model: `<b>${esc(ai.model)}</b>`, host: esc(ai.host) }); p.hidden = false; }
+    if (ai?.model) for (const p of document.querySelectorAll('[data-ai]')) { p.innerHTML = ai.paused ? t('The AI budget for this demo is used up: the agent is paused.') : t('Runs on {model} via {host}', { model: `<b>${esc(ai.model)}</b>`, host: esc(ai.host) }); p.hidden = false; }
     if (!buildSeen) buildSeen = build;
     // a new version: reload when nothing is in progress (not while talking, typing or inside a mission)
     else if (build && build !== buildSeen && !vm.on && !editing() && $('#live').hidden) location.reload();

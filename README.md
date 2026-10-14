@@ -1,31 +1,54 @@
-# Mandat
+# Mandat — an AI agent you can trust with a budget, on NVIDIA Nemotron
 
-**Tell it what you want and how much you can spend. Mandat searches real places, negotiates with merchants' agents, books, and holds deposits with PayPal, never a cent over your mandate.**
+**Tell it what you want and how much you can spend. Mandat searches real places, negotiates with merchants' agents, books, and holds deposits with PayPal, never a cent over your mandate.** Its brain is **NVIDIA Nemotron**, served by **Nebius Token Factory**.
 
-Built for the PayPal AI Hackathon (Devpost, 2026). Everything runs on the **PayPal sandbox**, so no real money moves.
+Built for the Nebius × NVIDIA Global AI Hackathon (track: *Best Apps and Agents*). Payments run on the **PayPal sandbox**: no real money moves.
 
-- Hosted demo: **https://mandat-qb77.onrender.com** (PayPal sandbox; see [Deploy on Render](#deploy-on-render) to run your own)
-- Stack: Node.js 20+, Express, plain HTML/CSS/JS (installable PWA), PayPal Server SDK + PayPal Agent Toolkit, DeepSeek, AG Studio, Bryntum Calendar, Channel3
+- Hosted demo: **https://mandat-nebius.onrender.com** (PayPal sandbox)
+- Models: **Nemotron 3 Super** (the agent), **Nemotron 3 Ultra** (reviews every plan, takes over when a call fails), Gemma 3 27B (photos), all through Token Factory's OpenAI-compatible API
+- Stack: Node.js 20+, Express, plain HTML/CSS/JS (installable PWA), PayPal Server SDK + Agent Toolkit, Google Places, OpenStreetMap, Channel3, AG Studio, Bryntum Calendar
 
 ---
 
-## For judges: try it in five minutes
+## Try it in 3 minutes
 
-Open **https://mandat-qb77.onrender.com** on a phone (it installs as an app) or a desktop browser. No sign-up: your browser gets its own private space.
+Open **https://mandat-nebius.onrender.com** on a phone (it installs as an app) or a desktop browser. No sign-up: your browser gets its own private space. The screen says which model runs the agent: *Runs on NVIDIA Nemotron 3 Super via Nebius Token Factory*.
 
-1. **Sign the mandate.** Tap *Continue with PayPal* and log in on the PayPal sandbox page with **any PayPal sandbox Personal account** (developer.paypal.com → *Testing Tools* → *Sandbox Accounts*; never a real PayPal login). Approving once saves the mandate. Pick a monthly limit and an autonomy level (*Balanced* is a good start).
-2. **Give it an errand.** Tap one of the examples or type your own, in English or French, in any city. Some that show different parts of the app:
-   - *"Dinner for 4 in Paris on Friday around 8pm, 200 € max, and a ride home"*: real places, negotiation with merchant agents, a deposit **held** with PayPal (not charged).
-   - *"A birthday present for my 8-year-old niece who loves unicorns, under $40"*: real products from Channel3, photos checked, two options, then a PayPal payment.
-   - Attach a photo of something broken (*"my scooter's tyre is flat, get it fixed this week"*): Mandat reads the photo, finds a repair shop and books a slot.
-   - *"Gala evening for 6 next Saturday, I already have my suit"*: a plan with several bookings; it asks for sizes only for what you still need, and remembers them.
-3. **Answer its few questions** (buttons under each message), then let it work. Merchants without an AI agent answer by themselves within a minute in this demo.
-4. **Look at the money and the dates.**
-   - *Activity*: every payment like a bank statement (held, paid, refunded), a receipt for each one, CSV export, and an AG Studio dashboard with its own assistant (*"Where did my money go this month?"*).
-   - *Agenda*: every dated booking on a Bryntum Calendar. Drag one to another time: Mandat asks the merchant to move it, and nothing is paid twice.
-5. **Change your mind.** *"Make it 8 people"*, *"cancel the ride"*: bookings are updated, holds are voided, and the budget envelope never goes over.
+1. **Sign the mandate (30 s).** Tap *Continue with PayPal*, pick an autonomy level (*Careful* shows every approval), and log in on the PayPal sandbox page with **any PayPal sandbox Personal account** (developer.paypal.com → *Testing Tools* → *Sandbox Accounts*; never a real PayPal login).
+2. **Give it an errand (1 min).** Type, in English or French:
+   > *My mum turns 60 on Saturday: dinner for 8 around 8pm near Rue Oberkampf, Paris 11e, a birthday cake delivered to the restaurant, and flowers. 550 € max.*
 
-Everything runs on the **PayPal sandbox**: no real money moves. The first visit after a quiet period can take up to a minute while the free host wakes up.
+   Mandat asks its few key questions **in one message** with tap answers. Tap one: it starts working on its own.
+3. **Watch it work (1 min).** Real restaurants on the map, the restaurant agent's identity checked, a negotiation with it (group discount), and when the restaurant offers another time, **Mandat asks you** with one button per time. Then a PayPal sheet: *Hold to approve*. The deposit is **held**, not charged.
+4. **Let it finish.** The cake and the flowers are ordered from local merchants of the network, delivered to the restaurant. Merchants without an AI agent answer by themselves in under a minute in this demo. A recap card closes the mission; *Activity* shows every payment like a bank statement and *Agenda* every booking.
+
+The first visit after a quiet period can take a few seconds while the server wakes up.
+
+## Built on NVIDIA Nemotron and Nebius Token Factory
+
+| Role | Model (Token Factory id) | Why this one |
+|---|---|---|
+| **The agent**: a tool-calling loop of 31 tools (search, verify, negotiate, request, hold, void, refund, move a booking, buy, split, remember, plan) | **Nemotron 3 Super** `nvidia/nemotron-3-super-120b-a12b` | 12B active parameters: fast tool calls for a voice-first app, and on our end-to-end bench it reached the same bookings and books as our previous model. |
+| **The merchant agents** (each demo merchant negotiates inside its own private rules) | Nemotron 3 Super | Many short JSON turns. |
+| **The senior planner** that reviews every plan before money moves (`reviewPlan`) | **Nemotron 3 Ultra** `nvidia/Nemotron-3-Ultra-550b-a55b` | Deep reasoning where it matters. Measured on 6 plans × 3 runs (`scripts/bench-review.mjs`): **Ultra found 18/18 real problems and invented none**; Super found 16/18 and invented one, for 1.5 s less (median 6.2 s vs 4.7 s). |
+| **Fallback**: a call that times out or errors moves once to the other model | Nemotron 3 Ultra / Super | A mission never freezes. |
+| **Photos** (a broken bike, a receipt) | Gemma 3 27B `google/gemma-3-27b-it` | No Nemotron vision model is served on Token Factory. |
+
+**Where Token Factory accelerated our work**
+
+- **One client, any model.** Token Factory speaks the OpenAI chat-completions API, tools included (`tool_choice: "required"` too). Moving the agent to Nemotron was a base URL, a key and a model name (`lib/llm.mjs`); no SDK.
+- **Benching models side by side.** `/v1/models` lists every model, so the same mission could run on Nemotron 3 Super, Ultra, 3.5 Lightning and Nano 30B (`scripts/bench-provider.mjs`) and the same plans through two reviewers (`scripts/bench-review.mjs`). The choices in the table above come from those runs, not from guesses.
+- **One endpoint for text and photos**: Nemotron and Gemma behind the same key.
+
+**What we had to add for an open model to handle money: the model proposes, the code decides.** Every guardrail below is code, tested (`npm test`) and measured on real missions:
+
+- *Exact calendar*: the next 15 days (weekday + date) are injected at every turn and given to the reviewer, so "this Saturday" is read, never computed.
+- *One deposit per booking*, the mandate and the daily limit checked before any PayPal call (`lib/envelope.mjs`), totals recomputed from the quote lines.
+- *Another time is the user's call*: when a merchant agent offers other times than the one asked, the code stops any booking or hold there until the user taps one (`lib/guards.mjs`).
+- *One round of questions*: the key questions come together; once answered, the next call must use a tool, so the agent acts instead of asking again.
+- *Local things from local merchants*: a cake or flowers are ordered from a bakery or florist of the network, never searched as shipped products.
+- *Clean words*: a reply where the model thinks out loud, several answer lines, a wrong language or wrong arithmetic is rewritten before anyone reads it. A title follows the language of the request.
+- *Say only what the tools confirmed*: the books shown to the user always come from code.
 
 ## The problem
 
@@ -71,40 +94,6 @@ No sign-up: each browser gets its own private space through an HTTP-only cookie.
 
 **Offline mode:** without PayPal keys the app still runs. Every PayPal call returns the same shape with fake ids and `mode: "offline"`, and the UI labels it "Demo mode" so it never pretends money moved.
 
-## How AI is used
-
-- **The agent: DeepSeek with tool calling** (`lib/agent.mjs`, `lib/deepseek.mjs`). DeepSeek is OpenAI-compatible, and the agent loop runs up to 24 tool steps per user turn. It has 30 tools:
-  - *find:* `find_real_places`, `find_top_places`, `find_network_merchants`, `inspect_place`, `find_products`, `estimate_trip`, `check_schedule`;
-  - *deal:* `verify_merchant`, `negotiate`, `ask_quote`, `request_booking`, `move_booking`;
-  - *pay:* `hold_deposit`, `cancel_hold`, `refund_payment`, `buy_product`, `split_bill`, `set_budget`, `calculate`;
-  - *show and remind:* `show_place_preview`, `show_booking`, `notify_user`, `set_reminder`;
-  - *remember:* `remember`, `forget`, `save_sizes`, `suggest_get_to_know`;
-  - *plan:* `update_plan`, `wrap_up`, `close_mission`.
-
-  Capture is not a tool: the code captures a held deposit once the merchant confirms. Every step is emitted as an event and streamed to the browser with Server-Sent Events, so you watch the agent work.
-- **Guardrails live in code, not in the prompt.** Even if the model asks, `hold_deposit` checks the envelope and the approval threshold, `request_booking` rejects items a merchant does not sell and requests the mandate cannot pay, and `doHold` refuses when a stop switch is on.
-- **Vision.** A photo is sent once to the model as image input. A precise text description (names, prices, dates, addresses) is kept in the conversation instead of the image. A name printed on the item is read five times in parallel and the majority spelling is kept (`readPrinted`), so the agent never names a brand it did not read.
-- **Merchant agents** (`lib/merchants.mjs`). Each demo merchant with `hasAgent: true` is a DeepSeek agent with its own catalogue and private floor rules. It replies in JSON with a structured offer (items, discount, total, deposit, slot, conditions).
-- **Natural-language ledger filter** (`POST /api/me/activity/ask` in `server.mjs`). A request in plain words becomes an AG Grid filter model in JSON mode, limited to a whitelist of columns.
-- **Mission titles.** The fast model writes a 2–5 word title in the background, and a plain title is shown instantly in the meantime.
-- **Streaming.** Replies stream token by token, and a stalled stream (no progress for 20–45 s) counts as a hang.
-- **Cost and reliability controls** (`lib/deepseek.mjs`):
-  - *Prefix caching:* the stable instructions come first and the changing budget state comes last, so DeepSeek bills the repeated prefix as a cache hit. Each call logs its tokens and cache-hit percentage.
-  - *Fast model by default, fallback on failure:* `DEEPSEEK_FAST_MODEL` serves every call. On a timeout, a 429 or a 5xx, the call moves once to `DEEPSEEK_SMART_MODEL`, and a half-streamed reply is replaced cleanly.
-  - *Health probe:* a model that hung is skipped. An 8-token probe re-checks it at most every 5 minutes, so no user waits on a broken model.
-
-## Sponsor technologies
-
-| Sponsor | What Mandat does with it | Where |
-|---|---|---|
-| **AG Grid: AG Studio** | The Activity tab is an AG Studio dashboard over two tables joined by a relationship (payments → missions), opening on a ready-made report in Mandat's theme (light and dark, French locale, a phone layout). Its chat is the **Studio Agent Framework**: the five built-in agents (lead, planning, page, widget, data) run on Mandat's model through our own `AgLlmAdapter`, which posts each turn to `/api/studio/llm` so the key stays on the server. The lead agent gets a Mandat brief and a custom tool, `mission_books`, that returns the books exactly as the app computes them, so it never adds amounts up itself. Ask "spending by week" and it delegates to the page agent, then the widget agent, and a new chart appears. | `public/insights.js`, `lib/studio.mjs` |
-| **Bryntum: Calendar** | The Agenda tab shows every dated step of every mission, one colour per mission, steps still waiting dashed. The agent drives the schedule: dragging an event sends the move to Mandat, which asks the same merchant with `move_booking`. Merchants with an agent answer at once, the others confirm from their inbox; the event only lands at the new time once they agree, and nothing is paid twice. | `public/agenda.js`, `lib/calendar.mjs` (`agendaOf`), `move_booking` in `lib/agent.mjs` |
-| **Channel3** | `find_products` searches real products (European retailers priced in euros, or the US market in English), the agent looks at the photos of the five best candidates against what the person needs and drops what does not fit, then `buy_product` pays with PayPal inside the mission budget. | `lib/shop.mjs`, `find_products` / `buy_product` in `lib/agent.mjs` |
-| **APIMatic: Context Plugin for PayPal** | Installed in the coding agent (`npx context-plugins install https://github.com/paypaldev/server-sdk-context-plugin-preview`) and used to move every PayPal call onto the APIMatic-generated **PayPal Server SDK**, following its skills: pinned version, a timeout per attempt, typed `CustomError` mapping, and POST retries that are safe because every write carries a `PayPal-Request-Id`. | `lib/paypal.mjs` |
-| **Render** | Hosting: a free web service, data kept in a private Cloudflare R2 bucket between restarts. | `render.yaml`, `start.mjs`, `lib/store.mjs` |
-
-**Trials.** AG Studio and Bryntum run on their free trial builds. Bryntum counts its 45 days per browser from the first visit; AG Studio without a key only shows a watermark. Set `AG_STUDIO_LICENSE_KEY` to remove it.
-
 ## Architecture
 
 ```mermaid
@@ -112,116 +101,98 @@ flowchart LR
   subgraph Browser["Browser / installable PWA"]
     UI["index.html + app.js<br/>chat, envelope, approvals"]
     MAP["MapLibre + OpenFreeMap"]
-    GRID["AG Grid ledger"]
-    VOICE["Web Speech API"]
+    STUDIO["AG Studio dashboard"]
+    CAL["Bryntum Calendar"]
     SW["sw.js (Web Push)"]
   end
 
   subgraph Server["Node.js / Express (server.mjs)"]
     API["REST API + SSE event stream"]
     AGENT["lib/agent.mjs<br/>tool-calling loop"]
-    ENV["lib/envelope.mjs<br/>budget envelope"]
-    SPLIT["lib/split.mjs"]
+    GUARDS["lib/guards.mjs + lib/envelope.mjs<br/>code-side checks"]
     MER["lib/merchants.mjs<br/>demo network + HMAC identity"]
     PLACES["lib/places.mjs"]
     PP["lib/paypal.mjs"]
     INV["lib/invoices.mjs<br/>PayPal Agent Toolkit"]
-    PUSH["lib/push.mjs"]
-    DS["lib/deepseek.mjs<br/>streaming, fallback, probe"]
-    DATA[("data/*.json<br/>users, missions, OSM cache")]
+    LLM["lib/llm.mjs<br/>model client: streaming, fallback, probe"]
+    DATA[("data/*.json<br/>mirrored to Cloudflare R2")]
   end
 
   UI <--> API
   API --> AGENT
-  AGENT --> ENV
-  AGENT --> SPLIT
+  AGENT --> GUARDS
   AGENT --> MER
   AGENT --> PLACES
   AGENT --> PP
   AGENT --> INV
-  AGENT --> DS
-  MER --> DS
-  API --> PUSH
+  AGENT --> LLM
+  MER --> LLM
   API --> DATA
 
-  DS --> DEEPSEEK["DeepSeek API"]
+  LLM --> TF["Nebius Token Factory<br/>Nemotron 3 Super · Nemotron 3 Ultra · Gemma 3 27B"]
   PP --> PAYPAL["PayPal REST (sandbox)<br/>Vault v3, Orders v2, Payments v2"]
   INV --> PAYPALINV["PayPal Invoicing v2"]
-  PLACES --> OSM["OpenStreetMap<br/>Nominatim + Overpass"]
-  PUSH --> PUSHSVC["Browser push services"] --> SW
+  PLACES --> OSM["OpenStreetMap + Google Places"]
 ```
 
 ## Run locally
 
-**Requirements:** Node.js 20 or newer, a DeepSeek API key, and (optionally) a PayPal sandbox app.
+**Requirements:** Node.js 20 or newer, a **Nebius Token Factory API key** (tokenfactory.nebius.com), and (optionally) a PayPal sandbox app.
 
 ```bash
-git clone https://github.com/blanco1er/mandat.git
+git clone --branch nebius https://github.com/blanco1er/mandat.git
 cd mandat
 npm install
-cp .env.example .env    # then fill in the values (see below)
+cp .env.example .env    # then set NEBIUS_API_KEY (and the optional keys below)
 set -a; source .env; set +a
-npm start               # or: node server.mjs
+npm test                # code-side guardrails
+npm start               # http://localhost:8790
 ```
-
-Open `http://localhost:8790`.
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | **yes** | The agent, the merchant agents, photo reading, the ledger filter. Without it the server starts but the agent cannot answer. |
-| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | recommended | PayPal **sandbox** app keys. Without them the app runs in clearly labelled offline demo mode. |
-| `PUBLIC_URL` | when hosted | Public https base URL, used for PayPal return URLs and invoice links. Defaults to `http://localhost:<PORT>`. |
-| `PORT` | no | Defaults to `8790`. |
-| `DEEPSEEK_FAST_MODEL`, `DEEPSEEK_SMART_MODEL` | no | Override the default and fallback models. |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | no | Web Push keys. If absent, a key pair is generated once and saved to a private (mode 600) file. |
-| `MANDAT_DATA` | no | Data directory, defaults to `./data` (gitignored). |
-| `MANDAT_TURNS_PER_USER_DAY`, `MANDAT_MISSIONS_PER_USER_DAY`, `MANDAT_TURNS_PER_DAY`, `MANDAT_WRITES_PER_MINUTE` | no | Public-demo guards (defaults 80, 15, 3000, 40): daily AI allowance per person and for the whole app, plus a per-IP burst limit on writes. They keep the AI bill bounded while judges test the hosted demo. |
-| `MANDAT_NETWORK_SECRET` | no | Signing key of the demo merchant network. Random at each start if absent. |
-| `GOOGLE_PLACES_KEY` | no | Real place photos and ratings (Google Places), speech-to-text and the neural voice. Without it, places come from OpenStreetMap only and the phone's own voice is used. |
-| `CHANNEL3_API_KEY` | no | Real product search and shopping. Without it, Mandat books services but does not shop. |
-| `AG_STUDIO_LICENSE_KEY` | no | AG Studio licence. Without it the Activity dashboard works with a trial watermark. |
-| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` | no | Keeps `data/` in a Cloudflare R2 bucket across restarts. |
-| `PAYPAL_ENV` | no | `sandbox` (default) or `production`. |
+| `NEBIUS_API_KEY` | **yes** | Token Factory key: the agent, the merchant agents, the plan review, photo reading. Without it the server starts but the agent cannot answer. |
+| `LLM_BASE_URL`, `LLM_FAST_MODEL`, `LLM_SMART_MODEL`, `LLM_VISION_MODEL`, `LLM_REVIEW_MODEL` | no | Defaults: Token Factory, Nemotron 3 Super, Nemotron 3 Ultra, Gemma 3 27B, Ultra. Any OpenAI-compatible endpoint works. |
+| `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | recommended | PayPal **sandbox** app keys. Without them the app runs in a clearly labelled offline demo mode. |
+| `PUBLIC_URL` | when hosted | Public https base URL (PayPal return URLs, invoice links). |
+| `GOOGLE_PLACES_KEY` | no | Real place photos and ratings, speech-to-text and the neural voice. |
+| `CHANNEL3_API_KEY` | no | Real product search and shopping. |
+| `AG_STUDIO_LICENSE_KEY` | no | Removes the AG Studio trial watermark. |
+| `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PREFIX` | no | Keeps `data/` in a Cloudflare R2 bucket across restarts. |
+| `MANDAT_LLM_BUDGET_USD` | no | A hard ceiling for the model bill (USD). Every call's cost is counted from its tokens (`lib/spend.mjs`, kept in `data/llm-spend.json`); past the ceiling no call leaves the server and the app says the agent is paused, while missions, payments and agenda stay available. |
+| `MANDAT_MERCHANT_DELAY` | no | How fast demo merchants without an AI agent answer (1 = 20 to 50 s, 0.4 = 8 to 20 s). |
+| `MANDAT_TURNS_PER_USER_DAY`, `MANDAT_MISSIONS_PER_USER_DAY`, `MANDAT_TURNS_PER_DAY`, `MANDAT_WRITES_PER_MINUTE` | no | Public-demo guards (defaults 80, 15, 3000, 40) that keep the model bill bounded while judges test. |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, `MANDAT_NETWORK_SECRET`, `PORT`, `MANDAT_DATA` | no | Web Push keys (generated if absent), network signing key, port, data directory. |
 
-Local alternative to environment variables: `PAYPAL_KEY_FILE` and `DEEPSEEK_KEY_FILE` can point to JSON files (`{"client_id","client_secret"}` and `{"api_key"}`). The server refuses to read them unless they are `chmod 600`.
+**Signing the mandate in the sandbox.** Log in with a **sandbox personal (buyer) account** from *Testing Tools → Sandbox Accounts* on developer.paypal.com. Never use a real PayPal login. In the sandbox app, enable **Save payment methods** and **Invoicing**.
 
-**Signing the mandate in the sandbox.** "Continue with PayPal" (or "Sign mandate with PayPal" in Settings) opens the PayPal sandbox. Log in with a **sandbox personal (buyer) account**, for example one you create under *Testing Tools → Sandbox Accounts* on developer.paypal.com. Never use a real PayPal login.
-
-**Try it without the UI.** `node scripts/scenario.mjs` runs a full "birthday evening" mission in the terminal (search, negotiation, booking requests, approvals, holds). It approves payments and accepts merchant requests automatically. It needs `DEEPSEEK_API_KEY` and runs with PayPal in offline mode.
+**Benches.** `node scripts/bench-provider.mjs [birthday|repair]` runs one realistic mission end to end without the UI (PayPal offline, every payment approved) and prints the books; `node scripts/bench-review.mjs [reps]` compares plan reviewers (`BENCH_MODELS=a,b`).
 
 ## Deploy on Render
 
-The repo includes a Render Blueprint: [`render.yaml`](render.yaml).
+The Blueprint [`render.yaml`](render.yaml) describes the `mandat-nebius` web service (branch `nebius`, Starter plan, Frankfurt), with the Token Factory endpoint and models already set.
 
-1. On Render, choose **New → Blueprint** and select this repository.
-2. Fill in the secrets Render asks for: `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `DEEPSEEK_API_KEY`, `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, and `PUBLIC_URL` (the service's `https://….onrender.com` URL). To generate a VAPID pair, run `npx web-push generate-vapid-keys`.
-3. In the PayPal sandbox app, enable **Save payment methods** and **Invoicing**.
+1. On Render: **New → Blueprint**, select this repository and the `nebius` branch.
+2. Paste the secrets it asks for: `NEBIUS_API_KEY`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `GOOGLE_PLACES_KEY`, `CHANNEL3_API_KEY`, the R2 keys; `MANDAT_NETWORK_SECRET` is generated.
+3. Health check: `GET /api/health` answers `{"ok":true, "ai":{"model":"NVIDIA Nemotron 3 Super","host":"Nebius Token Factory"}, …}`.
 
-Notes on the free plan:
-- **The disk is ephemeral.** When the Cloudflare R2 variables are set, `data/` is mirrored to R2 and restored at start (`start.mjs`, `lib/store.mjs`), so users and missions survive a redeploy. Without them, data is reset on every restart, which is fine for a quick demo.
-- A free instance sleeps after about 15 minutes without traffic. The server visits its own public address every 9 minutes (`start.mjs`; set `MANDAT_KEEPALIVE=off` to stop it), and [`.github/workflows/keepalive.yml`](.github/workflows/keepalive.yml) adds an outside ping when the repository variable `MANDAT_URL` is set.
+`data/` is mirrored to Cloudflare R2 (`R2_PREFIX=nebius/`) and restored at start, so accounts and missions survive a redeploy.
 
 ## Tools used
 
 | Tool | Used for |
 |---|---|
+| **NVIDIA Nemotron 3 Super and Nemotron 3 Ultra** on **Nebius Token Factory** | The agent, the merchant agents, the plan review, titles, the dashboard assistant |
+| **Gemma 3 27B** on Nebius Token Factory | Reading photos |
 | **PayPal Server SDK** (`@paypal/paypal-server-sdk`, sandbox): Vault v3, Orders v2, Payments v2 | Mandate, deposit holds, captures on confirmation, voids, refunds |
-| **APIMatic Context Plugin for PayPal** | Coding-agent context used to integrate the PayPal Server SDK |
-| **PayPal Agent Toolkit** (`@paypal/agent-toolkit`) | Invoicing v2 tools for split bills: create, send, QR code, status |
-| **DeepSeek API** (OpenAI-compatible) | Tool-calling agent, merchant agents, plan review, photo reading, the AG Studio agents, titles |
-| **OpenStreetMap**: Nominatim + Overpass | Geocoding and real nearby places, cached on disk, with a custom User-Agent, per the usage policies |
-| **MapLibre GL JS + OpenFreeMap** | Interactive map inside the conversation, no API key |
-| **AG Studio** (`ag-studio` 3.0, Studio Agent Framework) | Spending dashboard and its assistant (Activity tab) |
-| **Bryntum Calendar** (`@bryntum/calendar-trial` 7.3) | Agenda tab, moves handled by the agent |
-| **Channel3 API** | Product search, offers and photos for purchases |
-| **Google Places API (New)** | Real places, ratings, reviews and photos |
-| **Google Cloud Text-to-Speech (Chirp 3 HD) and Speech-to-Text** | The voice of Mandat, and what you say |
-| **AG Grid Community** | Fallback ledger when the dashboard cannot load |
-| **Web Push** (`web-push`, VAPID) + Service Worker | Notifications and the app badge |
-| **Web Speech API** | Fallback for voice when the cloud voice is not available |
-| **Express** | HTTP server, static files, Server-Sent Events |
-| **Render** | Hosting (free web service) |
-| **GitHub Actions** | Keep-alive ping for the hosted demo |
+| **PayPal Agent Toolkit** (`@paypal/agent-toolkit`) | Invoicing v2 tools for split bills |
+| **OpenStreetMap** (Nominatim + Overpass) and **Google Places API (New)** | Real places, ratings, reviews and photos |
+| **MapLibre GL JS + OpenFreeMap** | Interactive map inside the conversation |
+| **Channel3 API** | Real products for things to buy |
+| **AG Studio** and **Bryntum Calendar** | Activity dashboard and its assistant; Agenda |
+| **Google Cloud Text-to-Speech and Speech-to-Text** | The voice of Mandat, and what you say |
+| **Web Push** (VAPID) + Service Worker | Notifications |
+| **Express**, **Render**, **Cloudflare R2** | Server, hosting, durable data |
 
 ## Safety
 
@@ -235,7 +206,7 @@ Notes on the free plan:
 
 ## Sandbox disclaimer
 
-This is a hackathon demo. **All payments use the PayPal sandbox. No real money moves.** The merchants (Lumière, L'Ombre Rouge, Atelier Sucré, Pivoine, Hôtel des Arts) are fictional demo merchants. The places shown on the map are real OpenStreetMap data, but bookings only go to the demo network.
+This is a hackathon demo. **All payments use the PayPal sandbox. No real money moves.** The merchants of the Mandat network (Lumière, L'Ombre Rouge, Atelier Sucré, Pivoine and the ones it opens in new cities) are fictional demo merchants. The places on the map are real (OpenStreetMap, Google Places), but bookings only go to the demo network.
 
 ## License
 

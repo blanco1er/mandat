@@ -10,8 +10,9 @@ import fs from 'node:fs';
 import { setLiveLookup, createSession, userTurn, resolveApproval, resolveRequest, captureEntry, envelopeView, missionSummary, wrapCard, autoReminders, settleApprovals, refreshRecaps } from './lib/agent.mjs';
 import * as PayPal from './lib/paypal.mjs';
 import { geocode, searchAddress, reverseAddress } from './lib/places.mjs';
-import { chat, MODELS, probe, aiLabel } from './lib/deepseek.mjs';
+import { chat, MODELS, probe, aiLabel } from './lib/llm.mjs';
 import { textLang } from './lib/guards.mjs';
+import { exhausted, budgetError } from './lib/spend.mjs';
 import { invoiceStatus } from './lib/invoices.mjs';
 import { ics, planEvents, validTz, localToUtc, agendaOf } from './lib/calendar.mjs';
 import { KINDS, remember, forget, memoryBrief, missionsBrief } from './lib/memory.mjs';
@@ -73,6 +74,7 @@ function allowance(u, kind = 'turns') {
   const day = new Date().toISOString().slice(0, 10);
   if (usage.day !== day) usage = { day, global: 0, studio: 0, users: new Map() };
   const mine = usage.users.get(u.id) || { turns: 0, missions: 0, studio: 0 };
+  if (exhausted()) throw Object.assign(new Error(tr(u.lang, budgetError().message)), { status: 503 }); // the model budget is used: say so before anything starts
   if (usage.global >= LIMITS.global) throw Object.assign(new Error(tr(u.lang, 'Mandat has reached its daily demo limit. Please come back tomorrow.')), { status: 429 });
   if (mine[kind] >= LIMITS[kind]) throw Object.assign(new Error(kind === 'missions' ? tr(u.lang, "That's {n} new missions today, the demo limit. Continue an existing one, or come back tomorrow.", { n: LIMITS.missions }) : tr(u.lang, "You reached today's demo limit for the AI. It resets at midnight (UTC).")), { status: 429 });
   mine[kind]++;
@@ -248,8 +250,8 @@ function run(b, fn) {
     try {
       await fn(emit);
     } catch (e) {
-      console.error('[agent]', e);
-      emit('error', { message: e.message });
+      if (e.code === 'LLM_BUDGET') emit('error', { message: tr(b.s._user?.lang, e.message), budget: true });
+      else { console.error('[agent]', e); emit('error', { message: e.message }); }
     } finally {
       b.running = false;
       try {
@@ -278,7 +280,7 @@ const api = (h) => async (req, res) => {
 
 // The build the server runs: the app compares it with its own and reloads when a newer one is live.
 const BUILD = (process.env.RENDER_GIT_COMMIT || '').slice(0, 12) || String(Date.now());
-app.get('/api/health', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ok: true, paypal: PayPal.MODE, build: BUILD, shop: shopEnabled(), ai: aiLabel() }); }); // shop: whether product search is on (never the key)
+app.get('/api/health', (req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ok: true, paypal: PayPal.MODE, build: BUILD, shop: shopEnabled(), ai: { ...aiLabel(), paused: exhausted() } }); }); // shop: whether product search is on (never the key)
 
 app.get('/api/me', api(async (req, res) => {
   const u = me(req, res);

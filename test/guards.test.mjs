@@ -43,3 +43,11 @@ test('other times offered, in the slot or only in the reply', () => {
   assert.deepEqual(otherTimesOffered('a table for 8 at 8pm', 'Confirmed for 8pm, 10% off for the group.', null), []);
   assert.deepEqual(otherTimesOffered('a table for 8 at 20:00', 'Yes, 20:00 is available; the kitchen closes at 23:00.', null), []);
 });
+import { needsUser } from '../lib/guards.mjs';
+test('after the opening, only real decisions reach the user', () => {
+  assert.equal(needsUser('Cake flavour or any allergies? Chocolate, vanilla | Fruit tart, lemon | You decide'), false);
+  assert.equal(needsUser('Bouquet style? Red roses, mixed seasonal | White lilies, pastel mix | You decide'), false);
+  assert.equal(needsUser('The bakery can deliver at 17:30 instead. 17:30 works | Look elsewhere'), true);
+  assert.equal(needsUser('Flowers would go over the budget. Small flower gesture (~€12) | Increase budget | Skip flowers'), true);
+  assert.equal(needsUser('Shall I book Trattoria Verde? Yes, book it | No, look elsewhere'), true);
+});

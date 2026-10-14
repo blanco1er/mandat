@@ -18,7 +18,7 @@ steps=(
 )
 # nebius: the Nebius version (mandat-nebius) — the agent's key is the Token Factory key, plus a fresh network secret.
 if [[ "$1" == "nebius" ]]; then
-  steps=("DEEPSEEK_API_KEY|$dir/nebius-tokenfactory.json|api_key" ${steps:#DEEPSEEK_API_KEY*})
+  steps=("NEBIUS_API_KEY|$dir/nebius-tokenfactory.json|api_key" ${steps:#DEEPSEEK_API_KEY*})
   openssl rand -hex 24 | tr -d '\n' > "$TMPDIR/mandat-net"; chmod 600 "$TMPDIR/mandat-net"
   python3 -c 'import json,sys; print(json.dumps({"v": open(sys.argv[1]).read()}))' "$TMPDIR/mandat-net" > "$TMPDIR/mandat-net.json"; rm -f "$TMPDIR/mandat-net"
   steps+=("MANDAT_NETWORK_SECRET|$TMPDIR/mandat-net.json|v")

@@ -17,17 +17,34 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # The agent's model: NVIDIA Nemotron on Nebius Token Factory (OpenAI-compatible). DEEPSEEK_API_KEY = the Token Factory key.
-      - key: DEEPSEEK_API_KEY
+      # The models: NVIDIA Nemotron on Nebius Token Factory (OpenAI-compatible). These are also the defaults in code.
+      - key: NEBIUS_API_KEY
         sync: false
-      - key: DEEPSEEK_BASE_URL
+      - key: LLM_BASE_URL
         value: https://api.tokenfactory.nebius.com/v1
-      - key: DEEPSEEK_FAST_MODEL
+      - key: LLM_FAST_MODEL
         value: nvidia/nemotron-3-super-120b-a12b
-      - key: DEEPSEEK_SMART_MODEL
+      - key: LLM_SMART_MODEL
         value: nvidia/Nemotron-3-Ultra-550b-a55b
-      - key: DEEPSEEK_VISION_MODEL
+      - key: LLM_VISION_MODEL
         value: google/gemma-3-27b-it
+      # Demo merchants without an AI agent answer in 8 to 20 s instead of 20 to 50 s.
+      - key: MANDAT_MERCHANT_DELAY
+        value: "0.4"
+      # The model bill until judging ends (15 Dec): a hard ceiling (about 50 full missions at ~$0.20 each), then the
+      # agent pauses with a clear message; and fair daily shares so one visitor cannot use it all.
+      - key: MANDAT_LLM_BUDGET_USD
+        value: "10"
+      - key: MANDAT_MISSIONS_PER_USER_DAY
+        value: "5"
+      - key: MANDAT_TURNS_PER_USER_DAY
+        value: "40"
+      - key: MANDAT_TURNS_PER_DAY
+        value: "300"
+      - key: MANDAT_STUDIO_TURNS_PER_USER_DAY
+        value: "20"
+      - key: MANDAT_STUDIO_TURNS_PER_DAY
+        value: "150"
       # Its own folder in the R2 bucket: never mixed with the PayPal demo's data.
       - key: R2_PREFIX
         value: nebius/
