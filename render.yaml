@@ -1,12 +1,14 @@
-# Render Blueprint for the Mandat hackathon demo (free web service).
+# Render Blueprint for Mandat on NVIDIA Nemotron (Nebius × NVIDIA hackathon): the "mandat-nebius" service, branch nebius.
+# Never the free "mandat" service of the PayPal demo: that one stays on main.
 # Secrets marked "sync: false" are asked for once in the Render dashboard and are never stored in this repo.
 # The public URL comes from Render (RENDER_EXTERNAL_URL); Web Push keys are generated at start.
 # The free plan's disk is ephemeral: data/ is mirrored to Cloudflare R2 (lib/store.mjs) and restored at start.
 services:
   - type: web
-    name: mandat
+    name: mandat-nebius
     runtime: node
-    plan: free
+    plan: starter
+    branch: nebius
     region: frankfurt
     buildCommand: npm ci
     startCommand: node start.mjs
@@ -15,8 +17,20 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # The agent's model: NVIDIA Nemotron on Nebius Token Factory (OpenAI-compatible). DEEPSEEK_API_KEY = the Token Factory key.
       - key: DEEPSEEK_API_KEY
         sync: false
+      - key: DEEPSEEK_BASE_URL
+        value: https://api.tokenfactory.nebius.com/v1
+      - key: DEEPSEEK_FAST_MODEL
+        value: nvidia/nemotron-3-super-120b-a12b
+      - key: DEEPSEEK_SMART_MODEL
+        value: nvidia/Nemotron-3-Ultra-550b-a55b
+      - key: DEEPSEEK_VISION_MODEL
+        value: google/gemma-3-27b-it
+      # Its own folder in the R2 bucket: never mixed with the PayPal demo's data.
+      - key: R2_PREFIX
+        value: nebius/
       - key: PAYPAL_CLIENT_ID
         sync: false
       - key: PAYPAL_CLIENT_SECRET
