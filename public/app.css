@@ -946,6 +946,11 @@ body.on-welcome #topbar, body.on-welcome .backdrop { display: none; }
 .w-mark { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: center; gap: 7px; }
 .w-mark::before { content: ""; width: 18px; height: 18px; border-radius: 6px; background: var(--ink); -webkit-mask: radial-gradient(circle at 50% 50%, transparent 4px, #000 4.5px); mask: radial-gradient(circle at 50% 50%, transparent 4px, #000 4.5px); }
 .w-badge { font-size: 11.5px; font-weight: 600; color: var(--ink-3); border: 1px solid var(--card-line); padding: 4px 9px; border-radius: 999px; letter-spacing: 0.01em; }
+.w-right { display: inline-flex; align-items: center; gap: 8px; }
+/* Language switch on the first screen: English by default, French one tap away. */
+.w-lang { display: inline-flex; border: 1px solid var(--card-line); border-radius: 999px; padding: 2px; }
+.w-lang button { font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em; color: var(--ink-3); background: none; border: 0; border-radius: 999px; padding: 3px 9px; min-height: 24px; cursor: pointer; }
+.w-lang button[aria-checked="true"] { background: var(--ink); color: var(--bg); }
 .w-title { margin: 34px 0 12px; font-size: 32px; line-height: 36px; font-weight: 700; letter-spacing: -0.028em; }
 .w-lede { margin: 0 0 26px; font-size: 16px; line-height: 23px; color: var(--ink-2); max-width: 34ch; }
 .story { margin: 0; padding: 14px; border-radius: 22px; background: var(--card); border: 1px solid var(--card-line); box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 18px 50px rgba(20, 16, 8, 0.08); transition: opacity 0.4s var(--smooth); }

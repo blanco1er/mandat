@@ -1,4 +1,5 @@
-// Interface language: French or English, from the phone's language, or the one chosen in Settings.
+// Interface language: English by default; French when chosen (the EN | FR switch on the first screen, or
+// Settings). "Auto" in Settings follows the phone instead.
 // Gettext style: t('English text', { vars }) gives the French text when the app is in French.
 // The French table (i18n-fr.js) is keyed by the exact English source string.
 import FR from '/i18n-fr.js';
@@ -7,8 +8,8 @@ export const LANGS = { en: 'English', fr: 'Français' };
 const TABLES = { fr: FR };
 const KEY = 'mandat_lang';
 
-// Automatic: French when French is among the phone's languages, or when the phone is in a French-speaking
-// country (its time zone or region): an English phone in France gets French. English everywhere else.
+// "Auto" (only when chosen in Settings): French when French is among the phone's languages, or when the phone
+// is in a French-speaking country (its time zone or region). English everywhere else.
 const FR_REGIONS = new Set('FR BE LU MC CH SN CI CM ML BF NE TG BJ GA CG CD MG GN TD CF DJ KM HT MA DZ TN RE GP MQ GF YT NC PF PM BL MF WF'.split(' '));
 const FR_ZONES = /^(Europe\/(Paris|Brussels|Luxembourg|Monaco)|Africa\/(Dakar|Abidjan|Douala|Bamako|Ouagadougou|Niamey|Lome|Porto-Novo|Libreville|Brazzaville|Kinshasa|Lubumbashi|Conakry|Ndjamena|Bangui|Djibouti|Casablanca|Algiers|Tunis)|Indian\/(Antananarivo|Reunion|Mayotte|Comoro)|America\/(Guadeloupe|Martinique|Cayenne|Port-au-Prince)|Pacific\/(Noumea|Tahiti))$/;
 export function autoLang(languages = navigator.languages?.length ? navigator.languages : [navigator.language || 'en'], zone = Intl.DateTimeFormat().resolvedOptions().timeZone || '') {
@@ -22,22 +23,22 @@ function pick() {
   try {
     const saved = localStorage.getItem(KEY);
     if (saved === 'en' || saved === 'fr') return saved;
+    if (saved === 'auto') return autoLang();
   } catch {}
-  return autoLang();
+  return 'en';
 }
 export const lang = pick();
 export const locale = () => (lang === 'fr' ? 'fr-FR' : 'en-GB');
 document.documentElement.lang = lang;
+// The server reads it for the pages it writes itself (the "mandate signed" window).
+try { document.cookie = `mandat_lang=${lang}; path=/; max-age=31536000; SameSite=Lax`; } catch {}
 
-// The saved choice: 'en', 'fr', or 'auto' (follow the phone).
+// The saved choice: 'en' (the default), 'fr', or 'auto' (follow the phone).
 export function chosenLang() {
-  try { return localStorage.getItem(KEY) || 'auto'; } catch { return 'auto'; }
+  try { return localStorage.getItem(KEY) || 'en'; } catch { return 'en'; }
 }
 export function setLang(l) {
-  try {
-    if (l === 'en' || l === 'fr') localStorage.setItem(KEY, l);
-    else localStorage.removeItem(KEY);
-  } catch {}
+  try { localStorage.setItem(KEY, l === 'fr' || l === 'auto' ? l : 'en'); } catch {}
   location.reload();
 }
 
