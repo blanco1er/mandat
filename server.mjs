@@ -559,7 +559,7 @@ app.get('/mandate/return', async (req, res) => {
     saveUser(u);
     if (!elsewhere) return res.redirect('/?mandate=active');
     // Signed in a window over the app: say it is done; the app notices on its own.
-    const fr = /^fr/i.test(req.get('accept-language') || '');
+    const fr = cookie(req, 'mandat_lang') === 'fr'; // the app's language (English unless French was chosen)
     res.type('html').send(`<!doctype html><html lang="${fr ? 'fr' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mandat</title>
 <style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f4f1ec;color:#111216;font:17px/1.4 -apple-system,system-ui,sans-serif;text-align:center}@media(prefers-color-scheme:dark){body{background:#0b0c10;color:#f5f5f7}}main{padding:32px}b{display:block;font-size:24px;margin:14px 0 6px}p{margin:0;opacity:.7}svg{width:56px;height:56px}</style></head>
 <body><main><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#19a463"/><path d="m7 12.5 3.2 3.2L17 9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>

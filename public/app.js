@@ -2557,7 +2557,12 @@ $('#sLocBtn').addEventListener('click', async () => {
   if (st === 'prompt') { locRender('prompt'); $('#sLoc').textContent = t('No answer from the phone. Try again.'); }
   else locRender(st);
 });
-// Interface language: Auto follows the phone; changing it reloads the app.
+// The EN | FR switch on the first screen: English by default; a tap reloads the welcome in the other language.
+for (const b of document.querySelectorAll('#wLang button')) {
+  b.setAttribute('aria-checked', String(b.dataset.v === lang));
+  b.addEventListener('click', () => { if (b.dataset.v !== lang) setLang(b.dataset.v); });
+}
+// Interface language: English by default, Auto follows the phone; changing it reloads the app.
 // Changing the language reloads the app; it comes back to Settings, at the same place.
 segmented('#sLang', (v) => {
   if (v === chosenLang()) return;
