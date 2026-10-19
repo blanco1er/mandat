@@ -39,3 +39,5 @@ services:
         value: mailto:hello@mandat.app
       - key: MANDAT_NETWORK_SECRET
         generateValue: true
+      # Anonymous visit log (lib/visits.mjs, public/privacy.html). Its reader's key, MANDAT_VISITS_TOKEN, is added by hand
+      # in the dashboard (Environment), never here; without it the log is written but cannot be read from outside.

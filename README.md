@@ -232,6 +232,7 @@ Notes on the free plan:
 - **Know Your Agent.** The merchant agent's identity card is verified before negotiating or paying.
 - **Secrets never in the repo.** Keys come from environment variables or from private `chmod 600` files outside the project, and they are never logged. `.env`, `*.key` and `data/` are gitignored.
 - **Minimal data.** From PayPal, Mandat stores only the payer's name, email and the vault payment token id. The user can see "What Mandat knows" and erase it in Settings.
+- **Anonymous usage log.** The hosted demo notes anonymous steps (page opened, mission started, payment card answered...) to learn how it is used: never an address or PayPal detail, typed requests cut to 200 characters with emails, phone and card numbers masked, readable only by the developer and deleted after March 2027. See [/privacy](https://mandat-qb77.onrender.com/privacy) and `lib/visits.mjs`.
 
 ## Sandbox disclaimer
 

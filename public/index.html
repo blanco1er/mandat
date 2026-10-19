@@ -51,6 +51,7 @@
     <div class="w-bottom">
       <button class="pp-btn" id="start"><span>Continue with</span><b class="pp-word" aria-label="PayPal"><i>Pay</i><i>Pal</i></b></button>
       <p class="w-fine">Your card and password stay with PayPal. This demo uses the PayPal sandbox: no real money moves.</p>
+      <p class="w-fine w-usage" data-i18n>Anonymous usage is logged to improve the demo · <a href="/privacy">Privacy</a></p>
     </div>
   </main>
 
@@ -290,6 +291,7 @@
     <h2 class="group-title">Privacy</h2>
     <div class="group"><button type="button" class="mem-talk" id="memOpen"><span class="disc-ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/></svg></span><span class="grow"><b>What Mandat knows about you</b><small id="memSummary">Nothing yet</small></span><span class="chev" aria-hidden="true"></span></button></div>
     <p class="fine settings-fine">Stored on your account only, used only to act for you, never sold. PayPal keeps your payment details.</p>
+    <p class="fine settings-fine usage-fine" data-i18n>Anonymous usage is logged to improve the demo · <a href="/privacy">Privacy</a></p>
 
     <h2 class="group-title">This device</h2>
     <div class="group"><button type="button" class="row-btn" id="sFresh">Start over with a new account</button><button type="button" class="row-btn" id="sPrevious" hidden>Back to my previous account</button></div>
@@ -408,5 +410,6 @@
   </template>
 
   <script src="/app.js" type="module"></script>
+  <script src="/visit.js" defer></script>
 </body>
 </html>

@@ -5,6 +5,7 @@ export default {
   "Say what you need.<br>Set what you’ll spend.": "Dites ce qu’il vous faut.<br>Fixez ce que vous dépensez.",
   "Mandat finds the place, negotiates, books and pays with PayPal. It never goes a cent over.": "Mandat trouve, négocie, réserve et paie avec PayPal. Sans dépasser d’un centime.",
   "Continue with": "Continuer avec",
+  "Anonymous usage is logged to improve the demo · <a href=\"/privacy\">Privacy</a>": "Usage anonyme enregistré pour améliorer la démo · <a href=\"/privacy\">Confidentialité</a>",
   "Your card and password stay with PayPal. This demo uses the PayPal sandbox: no real money moves.": "Votre carte et votre mot de passe restent chez PayPal. Cette démo utilise la sandbox PayPal : aucun vrai paiement.",
   "{held} held of {total}": "{held} bloqués sur {total}",
   "Dinner for 4 on Saturday, €160 max": "Dîner pour 4 samedi soir, 160 € max",

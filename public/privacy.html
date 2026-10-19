@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f4f1ec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0c10" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <title>Mandat · Privacy</title>
+  <style>
+    :root { --bg: #f4f1ec; --ink: #111216; --ink-2: rgba(17, 18, 22, 0.66); --card: rgba(255, 255, 255, 0.86); --line: rgba(17, 18, 22, 0.08); --accent: #0a6cff; color-scheme: light dark; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0b0c10; --ink: #f5f5f7; --ink-2: rgba(245, 245, 247, 0.7); --card: rgba(28, 29, 34, 0.9); --line: rgba(255, 255, 255, 0.08); } }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, system-ui, sans-serif; -webkit-text-size-adjust: 100%; }
+    main { max-width: 640px; margin: 0 auto; padding: max(24px, env(safe-area-inset-top)) 16px max(40px, env(safe-area-inset-bottom)); }
+    .back { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); text-decoration: none; font-weight: 500; min-height: 44px; }
+    .back svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    h1 { font-size: 34px; line-height: 40px; letter-spacing: -0.02em; margin: 12px 0 8px; }
+    .lede { color: var(--ink-2); margin: 0 0 24px; }
+    section { background: var(--card); border: 1px solid var(--line); border-radius: 22px; padding: 18px 20px; margin: 0 0 14px; }
+    h2 { font-size: 19px; line-height: 24px; margin: 0 0 8px; }
+    ul { margin: 0; padding-left: 20px; }
+    li { margin: 4px 0; }
+    p { margin: 0; }
+    .fine { color: var(--ink-2); font-size: 14px; margin-top: 20px; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<main>
+  <a class="back" href="/"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg>Mandat</a>
+  <h1>Privacy</h1>
+  <p class="lede">Mandat is a hackathon demo. To learn whether people try it and where it can be better, it keeps an anonymous log of how the demo is used. Here is exactly what that means.</p>
+
+  <section>
+    <h2>What is logged</h2>
+    <ul>
+      <li>The time of each step: page opened, demo account created, PayPal sandbox sign-in, mission started, message sent, tools the agent used, payment card shown and answered, sandbox payment held, paid, released or refunded, and errors.</li>
+      <li>The site you came from (for example devpost.com or youtube.com), and your browser family, system family and whether it is a phone or a computer.</li>
+      <li>An anonymous visitor number, made by a one-way salted hash of your network address and browser. Your address itself is never written down.</li>
+      <li>What you ask the agent, cut to 200 characters, with email addresses, phone numbers and card numbers masked before anything is saved.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What is never logged</h2>
+    <ul>
+      <li>Passwords, tokens or keys.</li>
+      <li>Your PayPal account, email, payer id or any payment detail. PayPal keeps those; this demo only uses the PayPal sandbox and no real money moves.</li>
+      <li>Your name, profile, memory or photos (they stay in your own demo account, which only your browser can open).</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Who sees it, and for how long</h2>
+    <ul>
+      <li>Only the developer of Mandat, with a private key. It is not shared, sold or used for advertising, and there are no third-party trackers on this site.</li>
+      <li>It is stored with the demo's server (Render, Frankfurt) and its backup storage (Cloudflare R2).</li>
+      <li>It is kept until the hackathon results are known, and deleted after 31 March 2027 at the latest.</li>
+    </ul>
+  </section>
+
+  <p class="fine">Questions, or want your visits removed? Open an issue on the project's <a href="https://github.com/blanco1er/mandat">GitHub page</a> with the date and time of your visit.</p>
+</main>
+</body>
+</html>

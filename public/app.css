@@ -979,6 +979,9 @@ body.on-welcome #topbar, body.on-welcome .backdrop { display: none; }
 .pp-word i:first-child { color: #003087; }
 .pp-word i:last-child { color: #0070e0; }
 .w-fine { margin: 12px 4px 0; font-size: 12px; line-height: 17px; color: var(--ink-3); text-align: center; }
+.w-usage { margin-top: 4px; font-size: 11px; }
+.w-usage a, .usage-fine a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.usage-fine { margin-top: 6px; }
 @media (prefers-color-scheme: dark) {
   .story { box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); }
 }

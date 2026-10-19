@@ -22,6 +22,7 @@ import { budgetFromText, currencyFromText } from './lib/budget.mjs';
 import * as Push from './lib/push.mjs';
 import { tr, trn, langOf, money } from './lib/i18n-server.mjs';
 import { merchant, inboxAccess, inboxUrl, placeOf } from './lib/merchants.mjs';
+import * as Visits from './lib/visits.mjs';
 import { newUser, getUser, userWithSetup, saveUser, getMission, saveMission, deleteMission, approveAboveFor, agentBrief, monthCommitted, AUTONOMY } from './lib/users.mjs';
 
 const app = express();
@@ -78,6 +79,17 @@ function allowance(u, kind = 'turns') {
   if (kind === 'turns') usage.global++;
   usage.users.set(u.id, mine);
 }
+// ---------- anonymous visit log (explained in public/privacy.html; lib/visits.mjs) ----------
+// Pages opened are noted before the files are served; reading the log needs the developer's secret token.
+app.use((req, res, next) => {
+  if (req.method === 'GET' && Visits.isPage(req.path) && /html/.test(req.get('accept') || '')) Visits.page(req);
+  next();
+});
+app.get('/api/visits/export', Visits.exportRoute);
+app.get('/api/visits/internal', Visits.internalRoute);
+app.post('/api/visit', Visits.beaconRoute);
+Visits.startHousekeeping();
+
 // The app's own files are always checked with the server before a stored copy is used: an app installed on
 // the home screen must never keep running last week's code.
 app.use(express.static(path.resolve('public'), { extensions: ['html'], setHeaders: (res, file) => { if (/\.(html|js|css|json)$/.test(file)) res.setHeader('Cache-Control', 'no-cache'); } }));
@@ -101,7 +113,8 @@ function me(req, res) {
     u = newUser();
     saveUser(u);
     res.setHeader('Set-Cookie', `mandat_uid=${u.id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`);
-  }
+    Visits.track('account_new', Visits.linkUser(req, u.id));
+  } else Visits.linkUser(req, u.id);
   return u;
 }
 function publicUser(u) {
@@ -151,6 +164,7 @@ function box(id, user) {
     for (const e of s.feed) if (e.type === 'request' && e.data?.id && e.data.merchant_id) e.data.inbox = inboxUrl(e.data.merchant_id, e.data.id);
     refreshRecaps(s);
     b = { s, clients: new Set(), busy: Promise.resolve(), log: s.feed };
+    Visits.watch(b);
     live.set(id, b);
     // approvals that no longer stand (already paid, replaced, dropped from the plan) are closed on load
     if (settleApprovals(s, (type, data) => s.feed.push({ type, data, at: Date.now() })).length) saveMission(s);
@@ -165,6 +179,7 @@ const KEEP_IN_FEED = new Set(['user', 'say', 'payment', 'approval', 'approval_re
 function emitter(b) {
   return (type, data) => {
     const evt = { type, data, at: Date.now() };
+    Visits.observe(b, type, data);
     if (!EPHEMERAL.has(type)) {
       b.log.push(evt);
       // Room is made with the small technical events first: the conversation and the payments always stay.
@@ -243,14 +258,19 @@ function run(b, fn) {
   const emit = emitter(b);
   b.busy = b.busy.then(async () => {
     b.running = true;
+    const t0 = Date.now();
+    let failed = false;
+    b._tools = 0;
     emit('busy', { on: true });
     try {
       await fn(emit);
     } catch (e) {
+      failed = true;
       console.error('[agent]', e);
       emit('error', { message: e.message });
     } finally {
       b.running = false;
+      Visits.track('agent_run', Visits.ctxForUser(b.s.userId), { mid: b.s.id, ms: Date.now() - t0, tools: b._tools, error: failed ? 1 : undefined });
       try {
         emit('busy', { on: false });
         if (!b.deleted) {
@@ -271,6 +291,7 @@ const api = (h) => async (req, res) => {
   try {
     res.json(await h(req, res));
   } catch (e) {
+    Visits.track('error', Visits.ctxOf(req), { where: `${req.method} ${req.route?.path || req.path}`, status: e.status || 400, msg: Visits.maskText(e.message, 160) });
     res.status(e.status || 400).json({ error: tr(reqLang(req), e.message), ...(e.code ? { code: e.code } : {}) }); // fixed messages are translated as they are
   }
 };
@@ -389,6 +410,7 @@ app.post('/api/me/interview', api(async (req, res) => {
     };
   }
   allowance(u);
+  Visits.track('interview', Visits.ctxOf(req));
   const hist = (Array.isArray(req.body?.history) ? req.body.history : []).slice(-16)
     .map((m) => ({ role: m.role === 'you' ? 'user' : 'assistant', content: String(m.text || '').slice(0, 500) }));
   const known = [agentBrief(u), memoryBrief(u)].filter(Boolean).join('\n') || 'Nothing yet.';
@@ -499,6 +521,7 @@ app.post('/api/me/forget/undo', api(async (req, res) => {
 const idCookie = (name, id) => `${name}=${id}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`;
 app.post('/api/me/switch', api(async (req, res) => {
   const u = me(req, res);
+  Visits.track('account_switch', Visits.ctxOf(req), { to: req.body?.to === 'previous' ? 'previous' : 'new' });
   if (req.body?.to === 'previous') {
     const prev = getUser(cookie(req, 'mandat_prev'));
     if (!prev || prev.id === u.id) throw Object.assign(new Error('No previous account on this device.'), { status: 404 });
@@ -536,6 +559,7 @@ app.post('/api/me/mandate', api(async (req, res) => {
   });
   u.pendingSetup = setup.id;
   saveUser(u);
+  Visits.track('paypal_start', Visits.ctxOf(req), { mode: PayPal.MODE });
   return setup;
 }));
 
@@ -557,6 +581,7 @@ app.get('/mandate/return', async (req, res) => {
     if (!u.profile.email && m.payer) u.profile.email = m.payer;
     delete u.pendingSetup;
     saveUser(u);
+    Visits.track('paypal_signed', Visits.linkUser(req, u.id), { mode: PayPal.MODE, elsewhere: elsewhere ? 1 : undefined });
     if (!elsewhere) return res.redirect('/?mandate=active');
     // Signed in a window over the app: say it is done; the app notices on its own.
     const fr = cookie(req, 'mandat_lang') === 'fr'; // the app's language (English unless French was chosen)
@@ -566,6 +591,7 @@ app.get('/mandate/return', async (req, res) => {
 <b>${fr ? 'Mandat est signé' : 'Mandate signed'}</b><p>${fr ? 'Vous pouvez fermer cette fenêtre et revenir à l’appli.' : 'You can close this window and go back to the app.'}</p></main>
 <script>setTimeout(function(){try{window.close()}catch(e){}},1200)</script></body></html>`);
   } catch (e) {
+    Visits.track('error', Visits.ctxOf(req), { where: 'GET /mandate/return', status: 400, msg: Visits.maskText(e.message, 160) });
     res.status(400).send('Mandate activation failed: ' + e.message);
   }
 });
@@ -574,6 +600,7 @@ app.post('/api/me/mandate/revoke', api(async (req, res) => {
   const u = me(req, res);
   u.paypal.mandate = null;
   saveUser(u);
+  Visits.track('mandate_revoked', Visits.ctxOf(req));
   return { user: publicUser(u) };
 }));
 
@@ -651,6 +678,7 @@ app.post('/api/studio/llm', api(async (req, res) => {
 app.post('/api/me/activity/ask', api(async (req, res) => {
   const q = String(req.body?.q || '').trim().slice(0, 200);
   allowance(me(req, res));
+  Visits.track('ledger_ask', Visits.ctxOf(req));
   if (!q) throw new Error('Ask something');
   const today = new Date().toISOString().slice(0, 10);
   const { message } = await chat({
@@ -691,10 +719,11 @@ app.post('/api/missions', api(async (req, res) => {
   saveUser(u);
   s.feed = [];
   saveMission(s);
-  const b = { s, clients: new Set(), busy: Promise.resolve(), log: s.feed };
+  const b = Visits.watch({ s, clients: new Set(), busy: Promise.resolve(), log: s.feed });
   live.set(s.id, b);
   b.s._user = u;
   const imgs = saveImages(u, req.body?.images || (req.body?.image ? [req.body.image] : []));
+  Visits.track('mission_new', Visits.ctxOf(req), { mid: s.id, text: Visits.maskText(intent), budget: source, voice: req.body?.voice === true ? 1 : undefined, images: imgs.length || undefined, lang: ['en', 'fr'].includes(req.get('X-Lang')) ? req.get('X-Lang') : undefined });
   emitter(b)('user', { text: intent, images: imgs.map((i) => i.url) });
   run(b, (emit) => userTurn(b.s, intent, emit, { images: imgs.map((i) => i.data), urls: imgs.map((i) => i.url) }));
   titleFor(intent).then(({ title, emoji: e }) => {
@@ -740,6 +769,7 @@ app.post('/api/missions/:id/messages', api(async (req, res) => {
   const imgs = saveImages(u, req.body?.images || (req.body?.image ? [req.body.image] : []));
   if (!text && !imgs.length) throw new Error('Empty message');
   allowance(u);
+  Visits.track('turn', Visits.ctxOf(req), { mid: b.s.id, text: Visits.maskText(text), voice: req.body?.voice === true ? 1 : undefined, images: imgs.length || undefined });
   emitter(b)('user', { text, images: imgs.map((i) => i.url) });
   b.s._voice = req.body?.voice === true; // a live voice conversation: short spoken replies
   run(b, (emit) => userTurn(b.s, text, emit, { images: imgs.map((i) => i.data), urls: imgs.map((i) => i.url) }));
@@ -883,6 +913,8 @@ app.delete('/api/missions/:id', api(async (req, res) => {
       e.state = 'released';
     } catch (err) { console.error('[delete] release', e.id, err.message); }
   }
+  Visits.observe(b, 'envelope'); // deposits released by the deletion
+  Visits.track('mission_deleted', Visits.ctxOf(req), { mid: b.s.id });
   for (const c of b.clients) c.end();
   live.delete(b.s.id);
   u.missions = u.missions.filter((id) => id !== b.s.id);
