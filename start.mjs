@@ -11,7 +11,7 @@ for (let attempt = 1; ; attempt++) {
     if (r.enabled) console.log(`[store] Cloudflare R2 on · ${r.restored} files restored`);
     break;
   } catch (e) {
-    console.error(`[store] restore failed (try ${attempt}):`, e.message);
+    console.error(`[store] restore failed (try ${attempt}):`, e.message, e.cause?.code || e.cause?.message || '');
     if (attempt >= 4) { if (enabled) process.exit(1); break; } // the host restarts us
     await new Promise((r) => setTimeout(r, 3000 * attempt));
   }
