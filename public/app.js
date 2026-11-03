@@ -3111,17 +3111,18 @@ function vmFeed(chunk) {
   vmFeed('');
 }
 // Speak the reply, briefly: the first sentences only (about 260 characters); the screen holds the rest.
+// A point between digits (€418.80, 1.5 km) never ends a sentence.
 function vmFinal(text) {
   vm.buf = '';
   vm.used = 0;
   if (vm.mute || vm.voiceOff) return;
-  const sentences = plain(text).replace(/\n+/g, ' ').match(/[^.!?…]+[.!?…]+["»”)]*\s*|[^.!?…]+$/g) || [];
+  const sentences = plain(text).replace(/\n+/g, ' ').match(/(?:[^.!?…]|\.(?=\d))+[.!?…]+["»”)]*\s*|(?:[^.!?…]|\.(?=\d))+$/g) || [];
   let said = '';
   for (const x of sentences) {
     if (said && (said + x).length > 260) break;
     said += x;
   }
-  for (const x of said.match(/[^.!?…]+[.!?…]+["»”)]*\s*|[^.!?…]+$/g) || []) vmSay(x);
+  for (const x of said.match(/(?:[^.!?…]|\.(?=\d))+[.!?…]+["»”)]*\s*|(?:[^.!?…]|\.(?=\d))+$/g) || []) vmSay(x);
 }
 function vmReset() { vm.buf = ''; vm.used = 0; }
 // The voice: a human-sounding neural voice from the server, sentence by sentence (the next one is fetched
