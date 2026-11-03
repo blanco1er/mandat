@@ -111,7 +111,9 @@ export async function mountAgenda(el, { get, post, lang, onOpen, onAsked }) {
     // A stay over several days shows on each of them: its dates and nights say it is one and the same stay.
     const nights = Math.round((new Date(r.realEnd || r.endDate) - r.startDate) / 864e5);
     const d = (x) => new Date(x).toLocaleDateString(loc, { day: 'numeric', month: 'short' });
-    const stay = nights >= 1 && r.allDay ? `${d(r.startDate)} → ${d(r.realEnd || r.endDate)}${r.delivery ? '' : ` · ${nights} ${/^fr/.test(loc) ? (nights > 1 ? 'nuits' : 'nuit') : nights > 1 ? 'nights' : 'night'}`}` : '';
+    // a delivery window names its last day; a stay, its check-out morning
+    const last = r.delivery ? new Date(new Date(r.endDate) - 864e5) : r.realEnd || r.endDate;
+    const stay = nights >= 1 && r.allDay ? `${d(r.startDate)} → ${d(last)}${r.delivery ? '' : ` · ${nights} ${/^fr/.test(loc) ? (nights > 1 ? 'nuits' : 'nuit') : nights > 1 ? 'nights' : 'night'}`}` : '';
     const sub = [stay, r.where ? r.name : '', price(r), several ? r.mission : ''].filter(Boolean).join(' · ');
     return {
       className: 'm-ev' + (pins.has(r.id) ? ' pinned' : ''),
