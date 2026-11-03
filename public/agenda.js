@@ -67,7 +67,8 @@ export async function mountAgenda(el, { get, post, lang, onOpen, onAsked }) {
   const today = new Date(now.toDateString());
   const last = Math.max(today.getTime(), ...data.events.map((e) => new Date(e.realEnd || e.endDate || e.startDate).getTime()));
   const span = Math.min(1100, Math.max(7, Math.ceil((last - today) / 864e5) + 1));
-  const shape = (e) => ({ ...e, cls: PENDING.has(e.status) ? 'mandat-pending' : '', draggable: !e.allDay, resizable: !e.allDay });
+  // Bryntum only exposes the fields of the first event it gets: every event carries them all.
+  const shape = (e) => ({ delivery: false, realEnd: null, pinned: false, ...e, cls: PENDING.has(e.status) ? 'mandat-pending' : '', draggable: !e.allDay, resizable: !e.allDay });
 
   const several = data.missions.length > 1;
   // Find a programme fast: one chip per mission, and the dates the user pinned (tap one to jump to it).
